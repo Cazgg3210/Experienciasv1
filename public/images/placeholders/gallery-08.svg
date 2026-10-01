@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#F7F3EC"/>
+<defs>
+<g id="f"><circle cy="-14" r="11"/><circle cx="13" cy="-4" r="11"/><circle cx="8" cy="12" r="11"/><circle cx="-8" cy="12" r="11"/><circle cx="-13" cy="-4" r="11"/><circle r="6" fill="#A48F7E"/></g>
+<path id="lf" d="M0 0q20-18 46-8q-22 20-46 8z"/>
+</defs>
+<circle cx="600" cy="420" r="280" fill="#E8DCC8" fill-opacity=".55"/>
+<path d="M300 640H900" stroke="#A48F7E" stroke-opacity=".45" stroke-width="3" stroke-linecap="round"/>
+<g stroke="#A48F7E" stroke-width="3" stroke-linejoin="round">
+<rect x="440" y="390" width="320" height="250" fill="#E9C9BE"/>
+<rect x="420" y="340" width="360" height="60" rx="4" fill="#E9C9BE"/>
+<path d="M584 400h32v240h-32zM584 340h32v60h-32z" fill="#F7F3EC"/>
+<path d="M600 338C560 260 480 280 512 330C528 352 572 346 600 338zM600 338C640 260 720 280 688 330C672 352 628 346 600 338z" fill="#F7F3EC"/>
+<path d="M592 344L560 420L578 412L586 432zM608 344L640 420L622 412L614 432z" fill="#F7F3EC"/>
+<ellipse cx="600" cy="340" rx="16" ry="12" fill="#F7F3EC"/>
+</g>
+<path d="M440 408H584M616 408H760" stroke="#A48F7E" stroke-opacity=".3" stroke-width="3"/>
+<path d="M584 330c-20-24-50-36-66-20M616 330c20-24 50-36 66-20" fill="none" stroke="#A48F7E" stroke-opacity=".6" stroke-width="2" stroke-linecap="round"/>
+<g fill="#A3B18A">
+<use href="#lf" transform="translate(390 630) rotate(-150)"/>
+<use href="#lf" transform="translate(395 625) rotate(-60)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(815 630) rotate(-30)"/>
+<use href="#lf" transform="translate(810 625) rotate(-120)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(868 585) rotate(-20) scale(.7)"/>
+</g>
+<use href="#f" transform="translate(375 605)" fill="#E9C9BE"/>
+<use href="#f" transform="translate(830 612) scale(.9)" fill="#E8DCC8"/>
+<use href="#f" transform="translate(872 568) scale(.6)" fill="#E9C9BE"/>
+<path d="M430 250q2-12 14-14q-12-2-14-14q-2 12-14 14q12 2 14 14zM790 230q2-10 12-12q-10-2-12-12q-2 10-12 12q10 2 12 12z" fill="#A48F7E" fill-opacity=".7"/>
+<g fill="#E9C9BE"><circle cx="760" cy="300" r="5"/><circle cx="455" cy="300" r="4"/></g>
+</svg>

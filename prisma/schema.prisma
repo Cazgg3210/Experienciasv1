@@ -1,0 +1,1519 @@
+// =============================================================================
+// Ivonne & Rosa — Modelo de datos (PostgreSQL + Prisma)
+// Convenciones:
+//  - IDs cuid (no secuenciales). Códigos legibles (code) sólo para humanos.
+//  - Dinero en centavos MXN (Int). Porcentajes en basis points (bps, 1600 = 16%).
+//  - Fechas/horas en UTC (timestamptz). Zona de negocio: America/Mexico_City.
+//  - JSON sólo para snapshots (configuración, cotización, IA, auditoría).
+// =============================================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  OWNER
+  STAFF
+  CUSTOMER
+}
+
+enum Occasion {
+  BIRTHDAY // cumpleaños
+  FRIENDS_BRUNCH // brunch entre amigas
+  BACHELORETTE // despedida
+  BRIDAL // bridal shower / brunch
+  BABY_BRUNCH // baby brunch
+  GATHERING // reunión
+  CORPORATE // corporativo boutique
+  OTHER // otra
+}
+
+enum ExperienceType {
+  BRUNCH
+  BREAKFAST
+  CELEBRATION
+  THEMED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  WON
+  LOST
+}
+
+enum LeadSource {
+  CONFIGURATOR
+  AI_DESIGNER
+  CONTACT_FORM
+  WHATSAPP
+  INSTAGRAM
+  TIKTOK
+  REFERRAL
+  GOOGLE
+  MANUAL
+  OTHER
+}
+
+enum LeadActivityType {
+  CREATED
+  STATUS_CHANGE
+  NOTE
+  CALL
+  WHATSAPP
+  EMAIL
+  QUOTE_CREATED
+  QUOTE_SENT
+  ASSIGNED
+  SYSTEM
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum QuoteItemType {
+  BASE_EXPERIENCE
+  EXTRA_GUEST
+  MENU
+  ADDON
+  LOGISTICS
+  CUSTOM
+}
+
+enum DiscountType {
+  PERCENT
+  AMOUNT
+}
+
+enum EventStatus {
+  INQUIRY
+  PENDING_PAYMENT
+  CONFIRMED
+  PLANNING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentKind {
+  DEPOSIT
+  BALANCE
+  FULL
+  REFUND
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum PaymentMethod {
+  ONLINE
+  CASH
+  TRANSFER
+  CARD_TERMINAL
+  OTHER
+}
+
+enum MenuPricingType {
+  INCLUDED // incluido en el precio base
+  PER_GUEST // upgrade por invitado
+  FLAT // upgrade por evento
+}
+
+enum AddOnPricingType {
+  FLAT
+  PER_GUEST
+}
+
+enum AddOnCategory {
+  DECOR
+  FOOD
+  DRINKS
+  ENTERTAINMENT
+  PHOTO
+  PERSONALIZATION
+  EXPERIENCE
+  OTHER
+}
+
+enum MenuCourse {
+  DRINK
+  STARTER
+  MAIN
+  SIDE
+  DESSERT
+  OTHER
+}
+
+enum CostCategory {
+  FOOD
+  FLOWERS
+  STAFF
+  TRANSPORT
+  VENDOR
+  CONSUMABLES
+  PAYMENT_FEE
+  OTHER
+}
+
+enum RsvpStatus {
+  PENDING
+  ATTENDING
+  NOT_ATTENDING
+  MAYBE
+}
+
+enum GuestSource {
+  HOST
+  ADMIN
+  SELF_RSVP
+}
+
+enum DietaryRestriction {
+  VEGETARIAN
+  VEGAN
+  GLUTEN_FREE
+  LACTOSE_FREE
+  NUT_ALLERGY
+  SEAFOOD_ALLERGY
+  KOSHER
+  HALAL
+  OTHER
+}
+
+enum MessageKind {
+  HOST_THREAD // conversación clienta <-> equipo
+  HONOREE // mensaje para la homenajeada
+  GUESTBOOK // libro de visitas / memory capsule
+}
+
+enum MessageAuthorType {
+  CUSTOMER
+  GUEST
+  ADMIN
+  SYSTEM
+}
+
+enum ChecklistPhase {
+  T_MINUS_7
+  T_MINUS_3
+  T_MINUS_1
+  SETUP
+  EVENT
+  TEARDOWN
+  CLOSING
+}
+
+enum ChecklistArea {
+  FOOD
+  TABLE
+  FLOWERS
+  ADDONS
+  TRANSPORT
+  STAFF
+  CLIENT
+  ADMIN
+  GENERAL
+}
+
+enum ChecklistItemStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+enum StaffFunction {
+  COORDINATOR
+  CHEF
+  KITCHEN_ASSISTANT
+  SERVER
+  SETUP
+  DRIVER
+  HOST
+  PHOTOGRAPHER
+  OTHER
+}
+
+enum StaffRateType {
+  PER_EVENT
+  PER_HOUR
+}
+
+enum InventoryCategory {
+  DINNERWARE
+  GLASSWARE
+  CUTLERY
+  LINENS
+  DECOR
+  AUDIO
+  KARAOKE
+  FURNITURE
+  SERVING
+  OTHER
+}
+
+enum InventoryMovementType {
+  PURCHASE_IN
+  RESERVE
+  RELEASE
+  CHECK_OUT
+  RETURN
+  MAINTENANCE_OUT
+  MAINTENANCE_IN
+  LOSS
+  ADJUSTMENT
+}
+
+enum InventoryReservationStatus {
+  RESERVED
+  CHECKED_OUT
+  RETURNED
+  CANCELLED
+}
+
+enum VendorCategory {
+  FLOWERS
+  FOOD
+  PASTRY
+  TRANSPORT
+  FURNITURE
+  PHOTO
+  BEVERAGES
+  OTHER
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum PurchaseStatus {
+  REQUESTED
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum AvailabilityExceptionType {
+  BLOCKED // las fundadoras/no hay operación
+  BLACKOUT // fecha especial sin reservas públicas
+  CAPACITY_OVERRIDE // capacidad distinta ese día
+}
+
+enum StorageDriver {
+  S3
+  LOCAL
+  EXTERNAL
+}
+
+enum MediaKind {
+  IMAGE
+  DOCUMENT
+}
+
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum MediaPurpose {
+  EXPERIENCE
+  GALLERY
+  STYLE
+  ADDON
+  EVENT
+  MEMORY
+  RECEIPT
+  CHECKLIST_EVIDENCE
+  AVATAR
+  OTHER
+}
+
+enum NotificationType {
+  LEAD_RECEIVED
+  QUOTE_SENT
+  QUOTE_EXPIRING
+  QUOTE_ACCEPTED
+  PAYMENT_DUE
+  PAYMENT_RECEIVED
+  BOOKING_CONFIRMED
+  RSVP_REMINDER
+  EVENT_7D
+  EVENT_48H
+  POST_EVENT
+  REVIEW_REQUEST
+  PORTAL_ACCESS
+  STAFF_ASSIGNED
+  GENERIC
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  MOCKED
+  FAILED
+  SKIPPED
+}
+
+enum AnalyticsEventType {
+  VIEW_EXPERIENCE
+  START_CONFIGURATOR
+  COMPLETE_CONFIGURATOR
+  SUBMIT_LEAD
+  VIEW_QUOTE
+  ACCEPT_QUOTE
+  START_PAYMENT
+  PAYMENT_SUCCESS
+  RSVP_SUBMIT
+  AI_DESIGN_GENERATED
+}
+
+// -----------------------------------------------------------------------------
+// IDENTITY & ACCESS
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  phone        String?
+  passwordHash String?
+  role         Role      @default(STAFF)
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  staffMember        StaffMember?
+  customer           Customer?
+  assignedLeads      Lead[]               @relation("LeadAssignee")
+  leadActivities     LeadActivity[]
+  createdQuotes      Quote[]              @relation("QuoteCreatedBy")
+  recordedPayments   Payment[]            @relation("PaymentRecordedBy")
+  completedChecklist EventChecklistItem[] @relation("ChecklistCompletedBy")
+  auditLogs          AuditLog[]
+  uploadedMedia      MediaAsset[]         @relation("MediaUploadedBy")
+  createdPurchases   Purchase[]           @relation("PurchaseCreatedBy")
+  inventoryMovements InventoryMovement[]
+  eventCosts         EventCost[]
+  closedEvents       Event[]              @relation("EventClosedBy")
+  settingsUpdated    Setting[]
+
+  @@index([role])
+}
+
+// -----------------------------------------------------------------------------
+// CUSTOMERS & LEADS
+// -----------------------------------------------------------------------------
+
+model Customer {
+  id             String     @id @default(cuid())
+  name           String
+  email          String?    @unique
+  phone          String?
+  whatsapp       String?
+  instagram      String?
+  notes          String?
+  source         LeadSource @default(OTHER)
+  referralCode   String     @unique
+  marketingOptIn Boolean    @default(false)
+  userId         String?    @unique
+  user           User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  leads    Lead[]
+  quotes   Quote[]
+  bookings Booking[]
+  events   Event[]
+  reviews  Review[]
+
+  @@index([phone])
+  @@index([name])
+}
+
+model BudgetRange {
+  id        String   @id @default(cuid())
+  label     String
+  minCents  Int
+  maxCents  Int?
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads Lead[]
+}
+
+model Lead {
+  id                  String       @id @default(cuid())
+  code                String       @unique
+  customerId          String?
+  customer            Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  name                String
+  phone               String?
+  email               String?
+  occasion            Occasion     @default(OTHER)
+  occasionOther       String?
+  eventDate           DateTime?    @db.Date
+  guestCount          Int?
+  budgetRangeId       String?
+  budgetRange         BudgetRange? @relation(fields: [budgetRangeId], references: [id], onDelete: SetNull)
+  budgetNotes         String?
+  status              LeadStatus   @default(NEW)
+  source              LeadSource   @default(CONFIGURATOR)
+  serviceAreaId       String?
+  serviceArea         ServiceArea? @relation(fields: [serviceAreaId], references: [id], onDelete: SetNull)
+  zoneText            String?
+  outOfArea           Boolean      @default(false)
+  specialRequest      Boolean      @default(false) // > maxGuests estándar
+  experienceId        String?
+  experience          Experience?  @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  styleId             String?
+  style               Style?       @relation(fields: [styleId], references: [id], onDelete: SetNull)
+  menuId              String?
+  menu                Menu?        @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  honoreeName         String?
+  colors              String[]
+  inspiration         String?
+  notes               String?
+  estimatedTotalCents Int?
+  referredByCode      String?
+  utmSource           String?
+  lostReason          String?
+  assignedToId        String?
+  assignedTo          User?        @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  lastContactedAt     DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  activities    LeadActivity[]
+  snapshot      ConfigurationSnapshot?
+  quotes        Quote[]
+  aiDesigns     AiDesign[]
+  notifications NotificationLog[]
+
+  @@index([status, createdAt])
+  @@index([eventDate])
+  @@index([assignedToId])
+  @@index([email])
+}
+
+model LeadActivity {
+  id         String           @id @default(cuid())
+  leadId     String
+  lead       Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type       LeadActivityType
+  message    String?
+  fromStatus LeadStatus?
+  toStatus   LeadStatus?
+  actorId    String?
+  actor      User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime         @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+/// Snapshot inmutable de lo que la clienta configuró + estimado calculado en servidor.
+model ConfigurationSnapshot {
+  id             String   @id @default(cuid())
+  leadId         String   @unique
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  data           Json
+  estimate       Json
+  pricingVersion String
+  createdAt      DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------------
+// CATALOG
+// -----------------------------------------------------------------------------
+
+model Style {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  palette     String[] // colores hex
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  experiences Experience[]
+  leads       Lead[]
+  quotes      Quote[]
+  events      Event[]
+}
+
+model ServiceArea {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  description        String?
+  postalCodes        String[]
+  logisticsFeeCents  Int      @default(0)
+  logisticsCostCents Int      @default(0)
+  active             Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  experiences Experience[]
+  leads       Lead[]
+  quotes      Quote[]
+  events      Event[]
+}
+
+model Experience {
+  id                   String         @id @default(cuid())
+  name                 String
+  slug                 String         @unique
+  tagline              String?
+  description          String
+  type                 ExperienceType @default(BRUNCH)
+  occasions            Occasion[]
+  basePriceCents       Int
+  baseGuests           Int            @default(6)
+  minGuests            Int            @default(6)
+  maxGuests            Int            @default(12)
+  extraGuestPriceCents Int            @default(0)
+  extraGuestCostCents  Int            @default(0)
+  durationMinutes      Int            @default(180)
+  includes             String[]
+  coverImageUrl        String?
+  active               Boolean        @default(true)
+  featured             Boolean        @default(false)
+  sortOrder            Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  styles             Style[]
+  serviceAreas       ServiceArea[]
+  menus              Menu[]
+  addOns             AddOn[]
+  costComponents     ExperienceCostComponent[]
+  images             ExperienceImage[]
+  inventoryReqs      ExperienceInventoryRequirement[]
+  faqs               Faq[]
+  checklistTemplates ChecklistTemplate[]
+  leads              Lead[]
+  quotes             Quote[]
+  events             Event[]
+
+  @@index([active, sortOrder])
+}
+
+/// Componentes de costo base de la experiencia (para costeo estimado por categoría).
+model ExperienceCostComponent {
+  id           String       @id @default(cuid())
+  experienceId String
+  experience   Experience   @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  category     CostCategory
+  description  String
+  amountCents  Int
+  perGuest     Boolean      @default(false)
+  sortOrder    Int          @default(0)
+
+  @@index([experienceId])
+}
+
+model ExperienceImage {
+  id           String     @id @default(cuid())
+  experienceId String
+  experience   Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  mediaAssetId String
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  sortOrder    Int        @default(0)
+
+  @@unique([experienceId, mediaAssetId])
+}
+
+model ExperienceInventoryRequirement {
+  id              String        @id @default(cuid())
+  experienceId    String
+  experience      Experience    @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Int
+  perGuest        Boolean       @default(false)
+
+  @@unique([experienceId, inventoryItemId])
+}
+
+model Menu {
+  id                String               @id @default(cuid())
+  name              String
+  slug              String               @unique
+  description       String?
+  pricingType       MenuPricingType      @default(INCLUDED)
+  priceCents        Int                  @default(0) // por invitado si PER_GUEST, total si FLAT
+  costPerGuestCents Int                  @default(0)
+  tags              String[]
+  dietaryTags       DietaryRestriction[]
+  active            Boolean              @default(true)
+  sortOrder         Int                  @default(0)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  items       MenuItem[]
+  experiences Experience[]
+  leads       Lead[]
+  quotes      Quote[]
+  events      Event[]
+}
+
+model MenuItem {
+  id          String               @id @default(cuid())
+  menuId      String
+  menu        Menu                 @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  course      MenuCourse           @default(MAIN)
+  dietaryTags DietaryRestriction[]
+  sortOrder   Int                  @default(0)
+
+  @@index([menuId])
+}
+
+model AddOn {
+  id           String           @id @default(cuid())
+  name         String
+  slug         String           @unique
+  description  String?
+  category     AddOnCategory    @default(OTHER)
+  pricingType  AddOnPricingType @default(FLAT)
+  priceCents   Int
+  costCents    Int              @default(0)
+  costCategory CostCategory     @default(VENDOR)
+  maxQuantity  Int              @default(1)
+  leadTimeDays Int              @default(0)
+  imageUrl     String?
+  active       Boolean          @default(true)
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  experiences   Experience[]
+  inventoryReqs AddOnInventoryRequirement[]
+  eventAddOns   EventAddOn[]
+}
+
+model AddOnInventoryRequirement {
+  id              String        @id @default(cuid())
+  addOnId         String
+  addOn           AddOn         @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Int
+  perGuest        Boolean       @default(false)
+
+  @@unique([addOnId, inventoryItemId])
+}
+
+// -----------------------------------------------------------------------------
+// AVAILABILITY
+// -----------------------------------------------------------------------------
+
+/// Regla por día de la semana (0 = domingo ... 6 = sábado).
+model AvailabilityRule {
+  id            String   @id @default(cuid())
+  weekday       Int      @unique
+  isOpen        Boolean  @default(true)
+  maxEvents     Int      @default(2)
+  earliestStart String   @default("08:00")
+  latestEnd     String   @default("21:00")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AvailabilityException {
+  id            String                    @id @default(cuid())
+  date          DateTime                  @db.Date
+  type          AvailabilityExceptionType
+  maxEvents     Int?
+  reason        String?
+  serviceAreaId String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@index([date])
+}
+
+// -----------------------------------------------------------------------------
+// SALES: QUOTES, BOOKINGS, PAYMENTS
+// -----------------------------------------------------------------------------
+
+model Quote {
+  id                   String        @id @default(cuid())
+  code                 String        @unique
+  publicToken          String        @unique
+  version              Int           @default(1)
+  status               QuoteStatus   @default(DRAFT)
+  leadId               String?
+  lead                 Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  customerId           String
+  customer             Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  experienceId         String?
+  experience           Experience?   @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  menuId               String?
+  menu                 Menu?         @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  styleId              String?
+  style                Style?        @relation(fields: [styleId], references: [id], onDelete: SetNull)
+  serviceAreaId        String?
+  serviceArea          ServiceArea?  @relation(fields: [serviceAreaId], references: [id], onDelete: SetNull)
+  occasion             Occasion      @default(OTHER)
+  title                String
+  eventDate            DateTime?     @db.Date
+  startTime            String?
+  guestCount           Int
+  subtotalCents        Int           @default(0)
+  discountType         DiscountType?
+  discountValue        Int? // bps si PERCENT, centavos si AMOUNT
+  discountReason       String?
+  discountCents        Int           @default(0)
+  logisticsCents       Int           @default(0)
+  taxCents             Int           @default(0)
+  totalCents           Int           @default(0)
+  estimatedCostCents   Int           @default(0)
+  estimatedMarginCents Int           @default(0)
+  marginBps            Int           @default(0)
+  depositBps           Int           @default(5000)
+  depositCents         Int           @default(0)
+  currency             String        @default("MXN")
+  pricingSnapshot      Json?
+  notesForCustomer     String?
+  internalNotes        String?
+  validUntil           DateTime?
+  sentAt               DateTime?
+  viewedAt             DateTime?
+  acceptedAt           DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  expiredAt            DateTime?
+  createdById          String?
+  createdBy            User?         @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  items         QuoteItem[]
+  booking       Booking?
+  event         Event?
+  notifications NotificationLog[]
+
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([validUntil])
+}
+
+model QuoteItem {
+  id              String        @id @default(cuid())
+  quoteId         String
+  quote           Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  type            QuoteItemType
+  refId           String?
+  description     String
+  quantity        Int           @default(1)
+  unitPriceCents  Int
+  unitCostCents   Int           @default(0)
+  totalPriceCents Int
+  totalCostCents  Int           @default(0)
+  costCategory    CostCategory  @default(OTHER)
+  sortOrder       Int           @default(0)
+
+  @@index([quoteId])
+}
+
+/// Acuerdo comercial generado al aceptar una cotización. El estado operativo vive en Event.
+model Booking {
+  id                   String    @id @default(cuid())
+  code                 String    @unique
+  quoteId              String    @unique
+  quote                Quote     @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  customerId           String
+  customer             Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  eventId              String    @unique
+  event                Event     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  totalCents           Int
+  depositRequiredCents Int
+  currency             String    @default("MXN")
+  termsVersion         String
+  termsAcceptedAt      DateTime
+  acceptedByName       String
+  acceptedIp           String?
+  balanceDueAt         DateTime?
+  cancelledAt          DateTime?
+  cancellationReason   String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  payments Payment[]
+
+  @@index([customerId])
+}
+
+model Payment {
+  id                 String        @id @default(cuid())
+  bookingId          String
+  booking            Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  kind               PaymentKind
+  status             PaymentStatus @default(PENDING)
+  method             PaymentMethod @default(ONLINE)
+  provider           String // mock | stripe | mercadopago | manual
+  providerCheckoutId String?
+  providerPaymentId  String?
+  checkoutUrl        String?
+  amountCents        Int
+  feeCents           Int           @default(0)
+  refundedCents      Int           @default(0)
+  currency           String        @default("MXN")
+  idempotencyKey     String        @unique
+  refundOfId         String?
+  refundOf           Payment?      @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: SetNull)
+  refunds            Payment[]     @relation("PaymentRefunds")
+  paidAt             DateTime?
+  failedAt           DateTime?
+  failureReason      String?
+  notes              String?
+  recordedById       String?
+  recordedBy         User?         @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  receiptMediaId     String?
+  receiptMedia       MediaAsset?   @relation("PaymentReceipt", fields: [receiptMediaId], references: [id], onDelete: SetNull)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([provider, providerCheckoutId])
+  @@index([bookingId, status])
+  @@index([providerPaymentId])
+}
+
+/// Registro idempotente de webhooks recibidos (provider + externalId únicos).
+model WebhookEvent {
+  id             String    @id @default(cuid())
+  provider       String
+  externalId     String
+  type           String
+  payload        Json
+  signatureValid Boolean
+  processedAt    DateTime?
+  error          String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([provider, externalId])
+}
+
+// -----------------------------------------------------------------------------
+// EVENTS & EXPERIENCE LAYER
+// -----------------------------------------------------------------------------
+
+model Event {
+  id                 String       @id @default(cuid())
+  code               String       @unique
+  title              String
+  status             EventStatus  @default(INQUIRY)
+  customerId         String
+  customer           Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  quoteId            String?      @unique
+  quote              Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  booking            Booking?
+  experienceId       String?
+  experience         Experience?  @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  menuId             String?
+  menu               Menu?        @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  styleId            String?
+  style              Style?       @relation(fields: [styleId], references: [id], onDelete: SetNull)
+  serviceAreaId      String?
+  serviceArea        ServiceArea? @relation(fields: [serviceAreaId], references: [id], onDelete: SetNull)
+  occasion           Occasion     @default(OTHER)
+  honoreeName        String?
+  eventDate          DateTime     @db.Date
+  startsAt           DateTime
+  endsAt             DateTime
+  guestCount         Int
+  addressLine        String?
+  addressNotes       String?
+  neighborhood       String?
+  city               String       @default("Ciudad de México")
+  postalCode         String?
+  mapsUrl            String?
+  colors             String[]
+  inspiration        String?
+  dressCode          String?
+  hostMessage        String?
+  playlistUrl        String?
+  customerNotes      String?
+  internalNotes      String?
+  micrositeSlug      String       @unique
+  micrositeEnabled   Boolean      @default(true)
+  inviteToken        String       @unique
+  portalToken        String       @unique
+  departureAt        DateTime?
+  setupStartsAt      DateTime?
+  teardownAt         DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  completedAt        DateTime?
+  closedAt           DateTime?
+  closedById         String?
+  closedBy           User?        @relation("EventClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closingSnapshot    Json?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  addOns                EventAddOn[]
+  guests                EventGuest[]
+  messages              EventMessage[]
+  timeline              EventTimelineItem[]
+  checklistItems        EventChecklistItem[]
+  staffAssignments      StaffAssignment[]
+  inventoryReservations InventoryReservation[]
+  inventoryMovements    InventoryMovement[]
+  purchases             Purchase[]
+  costs                 EventCost[]
+  media                 MediaAsset[]
+  memoryCapsule         MemoryCapsule?
+  review                Review?
+  notifications         NotificationLog[]
+
+  @@index([eventDate, status])
+  @@index([status, startsAt])
+  @@index([customerId])
+}
+
+model EventAddOn {
+  id         String  @id @default(cuid())
+  eventId    String
+  event      Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  addOnId    String
+  addOn      AddOn   @relation(fields: [addOnId], references: [id], onDelete: Restrict)
+  quantity   Int     @default(1)
+  priceCents Int
+  costCents  Int
+  notes      String?
+
+  @@unique([eventId, addOnId])
+}
+
+model EventGuest {
+  id                  String               @id @default(cuid())
+  eventId             String
+  event               Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                String
+  email               String?
+  phone               String?
+  token               String               @unique
+  rsvpStatus          RsvpStatus           @default(PENDING)
+  plusOne             Boolean              @default(false)
+  plusOneName         String?
+  dietaryRestrictions DietaryRestriction[]
+  dietaryNotes        String?
+  comment             String?
+  source              GuestSource          @default(HOST)
+  photoConsent        Boolean              @default(false)
+  respondedAt         DateTime?
+  invitedAt           DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  messages EventMessage[]
+  media    MediaAsset[]
+
+  @@index([eventId, rsvpStatus])
+}
+
+model EventMessage {
+  id         String            @id @default(cuid())
+  eventId    String
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind       MessageKind
+  authorType MessageAuthorType
+  authorName String
+  guestId    String?
+  guest      EventGuest?       @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  body       String
+  hidden     Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  @@index([eventId, kind, createdAt])
+}
+
+model EventTimelineItem {
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  time            String // HH:mm hora local
+  title           String
+  description     String?
+  visibleToGuests Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([eventId, sortOrder])
+}
+
+// -----------------------------------------------------------------------------
+// OPERATIONS: CHECKLISTS, STAFF
+// -----------------------------------------------------------------------------
+
+model ChecklistTemplate {
+  id           String         @id @default(cuid())
+  name         String
+  phase        ChecklistPhase
+  description  String?
+  experienceId String?
+  experience   Experience?    @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  active       Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  items ChecklistTemplateItem[]
+}
+
+model ChecklistTemplateItem {
+  id               String            @id @default(cuid())
+  templateId       String
+  template         ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  area             ChecklistArea     @default(GENERAL)
+  offsetMinutes    Int               @default(0) // relativo a startsAt del evento (negativo = antes)
+  defaultFunction  StaffFunction?
+  requiresEvidence Boolean           @default(false)
+  sortOrder        Int               @default(0)
+
+  eventItems EventChecklistItem[]
+
+  @@index([templateId])
+}
+
+model EventChecklistItem {
+  id               String                 @id @default(cuid())
+  eventId          String
+  event            Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  templateItemId   String?
+  templateItem     ChecklistTemplateItem? @relation(fields: [templateItemId], references: [id], onDelete: SetNull)
+  phase            ChecklistPhase
+  area             ChecklistArea          @default(GENERAL)
+  title            String
+  description      String?
+  status           ChecklistItemStatus    @default(PENDING)
+  assigneeId       String?
+  assignee         StaffMember?           @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  dueAt            DateTime?
+  requiresEvidence Boolean                @default(false)
+  evidenceMediaId  String?
+  evidenceMedia    MediaAsset?            @relation("ChecklistEvidence", fields: [evidenceMediaId], references: [id], onDelete: SetNull)
+  notes            String?
+  completedAt      DateTime?
+  completedById    String?
+  completedBy      User?                  @relation("ChecklistCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  sortOrder        Int                    @default(0)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([eventId, phase])
+  @@index([assigneeId, status])
+}
+
+model StaffMember {
+  id                String        @id @default(cuid())
+  userId            String?       @unique
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name              String
+  primaryFunction   StaffFunction @default(SERVER)
+  phone             String?
+  email             String?
+  rateCents         Int           @default(0)
+  rateType          StaffRateType @default(PER_EVENT)
+  availableWeekdays Int[] // 0..6
+  availabilityNotes String?
+  active            Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  assignments    StaffAssignment[]
+  checklistItems EventChecklistItem[]
+}
+
+model StaffAssignment {
+  id            String        @id @default(cuid())
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  staffMemberId String
+  staffMember   StaffMember   @relation(fields: [staffMemberId], references: [id], onDelete: Restrict)
+  function      StaffFunction
+  startsAt      DateTime
+  endsAt        DateTime
+  amountCents   Int           @default(0)
+  confirmed     Boolean       @default(false)
+  paid          Boolean       @default(false)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([eventId, staffMemberId, function])
+  @@index([staffMemberId, startsAt])
+}
+
+// -----------------------------------------------------------------------------
+// INVENTORY, VENDORS, PURCHASES, COSTS
+// -----------------------------------------------------------------------------
+
+model InventoryItem {
+  id                   String            @id @default(cuid())
+  sku                  String            @unique
+  name                 String
+  category             InventoryCategory
+  unit                 String            @default("pz")
+  totalQuantity        Int
+  maintenanceQuantity  Int               @default(0)
+  lowStockThreshold    Int               @default(0)
+  replacementCostCents Int               @default(0)
+  location             String?
+  notes                String?
+  active               Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  reservations   InventoryReservation[]
+  movements      InventoryMovement[]
+  experienceReqs ExperienceInventoryRequirement[]
+  addOnReqs      AddOnInventoryRequirement[]
+
+  @@index([category])
+}
+
+model InventoryReservation {
+  id               String                     @id @default(cuid())
+  inventoryItemId  String
+  inventoryItem    InventoryItem              @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  eventId          String
+  event            Event                      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  quantity         Int
+  status           InventoryReservationStatus @default(RESERVED)
+  returnedQuantity Int?
+  damagedQuantity  Int?
+  notes            String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@unique([inventoryItemId, eventId])
+  @@index([eventId])
+}
+
+model InventoryMovement {
+  id              String                @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem         @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  eventId         String?
+  event           Event?                @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  type            InventoryMovementType
+  quantity        Int
+  reason          String?
+  actorId         String?
+  actor           User?                 @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+
+  @@index([inventoryItemId, createdAt])
+}
+
+model Vendor {
+  id          String         @id @default(cuid())
+  name        String
+  category    VendorCategory
+  contactName String?
+  phone       String?
+  whatsapp    String?
+  email       String?
+  slaNotes    String?
+  notes       String?
+  status      VendorStatus   @default(ACTIVE)
+  rating      Int?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  purchases Purchase[]
+
+  @@index([category, status])
+}
+
+model Purchase {
+  id                  String         @id @default(cuid())
+  eventId             String?
+  event               Event?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  vendorId            String?
+  vendor              Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  concept             String
+  category            CostCategory   @default(VENDOR)
+  expectedAmountCents Int
+  actualAmountCents   Int?
+  status              PurchaseStatus @default(REQUESTED)
+  neededBy            DateTime?
+  orderedAt           DateTime?
+  receivedAt          DateTime?
+  cancelledAt         DateTime?
+  receiptMediaId      String?
+  receiptMedia        MediaAsset?    @relation("PurchaseReceipt", fields: [receiptMediaId], references: [id], onDelete: SetNull)
+  notes               String?
+  createdById         String?
+  createdBy           User?          @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([eventId, status])
+  @@index([vendorId])
+}
+
+/// Costos reales adicionales registrados manualmente (además de compras y staff).
+model EventCost {
+  id          String       @id @default(cuid())
+  eventId     String
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category    CostCategory
+  description String
+  amountCents Int
+  createdById String?
+  createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+
+  @@index([eventId])
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA & MEMORY CAPSULE
+// -----------------------------------------------------------------------------
+
+model MediaAsset {
+  id              String          @id @default(cuid())
+  driver          StorageDriver
+  storageKey      String?         @unique
+  url             String? // sólo EXTERNAL o PUBLIC con CDN
+  mimeType        String
+  sizeBytes       Int             @default(0)
+  width           Int?
+  height          Int?
+  alt             String?
+  kind            MediaKind       @default(IMAGE)
+  visibility      MediaVisibility @default(PRIVATE)
+  purpose         MediaPurpose    @default(OTHER)
+  eventId         String?
+  event           Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  memoryCapsuleId String?
+  memoryCapsule   MemoryCapsule?  @relation("CapsuleMedia", fields: [memoryCapsuleId], references: [id], onDelete: SetNull)
+  guestId         String?
+  guest           EventGuest?     @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  uploaderName    String?
+  consent         Boolean         @default(false)
+  approved        Boolean         @default(true)
+  featured        Boolean         @default(false)
+  sortOrder       Int             @default(0)
+  uploadedById    String?
+  uploadedBy      User?           @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  experienceImages  ExperienceImage[]
+  checklistEvidence EventChecklistItem[] @relation("ChecklistEvidence")
+  purchaseReceipts  Purchase[]           @relation("PurchaseReceipt")
+  paymentReceipts   Payment[]            @relation("PaymentReceipt")
+  capsuleCovers     MemoryCapsule[]      @relation("CapsuleCover")
+
+  @@index([purpose, visibility])
+  @@index([eventId])
+  @@index([memoryCapsuleId])
+}
+
+model MemoryCapsule {
+  id                String      @id @default(cuid())
+  eventId           String      @unique
+  event             Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title             String
+  message           String?
+  shareToken        String      @unique
+  published         Boolean     @default(false)
+  allowGuestUploads Boolean     @default(true)
+  coverMediaId      String?
+  coverMedia        MediaAsset? @relation("CapsuleCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  media MediaAsset[] @relation("CapsuleMedia")
+}
+
+// -----------------------------------------------------------------------------
+// CONTENT, REVIEWS
+// -----------------------------------------------------------------------------
+
+model Testimonial {
+  id         String   @id @default(cuid())
+  authorName String
+  occasion   String?
+  body       String
+  rating     Int      @default(5)
+  active     Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Faq {
+  id           String      @id @default(cuid())
+  question     String
+  answer       String
+  category     String      @default("general")
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  sortOrder    Int         @default(0)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([experienceId, active])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rating      Int
+  npsScore    Int?
+  comment     String?
+  publishable Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------------
+// AI DESIGNER
+// -----------------------------------------------------------------------------
+
+model AiDesign {
+  id            String   @id @default(cuid())
+  leadId        String?
+  lead          Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  input         Json
+  output        Json
+  provider      String
+  model         String?
+  promptVersion String
+  prompt        String?
+  usedFallback  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// NOTIFICATIONS, ANALYTICS, AUDIT, SETTINGS
+// -----------------------------------------------------------------------------
+
+model NotificationLog {
+  id                String              @id @default(cuid())
+  type              NotificationType
+  channel           NotificationChannel
+  status            NotificationStatus  @default(QUEUED)
+  provider          String
+  to                String
+  subject           String?
+  body              String
+  actionUrl         String?
+  dedupeKey         String?             @unique
+  leadId            String?
+  lead              Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  quoteId           String?
+  quote             Quote?              @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  eventId           String?
+  event             Event?              @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  readAt            DateTime?
+  createdAt         DateTime            @default(now())
+
+  @@index([createdAt])
+  @@index([eventId])
+  @@index([type, status])
+}
+
+model AnalyticsEvent {
+  id           String             @id @default(cuid())
+  type         AnalyticsEventType
+  sessionId    String?
+  path         String?
+  experienceId String?
+  leadId       String?
+  quoteId      String?
+  eventId      String?
+  metadata     Json?
+  createdAt    DateTime           @default(now())
+
+  @@index([type, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model Setting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+}
+
+/// Límite de intentos por clave (rate limiting persistente y compartido entre instancias).
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+}

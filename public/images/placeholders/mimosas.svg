@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#F7F3EC"/>
+<defs>
+<g id="fg" stroke="#A48F7E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-31 50C-32 130-19 200 0 228C19 200 32 130 31 50z" stroke="none"/>
+<path d="M0 205V80" fill="none" stroke="#F7F3EC" stroke-width="6" stroke-dasharray="0 24"/>
+<path d="M-13 188V110M13 176V96" fill="none" stroke="#F7F3EC" stroke-width="4" stroke-dasharray="0 20"/>
+<path d="M-32 0C-34 120-20 200 0 230C20 200 34 120 32 0" fill="none"/>
+<ellipse rx="32" ry="6" fill="none"/>
+<path d="M0 230V358" fill="none"/>
+<ellipse cy="362" rx="46" ry="8" fill="#F7F3EC"/>
+</g>
+</defs>
+<path d="M370 600V340A230 230 0 0 1 830 340V600z" fill="#E8DCC8" fill-opacity=".7"/>
+<path d="M280 600H1040" stroke="#A48F7E" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"/>
+<use href="#fg" transform="translate(455 238) rotate(-5 0 362)" fill="#E9C9BE"/>
+<use href="#fg" transform="translate(600 238)" fill="#E8DCC8"/>
+<use href="#fg" transform="translate(745 238) rotate(5 0 362)" fill="#E9C9BE"/>
+<g fill="none" stroke="#E9C9BE" stroke-width="3">
+<circle cx="592" cy="205" r="5"/><circle cx="612" cy="180" r="7"/><circle cx="598" cy="150" r="4"/>
+<circle cx="440" cy="200" r="5"/><circle cx="758" cy="196" r="6"/><circle cx="770" cy="166" r="4"/>
+</g>
+<path d="M905 482q2 22-4 46" fill="none" stroke="#5C6B4E" stroke-width="3" stroke-linecap="round"/>
+<g transform="translate(905 538)">
+<circle r="62" fill="#E9C9BE" stroke="#A48F7E" stroke-width="4"/>
+<circle r="50" fill="none" stroke="#F7F3EC" stroke-width="3"/>
+<path d="M0-44V44M-44 0H44M-31-31L31 31M31-31L-31 31" stroke="#F7F3EC" stroke-width="4" stroke-linecap="round"/>
+<circle r="6" fill="#F7F3EC"/>
+</g>
+<path d="M960 596q40-40 84-22q-40 40-84 22z" fill="#A3B18A"/>
+<path d="M966 594q36-6 66-16" fill="none" stroke="#5C6B4E" stroke-width="2" stroke-linecap="round"/>
+<path d="M300 210q2-12 14-14q-12-2-14-14q-2 12-14 14q12 2 14 14zM930 300q2-10 12-12q-10-2-12-12q-2 10-12 12q10 2 12 12z" fill="#A48F7E" fill-opacity=".7"/>
+</svg>

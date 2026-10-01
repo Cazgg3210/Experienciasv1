@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#F7F3EC"/>
+<defs>
+<g id="lf"><path d="M0 0q24-44 0-96q-24 52 0 96z"/><path d="M0-8V-80" fill="none" stroke="#F7F3EC" stroke-opacity=".6" stroke-width="2" stroke-linecap="round"/></g>
+<g id="ro"><circle r="56" fill="#E9C9BE"/><path d="M2 2c8-6 16 4 8 12c-12 10-28-2-24-16c4-18 30-22 40-4c12 20-4 44-28 44c-28 0-44-28-32-52" fill="none" stroke="#A48F7E" stroke-width="3" stroke-linecap="round"/></g>
+<g id="pe"><circle r="54" fill="#E9C9BE" fill-opacity=".7"/><circle r="54" fill="none" stroke="#E9C9BE" stroke-width="14" stroke-dasharray="1 20" stroke-linecap="round"/><circle r="34" fill="#E9C9BE"/><path d="M-22-8q22-22 44 0M-16 10q16 14 32 0" fill="none" stroke="#A48F7E" stroke-width="3" stroke-linecap="round"/></g>
+</defs>
+<circle cx="600" cy="380" r="300" fill="#E8DCC8" fill-opacity=".45"/>
+<path d="M545 430L592 600L572 735M575 430L596 600L590 735M600 430V735M655 430L608 600L628 735" fill="none" stroke="#5C6B4E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="#A3B18A">
+<use href="#lf" transform="translate(470 330) rotate(-60)"/>
+<use href="#lf" transform="translate(735 330) rotate(60)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(520 240) rotate(-25)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(690 230) rotate(30)"/>
+<use href="#lf" transform="translate(440 400) rotate(-105)"/>
+<use href="#lf" transform="translate(765 405) rotate(105)"/>
+<use href="#lf" transform="translate(560 445) rotate(-150)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(645 445) rotate(150)"/>
+<use href="#lf" transform="translate(604 215) rotate(5) scale(.8)"/>
+</g>
+<path d="M455 252l-22-30M762 262l26-28M600 190v-26" stroke="#5C6B4E" stroke-width="3" stroke-linecap="round"/>
+<g fill="#A3B18A"><circle cx="430" cy="218" r="10"/><circle cx="790" cy="230" r="9"/></g>
+<circle cx="600" cy="160" r="9" fill="#E9C9BE"/>
+<use href="#pe" transform="translate(495 345)"/>
+<use href="#pe" transform="translate(705 350) scale(.9)"/>
+<use href="#ro" transform="translate(535 238) scale(.7)"/>
+<use href="#ro" transform="translate(672 244) scale(.75) rotate(90)"/>
+<use href="#ro" transform="translate(600 305) scale(1.1)"/>
+<use href="#pe" transform="translate(600 410) scale(.62)"/>
+<path d="M600 598c-34-34-78-16-58 10c12 14 38 6 58-10zM600 598c34-34 78-16 58 10c-12 14-38 6-58-10z" fill="#E8DCC8" stroke="#A48F7E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="576" y="584" width="48" height="30" rx="8" fill="#A48F7E"/>
+<path d="M594 612q-12 44-46 82M606 612q12 44 46 82" fill="none" stroke="#A48F7E" stroke-width="5" stroke-linecap="round"/>
+</svg>

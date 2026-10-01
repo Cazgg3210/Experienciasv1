@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#E8DCC8"/>
+<defs>
+<g id="l"><path d="M0 0q44-26 110 0q-66 26-110 0z"/><path d="M10 0H94" fill="none" stroke="#F7F3EC" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/></g>
+</defs>
+<circle cx="600" cy="400" r="320" fill="#F7F3EC" fill-opacity=".45"/>
+<g fill="none" stroke="#5C6B4E" stroke-width="5" stroke-linecap="round">
+<path d="M220 660C420 560 700 420 980 150"/>
+<path d="M460 535q4 26-6 46M690 405q10 24 2 38M855 266q14 18 10 40" stroke-width="3"/>
+</g>
+<g fill="#A3B18A">
+<use href="#l" transform="translate(282 629) rotate(30)" fill="#5C6B4E"/>
+<use href="#l" transform="translate(300 620) rotate(160)"/>
+<use href="#l" transform="translate(349 594) rotate(-85)"/>
+<use href="#l" transform="translate(420 557) rotate(25)"/>
+<use href="#l" transform="translate(493 515) rotate(-90)" fill="#5C6B4E"/>
+<use href="#l" transform="translate(530 492) rotate(160)"/>
+<use href="#l" transform="translate(570 469) rotate(20)"/>
+<use href="#l" transform="translate(649 417) rotate(-95)"/>
+<use href="#l" transform="translate(730 360) rotate(15)" fill="#5C6B4E"/>
+<use href="#l" transform="translate(770 330) rotate(-140)"/>
+<use href="#l" transform="translate(813 297) rotate(-100)"/>
+<use href="#l" transform="translate(896 227) rotate(8)"/>
+<use href="#l" transform="translate(975 156) rotate(-40) scale(.8)" fill="#5C6B4E"/>
+</g>
+<ellipse cx="453" cy="600" rx="15" ry="21" fill="#5C6B4E" transform="rotate(10 453 600)"/>
+<ellipse cx="692" cy="460" rx="14" ry="20" fill="#A3B18A" stroke="#5C6B4E" stroke-width="3"/>
+<ellipse cx="866" cy="326" rx="15" ry="21" fill="#5C6B4E" transform="rotate(-12 866 326)"/>
+<g fill="#F7F3EC" fill-opacity=".7"><circle cx="447" cy="592" r="4"/><circle cx="687" cy="452" r="4"/><circle cx="861" cy="318" r="4"/></g>
+</svg>

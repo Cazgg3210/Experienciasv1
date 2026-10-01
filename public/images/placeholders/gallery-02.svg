@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#F7F3EC"/>
+<defs>
+<g id="cp" stroke="#A48F7E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-104 14Q-92 78 0 82Q92 78 104 14z" fill="#E9C9BE" stroke="none"/>
+<path d="M-60 54h0M-30 64h0M20 62h0M54 50h0" stroke="#F7F3EC" stroke-width="7"/>
+<path d="M-110 0Q-100 84 0 86Q100 84 110 0" fill="none"/>
+<ellipse rx="110" ry="14" fill="none"/>
+<path d="M0 86V258" fill="none"/>
+<ellipse cy="262" rx="60" ry="9" fill="#E8DCC8"/>
+</g>
+<path id="sp" d="M0-26Q3-3 26 0Q3 3 0 26Q-3 3-26 0Q-3-3 0-26z"/>
+</defs>
+<circle cx="600" cy="400" r="270" fill="#E9C9BE" fill-opacity=".3"/>
+<path d="M300 528H900" stroke="#A48F7E" stroke-opacity=".4" stroke-width="3" stroke-linecap="round"/>
+<use href="#cp" transform="translate(428 266) rotate(14 0 262)"/>
+<use href="#cp" transform="translate(772 266) rotate(-14 0 262)"/>
+<use href="#sp" transform="translate(600 232)" fill="#A48F7E" fill-opacity=".85"/>
+<use href="#sp" transform="translate(548 196) scale(.45)" fill="#E9C9BE"/>
+<use href="#sp" transform="translate(656 186) scale(.6)" fill="#E9C9BE"/>
+<path d="M566 268l-16-10M634 268l16-10M600 196v-12" stroke="#E9C9BE" stroke-width="4" stroke-linecap="round"/>
+<g fill="#A3B18A"><circle cx="520" cy="250" r="5"/><circle cx="690" cy="240" r="4"/></g>
+</svg>

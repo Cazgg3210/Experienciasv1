@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#F7F3EC"/>
+<defs>
+<path id="lf" d="M0 0q14-11 30 0q-16 11-30 0z"/>
+<g id="fl"><circle r="15" fill="#E9C9BE"/><circle r="7" fill="none" stroke="#A48F7E" stroke-width="2"/></g>
+<g id="pl" fill="none" stroke="#A48F7E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<circle r="64" fill="#F7F3EC"/>
+<circle r="44" stroke="#E8DCC8"/>
+<path d="M-98-50v16m8-16v16m8-16v16m-16 0q8 8 16 0m-8 4v72"/>
+<path d="M92-50v94m0-94q14 12 0 44"/>
+<circle cx="122" cy="-56" r="10" fill="#E9C9BE" fill-opacity=".5" stroke="none"/>
+<circle cx="122" cy="-56" r="18"/>
+</g>
+<g id="cd"><circle r="30" fill="#E9C9BE" fill-opacity=".3"/><circle r="14" fill="#F7F3EC" stroke="#A48F7E" stroke-width="3"/><circle r="5" fill="#E9C9BE"/><circle r="1.5" fill="#2F2C2A"/></g>
+</defs>
+<rect x="90" y="190" width="1020" height="420" rx="26" fill="#E8DCC8" stroke="#A48F7E" stroke-opacity=".35" stroke-width="3"/>
+<rect x="90" y="360" width="1020" height="80" fill="#F7F3EC" fill-opacity=".75"/>
+<path d="M96 369H1104M96 431H1104" stroke="#A48F7E" stroke-opacity=".35" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>
+<use href="#pl" transform="translate(330 282)"/>
+<use href="#pl" transform="translate(870 282)"/>
+<use href="#pl" transform="translate(330 518) rotate(180)"/>
+<use href="#pl" transform="translate(870 518) rotate(180)"/>
+<path d="M170 400C300 376 420 424 600 400S900 376 1030 400" fill="none" stroke="#5C6B4E" stroke-width="3" stroke-linecap="round"/>
+<g fill="#A3B18A">
+<use href="#lf" transform="translate(178 398) rotate(-160)"/>
+<use href="#lf" transform="translate(215 393) rotate(-35)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(238 392) rotate(35)"/>
+<use href="#lf" transform="translate(300 390) rotate(-40)"/>
+<use href="#lf" transform="translate(322 394) rotate(30)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(375 402) rotate(-30)"/>
+<use href="#lf" transform="translate(410 406) rotate(40)"/>
+<use href="#lf" transform="translate(500 407) rotate(-35)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(505 406) rotate(150)"/>
+<use href="#lf" transform="translate(695 395) rotate(-30)"/>
+<use href="#lf" transform="translate(700 396) rotate(160)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(790 388) rotate(-35)"/>
+<use href="#lf" transform="translate(812 387) rotate(35)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(880 388) rotate(-40)"/>
+<use href="#lf" transform="translate(965 394) rotate(30)"/>
+<use href="#lf" transform="translate(990 396) rotate(-35)" fill="#5C6B4E"/>
+<use href="#lf" transform="translate(1022 400) rotate(-15)"/>
+</g>
+<use href="#fl" transform="translate(262 397)"/>
+<use href="#fl" transform="translate(455 405) scale(.8)"/>
+<use href="#fl" transform="translate(745 392)"/>
+<use href="#fl" transform="translate(935 390) scale(.85)"/>
+<g fill="#E9C9BE"><circle cx="350" cy="410" r="5"/><circle cx="845" cy="378" r="5"/><circle cx="1000" cy="412" r="4"/><circle cx="200" cy="410" r="4"/></g>
+<use href="#cd" transform="translate(542 403)"/>
+<use href="#cd" transform="translate(600 400) scale(1.2)"/>
+<use href="#cd" transform="translate(658 397)"/>
+</svg>

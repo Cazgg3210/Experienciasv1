@@ -1,0 +1,41 @@
+# Desarrollo local: PostgreSQL + almacenamiento S3 compatible (RustFS, API compatible con S3/MinIO).
+# Uso: pnpm db:setup  (levanta servicios, crea bucket, migra y siembra datos demo)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ir-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ivonne
+      POSTGRES_PASSWORD: ivonne_dev_pw
+      POSTGRES_DB: ivonne_rosa
+    ports:
+      - "5432:5432"
+    volumes:
+      - ir_pgdata:/var/lib/postgresql/data
+      - ./scripts/docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ivonne -d ivonne_rosa"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  storage:
+    image: rustfs/rustfs:latest
+    container_name: ir-storage
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: irdevaccess
+      RUSTFS_SECRET_KEY: irdevsecret123
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ir_storagedata:/data
+
+volumes:
+  ir_pgdata:
+  ir_storagedata:

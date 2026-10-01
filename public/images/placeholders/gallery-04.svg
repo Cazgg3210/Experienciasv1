@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#E8DCC8"/>
+<defs>
+<g id="p" fill="none" stroke="#A48F7E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="600" cy="200" r="52" fill="#F7F3EC"/>
+<circle cx="600" cy="200" r="34" stroke="#E8DCC8"/>
+<path d="M524 168v12m6-12v64m6-64v12m-12 0q6 6 12 0M670 168v64m0-64q12 10 0 34"/>
+<circle cx="668" cy="262" r="13"/>
+</g>
+<path id="lf" d="M585 284q15-11 30 0q-15 11-30 0z"/>
+<g id="c"><circle r="28" fill="#E9C9BE" fill-opacity=".35"/><circle r="13" fill="#F7F3EC" stroke="#A48F7E" stroke-width="3"/><circle r="5" fill="#E9C9BE"/><circle r="1.5" fill="#2F2C2A"/></g>
+</defs>
+<circle cx="600" cy="400" r="296" fill="#F7F3EC" fill-opacity=".45"/>
+<circle cx="600" cy="400" r="280" fill="#F7F3EC" stroke="#A48F7E" stroke-opacity=".5" stroke-width="3"/>
+<use href="#p"/>
+<use href="#p" transform="rotate(60 600 400)"/>
+<use href="#p" transform="rotate(120 600 400)"/>
+<use href="#p" transform="rotate(180 600 400)"/>
+<use href="#p" transform="rotate(240 600 400)"/>
+<use href="#p" transform="rotate(300 600 400)"/>
+<g fill="#A3B18A">
+<use href="#lf"/>
+<use href="#lf" transform="rotate(30 600 400)" fill="#5C6B4E"/>
+<use href="#lf" transform="rotate(60 600 400)"/>
+<use href="#lf" transform="rotate(90 600 400)" fill="#5C6B4E"/>
+<use href="#lf" transform="rotate(120 600 400)"/>
+<use href="#lf" transform="rotate(150 600 400)" fill="#5C6B4E"/>
+<use href="#lf" transform="rotate(180 600 400)"/>
+<use href="#lf" transform="rotate(210 600 400)" fill="#5C6B4E"/>
+<use href="#lf" transform="rotate(240 600 400)"/>
+<use href="#lf" transform="rotate(270 600 400)" fill="#5C6B4E"/>
+<use href="#lf" transform="rotate(300 600 400)"/>
+<use href="#lf" transform="rotate(330 600 400)" fill="#5C6B4E"/>
+</g>
+<g fill="#E9C9BE">
+<circle cx="600" cy="284" r="7" transform="rotate(15 600 400)"/>
+<circle cx="600" cy="284" r="7" transform="rotate(75 600 400)"/>
+<circle cx="600" cy="284" r="7" transform="rotate(135 600 400)"/>
+<circle cx="600" cy="284" r="7" transform="rotate(195 600 400)"/>
+<circle cx="600" cy="284" r="7" transform="rotate(255 600 400)"/>
+<circle cx="600" cy="284" r="7" transform="rotate(315 600 400)"/>
+</g>
+<circle cx="600" cy="400" r="36" fill="#E8DCC8" stroke="#A48F7E" stroke-width="3"/>
+<path d="M600 400V330M600 400L539 435M600 400L661 435" stroke="#A48F7E" stroke-width="5" stroke-linecap="round"/>
+<use href="#c" x="600" y="330"/>
+<use href="#c" x="539" y="435"/>
+<use href="#c" x="661" y="435"/>
+<use href="#c" x="600" y="400"/>
+</svg>

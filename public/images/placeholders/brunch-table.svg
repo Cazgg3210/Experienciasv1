@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-hidden="true">
+<rect width="1200" height="800" fill="#E8DCC8"/>
+<rect x="230" y="140" width="740" height="520" rx="22" fill="#F7F3EC" stroke="#A48F7E" stroke-opacity=".3" stroke-width="3"/>
+<rect x="318" y="250" width="92" height="300" rx="6" fill="#E9C9BE"/>
+<path d="M340 256v288" stroke="#F7F3EC" stroke-opacity=".8" stroke-width="3"/>
+<g fill="none" stroke="#A48F7E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M352 290v34m12-34v34m12-34v34m-24 0q12 14 24 0m-12 8v170"/>
+<path d="M820 290v212m0-212q22 24 0 96"/>
+<circle cx="600" cy="400" r="150" fill="#F7F3EC" stroke-width="3"/>
+<circle cx="600" cy="400" r="108" stroke="#E8DCC8"/>
+<circle cx="840" cy="215" r="30" fill="#E9C9BE" fill-opacity=".45" stroke="none"/>
+<circle cx="840" cy="215" r="42" stroke-width="3"/>
+<path d="M818 196q10-12 26-14" stroke="#F7F3EC" stroke-width="5"/>
+<circle cx="870" cy="575" r="58" fill="#F7F3EC" stroke-width="3"/>
+<path d="M902 598l22 15" stroke-width="10"/>
+<circle cx="870" cy="575" r="38" fill="#F7F3EC" stroke-width="3"/>
+<circle cx="870" cy="575" r="28" fill="#A48F7E" stroke="none"/>
+</g>
+<path d="M870 584c-12-8-16-15-11-20c4-4 9-1 11 3c2-4 7-7 11-3c5 5 1 12-11 20z" fill="#F7F3EC" fill-opacity=".85"/>
+<g transform="translate(600 410) scale(1.1)" stroke="#A48F7E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-95 25Q0-110 95 25Q0 0-95 25z" fill="#E8DCC8"/>
+<path d="M-50-24q8 18 2 36M50-24q-8 18-2 36M-3-42q8 26 2 52M-78 6q6 6 4 16M78 6q-6 6-4 16" fill="none"/>
+</g>
+<g fill="#E9C9BE"><circle cx="555" cy="478" r="10"/><circle cx="578" cy="488" r="9"/></g>
+<path d="M600 482q14-14 30-10q-12 14-30 10z" fill="#A3B18A"/>
+<path d="M440 236q36-28 92-62" fill="none" stroke="#5C6B4E" stroke-width="3" stroke-linecap="round"/>
+<g fill="#A3B18A">
+<path d="M462 222q-6-24 10-36q6 22-10 36z"/>
+<path d="M470 216q24 4 34 22q-24 0-34-22z"/>
+<path d="M494 200q-4-24 14-34q4 22-14 34z"/>
+<path d="M500 196q22 6 30 24q-22-2-30-24z"/>
+<path d="M532 174q16-4 26-14q-18-6-26 14z"/>
+</g>
+</svg>
