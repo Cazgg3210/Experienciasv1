@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import type { PaymentProvider } from "./payments/types";
 import { MockPaymentProvider } from "./payments/mock-provider";
+import { createRealPaymentProvider } from "./payments/real";
 import type { EmailProvider } from "./email/types";
 import { MockEmailProvider } from "./email/mock-provider";
 import { ResendEmailProvider } from "./email/resend-provider";
@@ -11,6 +12,7 @@ import { MockWhatsAppProvider } from "./whatsapp/mock-provider";
 import { CloudApiWhatsAppProvider } from "./whatsapp/cloud-api-provider";
 import type { AIProvider } from "./ai/types";
 import { MockAIProvider } from "./ai/mock-provider";
+import { createRealAIProvider } from "./ai/real";
 import type { StorageProvider } from "./storage/types";
 import { S3StorageProvider } from "./storage/s3-provider";
 import { LocalStorageProvider } from "./storage/local-provider";
@@ -24,35 +26,13 @@ let payment: PaymentProvider | null = null;
 export function getPaymentProvider(): PaymentProvider {
   if (payment) return payment;
   const e = env();
-  // Proveedores reales: se registran en ./payments/registry-real.ts (Stripe / Mercado Pago)
   if (e.PAYMENT_PROVIDER !== "mock" && e.PAYMENT_SECRET_KEY) {
-    const real = loadRealPaymentProvider(e.PAYMENT_PROVIDER, e.PAYMENT_SECRET_KEY, e.PAYMENT_WEBHOOK_SECRET, e.APP_URL);
+    const real = createRealPaymentProvider(e.PAYMENT_PROVIDER, e.PAYMENT_SECRET_KEY, e.PAYMENT_WEBHOOK_SECRET, e.APP_URL);
     if (real) return (payment = real);
     logger.warn("payments.provider_unavailable_fallback_mock", { provider: e.PAYMENT_PROVIDER });
   }
   payment = new MockPaymentProvider(e.APP_URL, e.PAYMENT_WEBHOOK_SECRET);
   return payment;
-}
-
-/** Punto de extensión para proveedores reales (implementados en payments/*). */
-type RealPaymentFactory = (
-  provider: "stripe" | "mercadopago",
-  secretKey: string,
-  webhookSecret: string,
-  appUrl: string,
-) => PaymentProvider | null;
-let realPaymentFactory: RealPaymentFactory | null = null;
-export function registerRealPaymentFactory(factory: RealPaymentFactory) {
-  realPaymentFactory = factory;
-  payment = null;
-}
-function loadRealPaymentProvider(
-  provider: "stripe" | "mercadopago",
-  secretKey: string,
-  webhookSecret: string,
-  appUrl: string,
-): PaymentProvider | null {
-  return realPaymentFactory ? realPaymentFactory(provider, secretKey, webhookSecret, appUrl) : null;
 }
 
 /** Devuelve un proveedor por nombre (para webhooks /api/webhooks/payments/[provider]). */
@@ -91,18 +71,13 @@ export function getWhatsAppProvider(): WhatsAppProvider {
 }
 
 let ai: AIProvider | null = null;
-type RealAIFactory = (provider: "anthropic" | "openai", apiKey: string, model?: string) => AIProvider | null;
-let realAIFactory: RealAIFactory | null = null;
-export function registerRealAIFactory(factory: RealAIFactory) {
-  realAIFactory = factory;
-  ai = null;
-}
 export function getAIProvider(): AIProvider {
   if (ai) return ai;
   const e = env();
-  if (e.AI_PROVIDER !== "mock" && e.AI_API_KEY && realAIFactory) {
-    const real = realAIFactory(e.AI_PROVIDER, e.AI_API_KEY, e.AI_MODEL);
+  if (e.AI_PROVIDER !== "mock" && e.AI_API_KEY) {
+    const real = createRealAIProvider(e.AI_PROVIDER, e.AI_API_KEY, e.AI_MODEL);
     if (real) return (ai = real);
+    logger.warn("ai.provider_unavailable_fallback_mock", { provider: e.AI_PROVIDER });
   }
   ai = new MockAIProvider();
   return ai;

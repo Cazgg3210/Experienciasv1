@@ -80,7 +80,6 @@ export interface DemoRefs {
   styles: Record<string, { id: string; name: string; palette: string[] }>;
   vendors: Record<string, { id: string; name: string }>;
   customers: Record<string, CustomerRef>;
-  budgets: Record<string, string>;
   menuCostBaselineCents: number;
   dates: DemoDates;
 }
@@ -534,9 +533,6 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
     };
   }
 
-  const budgetRows = await prisma.budgetRange.findMany({ orderBy: { sortOrder: "asc" } });
-  const budgets = Object.fromEntries(budgetRows.map((b) => [b.id, b.id]));
-
   const baseline = menus[MENU_COST_BASELINE_SLUG];
   if (!baseline) throw new Error("Falta el menú de referencia");
 
@@ -551,10 +547,8 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
     styles,
     vendors,
     customers,
-    budgets,
     menuCostBaselineCents: baseline.costPerGuestCents,
     dates,
   };
 }
 
-export { addDaysToKey };

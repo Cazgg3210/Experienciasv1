@@ -49,3 +49,6 @@ coverage/
 .env
 !.env.example
 *.tsbuildinfo
+
+.tsbuild/
+.logs/
