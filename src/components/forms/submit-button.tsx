@@ -8,10 +8,11 @@ export function SubmitButton({
   pending,
   children,
   pendingText = "Guardando…",
+  disabled,
   ...props
 }: React.ComponentProps<typeof Button> & { pending?: boolean; pendingText?: string }) {
   return (
-    <Button type="submit" disabled={pending || props.disabled} aria-busy={pending || undefined} {...props}>
+    <Button type="submit" {...props} disabled={pending || disabled} aria-busy={pending || undefined}>
       {pending ? (
         <>
           <Loader2 className="size-4 animate-spin" aria-hidden />

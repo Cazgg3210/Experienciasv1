@@ -44,6 +44,7 @@ export function MediaUploader({
     const list = Array.from(files);
     if (!list.length) return;
     setBusy(true);
+    let ok = 0;
     try {
       for (const file of list) {
         const body = new FormData();
@@ -55,9 +56,10 @@ export function MediaUploader({
           toast.error(json.error ?? "No se pudo subir el archivo.");
           continue;
         }
+        ok += 1;
         onUploaded?.(json as UploadedMedia);
       }
-      if (list.length) toast.success(list.length > 1 ? "Archivos subidos" : "Archivo subido");
+      if (ok > 0) toast.success(ok > 1 ? `${ok} archivos subidos` : "Archivo subido");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";

@@ -45,10 +45,21 @@ function memoryLimit(key: string, opts: { limit: number; windowMs: number }): Ra
   return { ok: entry.count <= opts.limit, remaining: Math.max(0, opts.limit - entry.count), resetAt: new Date(entry.resetAt) };
 }
 
-/** IP del cliente detrás del proxy (Traefik en Dokploy agrega X-Forwarded-For). */
+/**
+ * IP del cliente detrás del proxy. En Dokploy, Traefik fija X-Real-Ip y AGREGA la IP que ve al final de
+ * X-Forwarded-For; las entradas de la izquierda las puede inventar el cliente. Por eso se usa X-Real-Ip o la
+ * entrada TRUSTED_PROXY_HOPS desde la derecha (default 1), nunca la primera.
+ */
 export async function clientIp(): Promise<string> {
   const h = await headers();
+  const real = h.get("x-real-ip")?.trim();
+  if (real) return real;
   const fwd = h.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return h.get("x-real-ip") ?? "unknown";
+  if (fwd) {
+    const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? 1) || 1);
+    const parts = fwd.split(",").map((s) => s.trim()).filter(Boolean);
+    const ip = parts[Math.max(0, parts.length - hops)];
+    if (ip) return ip;
+  }
+  return "unknown";
 }

@@ -76,7 +76,7 @@ export function AdminShell({
   return (
     <div className="bg-background flex min-h-dvh">
       {/* Sidebar escritorio */}
-      <aside className="bg-sidebar border-sidebar-border sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r lg:flex">
+      <aside className="bg-sidebar border-sidebar-border sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r lg:flex print:hidden">
         <div className="px-5 pt-6 pb-4">
           <Logo href="/admin" subtitle="Centro de experiencias" />
         </div>
@@ -87,7 +87,7 @@ export function AdminShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="bg-background/90 sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-4 backdrop-blur sm:px-6">
+        <header className="bg-background/90 sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-4 backdrop-blur sm:px-6 print:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú">

@@ -12,8 +12,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
 
 /** Confirmación para acciones destructivas o irreversibles. */
 export function ConfirmDialog({
@@ -50,7 +48,7 @@ export function ConfirmDialog({
           <AlertDialogCancel disabled={pending}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             disabled={pending}
-            className={cn(destructive && buttonVariants({ variant: "destructive" }))}
+            variant={destructive ? "destructive" : "default"}
             onClick={async (e) => {
               e.preventDefault();
               setPending(true);

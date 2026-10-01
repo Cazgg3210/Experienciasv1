@@ -13,15 +13,8 @@ export const authConfig = {
   trustHost: true,
   providers: [],
   callbacks: {
-    authorized({ auth, request }) {
-      const { pathname } = request.nextUrl;
-      const role = auth?.user?.role as AppRole | undefined;
-      if (pathname.startsWith("/admin")) {
-        return role === "SUPER_ADMIN" || role === "OWNER";
-      }
-      if (pathname.startsWith("/staff")) {
-        return role === "STAFF" || role === "SUPER_ADMIN" || role === "OWNER";
-      }
+    // La autorización por ruta vive en src/middleware.ts (redirige con callbackUrl correcto).
+    authorized() {
       return true;
     },
     jwt({ token, user }) {

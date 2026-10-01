@@ -44,7 +44,8 @@ export function MoneyInput({
         className="tabular pl-7"
         value={text}
         onChange={(e) => {
-          const raw = e.target.value.replace(/[^\d.,-]/g, "").replace(",", ".");
+          // Formato MX: coma = separador de miles, punto = decimales ("1,500.50" -> 1500.50)
+          const raw = e.target.value.replace(/,/g, "").replace(/[^\d.-]/g, "");
           setText(raw);
           if (raw === "" || raw === "-") {
             lastEmitted.current = null;

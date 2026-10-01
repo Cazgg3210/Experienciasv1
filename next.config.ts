@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "10mb" },
   },
   images: {
+    localPatterns: [{ pathname: "/api/media/**" }, { pathname: "/images/**" }, { pathname: "/opengraph-image**" }],
     formats: ["image/avif", "image/webp"],
     dangerouslyAllowSVG: true,
     contentDispositionType: "inline",

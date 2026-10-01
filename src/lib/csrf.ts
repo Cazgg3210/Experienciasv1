@@ -7,6 +7,10 @@ import { env } from "@/lib/env";
  * Acepta el request si Origin (o Referer) coincide con el host del request o con APP_URL.
  */
 export function isSameOrigin(req: Request): boolean {
+  // Navegadores modernos: Fetch Metadata es la señal más confiable (no depende de Referrer-Policy)
+  const site = req.headers.get("sec-fetch-site");
+  if (site === "same-origin") return true;
+  if (site === "cross-site" || site === "same-site") return false;
   const origin = req.headers.get("origin") ?? refererOrigin(req.headers.get("referer"));
   if (!origin) return false;
   try {

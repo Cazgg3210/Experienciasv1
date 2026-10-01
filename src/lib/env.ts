@@ -14,6 +14,9 @@ const boolDefaultTrue = z
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:3000"),
+  /** URL interna para llamadas servidor→servidor (p. ej. webhook simulado). Default: APP_URL */
+  INTERNAL_APP_URL: z.string().url().optional(),
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(1),
   APP_NAME: z.string().default("Ivonne & Rosa"),
   APP_TIMEZONE: z.string().default("America/Mexico_City"),
   DATABASE_URL: z.string().min(1),

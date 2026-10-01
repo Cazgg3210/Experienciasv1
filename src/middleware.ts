@@ -4,20 +4,42 @@ import { authConfig } from "@/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
+const BACKOFFICE = new Set(["SUPER_ADMIN", "OWNER"]);
+const STAFF_AREA = new Set(["SUPER_ADMIN", "OWNER", "STAFF"]);
+const TOKEN_PREFIXES = ["/mi-evento", "/e/", "/memory", "/cotizacion", "/pago"];
+const NOINDEX_PREFIXES = ["/admin", "/staff", "/login", ...TOKEN_PREFIXES];
+
 /**
- * Middleware edge: protege /admin y /staff (RBAC fino se valida de nuevo en servidor),
- * y agrega cabeceras de seguridad + noindex en zonas privadas.
+ * Middleware edge: primera barrera para /admin y /staff (el RBAC fino se valida otra vez en servidor)
+ * + cabeceras de privacidad en zonas privadas.
  */
 export default auth((req) => {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
+  const role = req.auth?.user?.role as string | undefined;
+
+  const needsBackoffice = pathname === "/admin" || pathname.startsWith("/admin/");
+  const needsStaff = pathname === "/staff" || pathname.startsWith("/staff/");
+  if (needsBackoffice || needsStaff) {
+    if (!role) {
+      const login = new URL("/login", req.nextUrl.origin);
+      login.searchParams.set("callbackUrl", `${pathname}${search}`);
+      return NextResponse.redirect(login);
+    }
+    const allowed = needsBackoffice ? BACKOFFICE.has(role) : STAFF_AREA.has(role);
+    if (!allowed) {
+      const target = role === "STAFF" ? "/staff" : "/sin-acceso";
+      return NextResponse.redirect(new URL(target, req.nextUrl.origin));
+    }
+  }
+
   const res = NextResponse.next();
-  const privatePrefixes = ["/admin", "/staff", "/mi-evento", "/e/", "/memory", "/cotizacion", "/pago", "/login"];
-  if (privatePrefixes.some((p) => pathname.startsWith(p))) {
+  if (NOINDEX_PREFIXES.some((p) => pathname.startsWith(p))) {
     res.headers.set("X-Robots-Tag", "noindex, nofollow");
   }
-  // Tokens en URL: no filtrar el path completo por Referer a terceros
-  if (["/mi-evento", "/e/", "/memory", "/cotizacion", "/pago"].some((p) => pathname.startsWith(p))) {
-    res.headers.set("Referrer-Policy", "no-referrer");
+  // URLs con token: nunca enviar la ruta a terceros. `same-origin` (no `no-referrer`) para que los
+  // POST del mismo sitio conserven un Origin válido (Server Actions y verificación CSRF).
+  if (TOKEN_PREFIXES.some((p) => pathname.startsWith(p))) {
+    res.headers.set("Referrer-Policy", "same-origin");
   }
   return res;
 });

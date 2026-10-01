@@ -52,7 +52,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           Saltar al contenido
         </a>
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-        <Toaster position="top-center" richColors closeButton />
+        <Toaster
+          position="top-center"
+          richColors
+          closeButton
+          containerAriaLabel="Notificaciones"
+          toastOptions={{ closeButtonAriaLabel: "Cerrar aviso" }}
+        />
       </body>
     </html>
   );
