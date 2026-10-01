@@ -7,7 +7,6 @@ import type {
   ChecklistItemStatus,
   CostCategory,
   DietaryRestriction,
-  DiscountType,
   EventStatus,
   GuestSource,
   LeadActivityType,
@@ -31,17 +30,16 @@ import { BUDGET_RANGES } from "./base-data";
 import { type DemoRefs, type StaffKey, type UserKey, placeholderMedia } from "./demo-setup";
 import {
   type Clock,
-  type CustomLine,
-  type QuoteCalc,
+  type EngineCustomItem,
+  type EngineDiscount,
+  type QuoteResult,
   type Rng,
   DAY_MS,
   HOUR_MS,
-  MINUTE_MS,
-  PRICING_VERSION,
   TERMS_VERSION,
   addDays,
   addMinutes,
-  calculateQuote,
+  priceQuote,
   emailFor,
   firstDateOnOrAfter,
   json,
@@ -81,7 +79,9 @@ export interface QuoteRef {
   code: string;
   publicToken: string;
   status: QuoteStatus;
-  calc: QuoteCalc;
+  /** Resultado completo del QuoteEngine (también guardado como pricingSnapshot). */
+  calc: QuoteResult;
+  discount: EngineDiscount | null;
   customerKey: string;
   createdAt: Date;
   sentAt: Date | null;
@@ -203,22 +203,21 @@ const SOURCE_LABEL: Record<LeadSource, string> = {
   OTHER: "otro canal",
 };
 
-async function createLead(prisma: PrismaClient, refs: DemoRefs, seed: LeadSeed): Promise<LeadRef & { estimate: QuoteCalc | null }> {
+async function createLead(prisma: PrismaClient, refs: DemoRefs, seed: LeadSeed): Promise<LeadRef & { estimate: QuoteResult | null }> {
   const customer = seed.customerKey ? refs.customers[seed.customerKey] : undefined;
   const name = seed.name ?? customer?.name ?? "Sin nombre";
   const email = seed.email ?? customer?.email ?? null;
   const phone = seed.phone ?? customer?.phone ?? null;
 
-  let estimate: QuoteCalc | null = null;
+  let estimate: QuoteResult | null = null;
   let snapshot: Prisma.ConfigurationSnapshotCreateWithoutLeadInput | undefined;
   if (seed.configurator && seed.experienceSlug && seed.areaSlug && seed.guestCount) {
     const exp = refs.experiences[seed.experienceSlug]!;
     const menu = seed.menuSlug ? refs.menus[seed.menuSlug] : undefined;
-    estimate = calculateQuote({
+    estimate = priceQuote({
       experience: exp,
       guestCount: seed.guestCount,
       menu: menu ?? null,
-      menuCostBaselineCents: refs.menuCostBaselineCents,
       addOns: seed.configurator.addOns.map((a) => ({ addOn: refs.addOns[a.slug]!, quantity: a.quantity })),
       area: refs.areas[seed.areaSlug]!,
     });
@@ -241,7 +240,7 @@ async function createLead(prisma: PrismaClient, refs: DemoRefs, seed: LeadSeed):
         contact: { name, email, phone },
       }),
       estimate: publicEstimate(estimate),
-      pricingVersion: PRICING_VERSION,
+      pricingVersion: estimate.pricingVersion,
       createdAt: seed.createdAt,
     };
   }
@@ -372,8 +371,8 @@ interface QuoteSeed {
   eventDateKey: string;
   startTime: string;
   addOns: { slug: string; quantity: number }[];
-  custom?: CustomLine[];
-  discount?: { type: DiscountType; value: number; reason: string };
+  customItems?: EngineCustomItem[];
+  discount?: EngineDiscount & { reason: string };
   createdAt: Date;
   sentAt?: Date;
   viewedAt?: Date;
@@ -390,15 +389,15 @@ const DEFAULT_CUSTOMER_NOTES =
   "Precios con IVA incluido. Apartas tu fecha con el 50% de anticipo; el saldo se liquida a más tardar 3 días antes del evento.";
 
 async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed): Promise<QuoteRef> {
-  const calc = calculateQuote({
+  const discount = seed.discount ?? null;
+  const calc = priceQuote({
     experience: refs.experiences[seed.experienceSlug]!,
     guestCount: seed.guestCount,
     menu: refs.menus[seed.menuSlug] ?? null,
-    menuCostBaselineCents: refs.menuCostBaselineCents,
     addOns: seed.addOns.map((a) => ({ addOn: refs.addOns[a.slug]!, quantity: a.quantity })),
     area: refs.areas[seed.areaSlug]!,
-    custom: seed.custom,
-    discount: seed.discount ?? null,
+    customItems: seed.customItems,
+    discount,
   });
   const validUntil = seed.sentAt ? addDays(seed.sentAt, 7) : null;
   const publicToken = seed.publicToken ?? generateToken();
@@ -419,9 +418,9 @@ async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed
       startTime: seed.startTime,
       guestCount: seed.guestCount,
       subtotalCents: calc.subtotalCents,
-      discountType: calc.discountType,
-      discountValue: calc.discountValue,
-      discountReason: calc.discountReason,
+      discountType: discount?.type ?? null,
+      discountValue: discount?.value ?? null,
+      discountReason: discount?.reason ?? null,
       discountCents: calc.discountCents,
       logisticsCents: calc.logisticsCents,
       taxCents: calc.taxCents,
@@ -431,7 +430,7 @@ async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed
       marginBps: calc.marginBps,
       depositBps: calc.depositBps,
       depositCents: calc.depositCents,
-      pricingSnapshot: calc.snapshot,
+      pricingSnapshot: json(calc),
       notesForCustomer: seed.notesForCustomer ?? DEFAULT_CUSTOMER_NOTES,
       internalNotes: seed.internalNotes ?? null,
       validUntil,
@@ -444,7 +443,7 @@ async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed
       createdById: refs.users[seed.createdBy].id,
       createdAt: seed.createdAt,
       items: {
-        create: calc.items.map((i) => ({
+        create: calc.lines.map((i, index) => ({
           type: i.type,
           refId: i.refId,
           description: i.description,
@@ -454,7 +453,7 @@ async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed
           totalPriceCents: i.totalPriceCents,
           totalCostCents: i.totalCostCents,
           costCategory: i.costCategory,
-          sortOrder: i.sortOrder,
+          sortOrder: index,
         })),
       },
     },
@@ -465,6 +464,7 @@ async function createQuote(prisma: PrismaClient, refs: DemoRefs, seed: QuoteSeed
     publicToken,
     status: seed.status,
     calc,
+    discount,
     customerKey: seed.customerKey,
     createdAt: seed.createdAt,
     sentAt: seed.sentAt ?? null,
@@ -715,7 +715,7 @@ export async function seedDemoSales(prisma: PrismaClient, refs: DemoRefs, clock:
       key: "e3", leadId: leads.daniela!.id, customerKey: "daniela", status: "ACCEPTED", title: "Karaoke & Mimosas de Daniela", occasion: "BIRTHDAY",
       experienceSlug: "karaoke-mimosas", menuSlug: "brunch-clasico", styleSlug: "divertido", areaSlug: "irrigacion", guestCount: 9, eventDateKey: d.e3, startTime: "13:00",
       addOns: [{ slug: "pastel-personalizado", quantity: 1 }, { slug: "regalo-homenajeada", quantity: 1 }],
-      custom: [{ description: "Pantalla adicional para letras en la terraza", quantity: 1, unitPriceCents: mx(1_200), unitCostCents: mx(500), costCategory: "VENDOR" }],
+      customItems: [{ description: "Pantalla adicional para letras en la terraza", quantity: 1, unitPriceCents: mx(1_200), unitCostCents: mx(500), costCategory: "VENDOR" }],
       createdAt: at(-20, "10:00"), sentAt: at(-20, "10:15"), viewedAt: at(-20, "12:00"), acceptedAt: at(-18, "16:45"), createdBy: "rosa",
     },
     {
@@ -1162,7 +1162,7 @@ export async function seedDemoSales(prisma: PrismaClient, refs: DemoRefs, clock:
     });
 
     // --- Add-ons (copiados de la cotización) ----------------------------------
-    const addOnItems = quote.calc.items.filter((i) => i.type === "ADDON");
+    const addOnItems = quote.calc.lines.filter((i) => i.type === "ADDON");
     for (const sel of quoteSeed.addOns) {
       const addOn = refs.addOns[sel.slug]!;
       const item = addOnItems.find((i) => i.refId === addOn.id)!;

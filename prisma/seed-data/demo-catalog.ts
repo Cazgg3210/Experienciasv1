@@ -207,8 +207,6 @@ export const MENUS: MenuSeed[] = [
   },
 ];
 
-/** Menú incluido de referencia para costear upgrades de forma incremental. */
-export const MENU_COST_BASELINE_SLUG = "brunch-clasico";
 
 // -----------------------------------------------------------------------------
 // Add-ons
@@ -447,7 +445,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     occasions: ["FRIENDS_BRUNCH", "BIRTHDAY", "GATHERING", "BABY_BRUNCH"],
     basePriceCents: mx(14_900),
     extraGuestPriceCents: mx(1_500),
-    extraGuestCostCents: mx(700),
+    extraGuestCostCents: mx(500),
     durationMinutes: 180,
     includes: [
       "Montaje completo de mesa para 6 invitadas (ampliable hasta 12)",
@@ -465,10 +463,10 @@ export const EXPERIENCES: ExperienceSeed[] = [
     menus: ["brunch-clasico", "brunch-garden", "brunch-sin-gluten", "brunch-premium", "sabores-peru-mexico"],
     addOns: ["pastel-personalizado", "fotografo-2h", "mimosa-bar", "upgrade-floral", "taller-floral", "papeleria-personalizada", "regalo-homenajeada", "video-recap", "memory-capsule-premium", "arco-globos-organico", "mesa-postres"],
     costs: [
-      { category: "FOOD", description: "Insumos de cocina: menú incluido, panadería, fruta, café y jugos", amountCents: mx(420), perGuest: true },
+      { category: "FOOD", description: "Café de especialidad, jugos naturales y aguas frescas (fuera del menú)", amountCents: mx(140), perGuest: true },
       { category: "FLOWERS", description: "Flores de temporada para centro de mesa", amountCents: mx(1_200), perGuest: false },
       { category: "STAFF", description: "Coordinadora y mesera (base)", amountCents: mx(2_600), perGuest: false },
-      { category: "CONSUMABLES", description: "Hielo, velas, servilletas de papel y desechables de cocina", amountCents: mx(110), perGuest: true },
+      { category: "CONSUMABLES", description: "Hielo, velas, servilletas de papel y desechables de cocina", amountCents: mx(100), perGuest: true },
       { category: "TRANSPORT", description: "Carga y traslado de mobiliario", amountCents: mx(300), perGuest: false },
       { category: "OTHER", description: "Lavandería de mantelería", amountCents: mx(250), perGuest: false },
     ],
@@ -491,7 +489,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     occasions: ["BIRTHDAY", "FRIENDS_BRUNCH", "GATHERING"],
     basePriceCents: mx(16_900),
     extraGuestPriceCents: mx(1_700),
-    extraGuestCostCents: mx(800),
+    extraGuestCostCents: mx(580),
     durationMinutes: 210,
     includes: [
       "Mesa de celebración para 6 invitadas (hasta 12)",
@@ -510,7 +508,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     menus: ["brunch-clasico", "brunch-garden", "brunch-sin-gluten", "brunch-premium", "sabores-peru-mexico"],
     addOns: ["mini-karaoke", "pastel-personalizado", "fotografo-2h", "mimosa-bar", "upgrade-floral", "taller-floral", "papeleria-personalizada", "regalo-homenajeada", "video-recap", "memory-capsule-premium", "arco-globos-organico", "mesa-postres"],
     costs: [
-      { category: "FOOD", description: "Insumos de cocina y bebidas de bienvenida", amountCents: mx(450), perGuest: true },
+      { category: "FOOD", description: "Café, jugos y mocktail de bienvenida (fuera del menú)", amountCents: mx(160), perGuest: true },
       { category: "FLOWERS", description: "Flores y follaje para mesa de celebración", amountCents: mx(1_500), perGuest: false },
       { category: "STAFF", description: "Anfitriona y mesera (base)", amountCents: mx(2_800), perGuest: false },
       { category: "CONSUMABLES", description: "Espumoso para brindis, velas y desechables", amountCents: mx(120), perGuest: true },
@@ -536,7 +534,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     occasions: ["BACHELORETTE", "BIRTHDAY", "FRIENDS_BRUNCH"],
     basePriceCents: mx(17_900),
     extraGuestPriceCents: mx(1_800),
-    extraGuestCostCents: mx(850),
+    extraGuestCostCents: mx(640),
     durationMinutes: 240,
     includes: [
       "Equipo de karaoke profesional con 2 micrófonos inalámbricos",
@@ -555,9 +553,9 @@ export const EXPERIENCES: ExperienceSeed[] = [
     menus: ["brunch-clasico", "brunch-garden", "brunch-premium"],
     addOns: ["pastel-personalizado", "fotografo-2h", "upgrade-floral", "papeleria-personalizada", "regalo-homenajeada", "video-recap", "memory-capsule-premium", "arco-globos-organico", "mesa-postres"],
     costs: [
-      { category: "FOOD", description: "Insumos de cocina, espumoso y jugos para mimosas", amountCents: mx(480), perGuest: true },
+      { category: "FOOD", description: "Base de mimosas (espumoso y jugos), café y aguas (fuera del menú)", amountCents: mx(230), perGuest: true },
       { category: "FLOWERS", description: "Flores y detalles de mesa", amountCents: mx(1_100), perGuest: false },
-      { category: "STAFF", description: "Anfitriona, mesera y técnico de karaoke", amountCents: mx(3_200), perGuest: false },
+      { category: "STAFF", description: "Anfitriona, mesera y técnico de karaoke", amountCents: mx(3_000), perGuest: false },
       { category: "CONSUMABLES", description: "Hielo, fruta para mimosas y desechables", amountCents: mx(130), perGuest: true },
       { category: "TRANSPORT", description: "Traslado de equipo de audio y mobiliario", amountCents: mx(400), perGuest: false },
       { category: "OTHER", description: "Licencia de catálogo, baterías y lavandería", amountCents: mx(650), perGuest: false },
@@ -588,7 +586,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     occasions: ["BRIDAL", "BACHELORETTE", "BABY_BRUNCH"],
     basePriceCents: mx(19_900),
     extraGuestPriceCents: mx(1_900),
-    extraGuestCostCents: mx(900),
+    extraGuestCostCents: mx(680),
     durationMinutes: 240,
     includes: [
       "Mesa nupcial con flores blancas y follaje",
@@ -608,12 +606,12 @@ export const EXPERIENCES: ExperienceSeed[] = [
     menus: ["brunch-clasico", "brunch-garden", "brunch-sin-gluten", "brunch-premium"],
     addOns: ["pastel-personalizado", "fotografo-2h", "mimosa-bar", "upgrade-floral", "taller-floral", "papeleria-personalizada", "regalo-homenajeada", "video-recap", "memory-capsule-premium", "arco-globos-organico", "mesa-postres"],
     costs: [
-      { category: "FOOD", description: "Insumos de cocina, espumoso y bebidas", amountCents: mx(520), perGuest: true },
-      { category: "FLOWERS", description: "Flores blancas premium y follaje", amountCents: mx(2_600), perGuest: false },
+      { category: "FOOD", description: "Espumoso de bienvenida, café y jugos (fuera del menú)", amountCents: mx(200), perGuest: true },
+      { category: "FLOWERS", description: "Flores blancas premium y follaje", amountCents: mx(2_300), perGuest: false },
       { category: "STAFF", description: "Coordinadora y mesera (4 h)", amountCents: mx(3_000), perGuest: false },
       { category: "CONSUMABLES", description: "Velas, detalles de mesa y desechables", amountCents: mx(140), perGuest: true },
       { category: "TRANSPORT", description: "Traslado de cristalería y candelabros", amountCents: mx(400), perGuest: false },
-      { category: "OTHER", description: "Detalle para la novia, papelería y lavandería", amountCents: mx(600), perGuest: false },
+      { category: "OTHER", description: "Detalle para la novia, papelería y lavandería", amountCents: mx(500), perGuest: false },
     ],
     inventory: [...STANDARD_TABLE, { sku: "COP-CHA-01", quantity: 1, perGuest: true }, { sku: "CAN-01", quantity: 4, perGuest: false }, { sku: "CAM-01", quantity: 1, perGuest: false }],
     faqs: [
@@ -634,7 +632,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     occasions: ["FRIENDS_BRUNCH", "BIRTHDAY", "GATHERING", "CORPORATE"],
     basePriceCents: mx(18_500),
     extraGuestPriceCents: mx(1_800),
-    extraGuestCostCents: mx(880),
+    extraGuestCostCents: mx(640),
     durationMinutes: 210,
     includes: [
       "Mesa temática con textiles andinos y papel picado artesanal",
@@ -652,7 +650,7 @@ export const EXPERIENCES: ExperienceSeed[] = [
     menus: ["brunch-clasico", "brunch-garden", "sabores-peru-mexico"],
     addOns: ["mini-karaoke", "pastel-personalizado", "fotografo-2h", "upgrade-floral", "papeleria-personalizada", "video-recap", "memory-capsule-premium"],
     costs: [
-      { category: "FOOD", description: "Insumos de cocina y bebidas de la casa", amountCents: mx(560), perGuest: true },
+      { category: "FOOD", description: "Chilcano sin alcohol, aguas de la casa y café (fuera del menú)", amountCents: mx(180), perGuest: true },
       { category: "FLOWERS", description: "Flores de color y follaje", amountCents: mx(1_300), perGuest: false },
       { category: "STAFF", description: "Chef en sitio y mesera", amountCents: mx(3_200), perGuest: false },
       { category: "CONSUMABLES", description: "Hielo, desechables y especias", amountCents: mx(130), perGuest: true },

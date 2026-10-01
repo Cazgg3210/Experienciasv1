@@ -1,0 +1,805 @@
+import "server-only";
+import type { PaymentMethod, Prisma } from "@prisma/client";
+import { prisma } from "@/db";
+import { appUrl } from "@/lib/env";
+import { AppError, NotFoundError, ValidationError } from "@/lib/errors";
+import { isEnabled } from "@/lib/flags";
+import { logger } from "@/lib/logger";
+import { formatMXN } from "@/lib/money";
+import { PAYMENT_KIND_LABELS } from "@/lib/labels";
+import { generateToken, isPlausibleToken } from "@/lib/tokens";
+import { formatLongDate, localDateKey, zonedDateTime } from "@/lib/dates";
+import { track } from "@/server/analytics";
+import { audit } from "@/server/audit";
+import type { SessionUser } from "@/server/auth/session";
+import { getPaymentProvider, getPaymentProviderByName } from "@/server/providers";
+import { getSettings } from "@/features/settings/server/settings-service";
+import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
+import { onEventConfirmed } from "@/features/events/server/lifecycle";
+import { eventStatusMachine, type EventStatus } from "@/features/events/domain/event-status";
+import { netPaidCents, paymentStatusMachine, type PaymentStatus } from "../domain/payment-status";
+import {
+  CHECKOUT_BLOCK_MESSAGES,
+  checkoutAmountCents,
+  estimateFeeCents,
+  isReusablePendingCheckout,
+  maxManualAmountCents,
+  planRefund,
+  shouldConfirmEvent,
+  type CheckoutKind,
+} from "../domain/amounts";
+import type { ManualPaymentInput, RefundInput } from "../schemas";
+import { paymentResultUrl, portalPath, quotePath } from "./payment-links";
+
+type Tx = Prisma.TransactionClient;
+
+export type CheckoutSource = "quote" | "portal";
+
+export const PAYMENTS_DISABLED_MESSAGE =
+  "Los pagos en línea están en pausa por el momento. Escríbenos por WhatsApp y con gusto te ayudamos a completar tu pago.";
+const GENERIC_NOT_FOUND = "No encontramos esta reserva. Revisa tu enlace o escríbenos por WhatsApp.";
+
+// -----------------------------------------------------------------------------
+// Checkout
+// -----------------------------------------------------------------------------
+
+/** Resuelve un token público (cotización aceptada o portal) a su reserva. 404 genérico si no aplica. */
+export async function resolveBookingFromToken(token: string, tokenType: CheckoutSource): Promise<{ bookingId: string }> {
+  if (!isPlausibleToken(token)) throw new NotFoundError(GENERIC_NOT_FOUND);
+  if (tokenType === "quote") {
+    const quote = await prisma.quote.findUnique({
+      where: { publicToken: token },
+      select: { status: true, booking: { select: { id: true } } },
+    });
+    if (!quote || quote.status !== "ACCEPTED") throw new NotFoundError(GENERIC_NOT_FOUND);
+    if (!quote.booking) throw new AppError("Tu reserva se está preparando. Intenta de nuevo en unos minutos.", "BOOKING_NOT_READY", 409);
+    return { bookingId: quote.booking.id };
+  }
+  const event = await prisma.event.findUnique({
+    where: { portalToken: token },
+    select: { booking: { select: { id: true } } },
+  });
+  if (!event?.booking) throw new NotFoundError(GENERIC_NOT_FOUND);
+  return { bookingId: event.booking.id };
+}
+
+export type StartCheckoutResult = { url: string; paymentId: string; reused: boolean };
+
+/**
+ * Inicia (o reutiliza) un checkout para una reserva.
+ *  - DEPOSIT = max(0, anticipo − pagado neto); BALANCE/FULL = total − pagado neto.
+ *  - Reutiliza un pago PENDING del mismo tipo y monto creado hace < 1 h.
+ *  - La confirmación del pago llega SÓLO por webhook firmado (nunca por el redirect).
+ */
+export async function startCheckout(
+  bookingId: string,
+  kind: CheckoutKind,
+  opts: { source?: CheckoutSource; now?: Date } = {},
+): Promise<StartCheckoutResult> {
+  if (!(await isEnabled("PAYMENTS_ENABLED"))) {
+    throw new AppError(PAYMENTS_DISABLED_MESSAGE, "PAYMENTS_DISABLED", 409);
+  }
+  const now = opts.now ?? new Date();
+  const source = opts.source ?? "portal";
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      customer: { select: { name: true, email: true, phone: true, whatsapp: true } },
+      quote: { select: { id: true, publicToken: true } },
+      event: { select: { id: true, title: true, status: true, portalToken: true, eventDate: true } },
+      payments: {
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          amountCents: true,
+          refundedCents: true,
+          provider: true,
+          checkoutUrl: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+  if (!booking) throw new NotFoundError(GENERIC_NOT_FOUND);
+  if (booking.cancelledAt || booking.event.status === "CANCELLED") {
+    throw new AppError(
+      "Esta reserva fue cancelada, por lo que no podemos recibir pagos. Escríbenos si necesitas ayuda.",
+      "EVENT_CANCELLED",
+      409,
+    );
+  }
+
+  const calc = checkoutAmountCents(kind, booking, booking.payments);
+  if (!calc.ok) throw new AppError(CHECKOUT_BLOCK_MESSAGES[calc.reason], calc.reason, 409);
+
+  const provider = getPaymentProvider();
+  const decorate = (url: string) => (provider.isMock && source === "quote" ? withParam(url, "from", "quote") : url);
+
+  const reusable = booking.payments.find((p) =>
+    isReusablePendingCheckout(p, { kind, amountCents: calc.amountCents, provider: provider.name }, now),
+  );
+  if (reusable?.checkoutUrl) {
+    return { url: decorate(reusable.checkoutUrl), paymentId: reusable.id, reused: true };
+  }
+
+  const idempotencyKey = `${booking.id}:${kind}:${generateToken(12)}`;
+  const payment = await prisma.payment.create({
+    data: {
+      bookingId: booking.id,
+      kind,
+      status: "PENDING",
+      method: "ONLINE",
+      provider: provider.name,
+      amountCents: calc.amountCents,
+      currency: booking.currency || "MXN",
+      idempotencyKey,
+    },
+  });
+
+  const cancelUrl =
+    source === "quote" && booking.quote?.publicToken
+      ? appUrl(quotePath(booking.quote.publicToken))
+      : appUrl(portalPath(booking.event.portalToken));
+
+  let session: Awaited<ReturnType<typeof provider.createCheckout>>;
+  try {
+    session = await provider.createCheckout({
+      paymentId: payment.id,
+      amountCents: calc.amountCents,
+      currency: "MXN",
+      description: `${PAYMENT_KIND_LABELS[kind]} · ${booking.event.title}`,
+      customer: {
+        name: booking.customer.name,
+        email: booking.customer.email,
+        phone: booking.customer.whatsapp ?? booking.customer.phone,
+      },
+      successUrl: paymentResultUrl(payment.id),
+      cancelUrl,
+      idempotencyKey,
+      metadata: {
+        paymentId: payment.id,
+        bookingId: booking.id,
+        bookingCode: booking.code,
+        eventId: booking.event.id,
+        kind,
+      },
+    });
+  } catch (error) {
+    logger.error("payments.checkout_create_failed", { error, paymentId: payment.id, provider: provider.name });
+    await prisma.payment
+      .update({
+        where: { id: payment.id },
+        data: { status: "FAILED", failedAt: new Date(), failureReason: "No se pudo abrir la pasarela de pago." },
+      })
+      .catch(() => undefined);
+    throw new AppError(
+      "No pudimos abrir la pasarela de pago. Intenta de nuevo en unos minutos o escríbenos por WhatsApp.",
+      "CHECKOUT_FAILED",
+      502,
+    );
+  }
+
+  await prisma.payment.update({
+    where: { id: payment.id },
+    data: { providerCheckoutId: session.checkoutId, checkoutUrl: session.url },
+  });
+
+  await track("START_PAYMENT", {
+    eventId: booking.event.id,
+    quoteId: booking.quote?.id ?? null,
+    path: source === "quote" ? "/cotizacion" : "/mi-evento",
+    metadata: { kind, amountCents: calc.amountCents, provider: provider.name, paymentId: payment.id },
+  });
+
+  return { url: decorate(session.url), paymentId: payment.id, reused: false };
+}
+
+function withParam(url: string, key: string, value: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set(key, value);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Transiciones compartidas (webhook + pagos manuales)
+// -----------------------------------------------------------------------------
+
+export type PaymentApplyOutcome = {
+  applied: boolean;
+  confirmed: boolean;
+  paymentId: string;
+  bookingId: string | null;
+  eventId: string | null;
+  note?: string;
+};
+
+/** Bloqueo de fila de la reserva (SELECT ... FOR UPDATE) dentro de la transacción actual. */
+async function lockBooking(tx: Tx, bookingId: string): Promise<void> {
+  await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`;
+}
+
+/**
+ * Si el evento está en INQUIRY/PENDING_PAYMENT y el anticipo quedó cubierto → CONFIRMED.
+ * Debe ejecutarse dentro de la misma transacción que registró el pago.
+ */
+export async function confirmEventIfDepositSatisfied(
+  tx: Tx,
+  bookingId: string,
+): Promise<{ confirmed: boolean; eventId: string | null }> {
+  const booking = await tx.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      depositRequiredCents: true,
+      cancelledAt: true,
+      event: { select: { id: true, status: true } },
+      payments: { select: { kind: true, status: true, amountCents: true, refundedCents: true } },
+    },
+  });
+  if (!booking) return { confirmed: false, eventId: null };
+  const eventId = booking.event.id;
+  if (booking.cancelledAt) return { confirmed: false, eventId };
+  const from = booking.event.status as EventStatus;
+  if (!shouldConfirmEvent(from, booking.depositRequiredCents, booking.payments)) return { confirmed: false, eventId };
+  eventStatusMachine.assert(from, "CONFIRMED");
+  const res = await tx.event.updateMany({ where: { id: eventId, status: from }, data: { status: "CONFIRMED" } });
+  if (res.count === 1) {
+    await audit(
+      {
+        action: "event.confirmed_by_payment",
+        entityType: "Event",
+        entityId: eventId,
+        before: { status: from },
+        after: { status: "CONFIRMED" },
+        actor: null,
+      },
+      tx,
+    );
+  }
+  return { confirmed: res.count === 1, eventId };
+}
+
+/**
+ * Marca un pago como PAID (si su estado lo permite) y confirma el evento cuando el anticipo
+ * queda cubierto. Idempotente: si otro proceso ya lo aplicó, devuelve applied=false.
+ */
+export async function applyPaymentSucceeded(
+  tx: Tx,
+  input: { paymentId: string; providerPaymentId?: string | null; feeCents?: number | null; paidAt?: Date },
+): Promise<PaymentApplyOutcome> {
+  const payment = await tx.payment.findUnique({
+    where: { id: input.paymentId },
+    select: { id: true, status: true, kind: true, bookingId: true, amountCents: true },
+  });
+  if (!payment) throw new NotFoundError("Pago no encontrado.");
+  const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null };
+  if (payment.kind === "REFUND") return { ...base, applied: false, confirmed: false, note: "refund_row" };
+  // Serializa pagos concurrentes de la misma reserva: así la suma para confirmar el anticipo ve ambos.
+  await lockBooking(tx, payment.bookingId);
+  const from = payment.status as PaymentStatus;
+  if (!paymentStatusMachine.can(from, "PAID")) {
+    return { ...base, applied: false, confirmed: false, note: `already_${from.toLowerCase()}` };
+  }
+  paymentStatusMachine.assert(from, "PAID");
+  const feeCents =
+    input.feeCents != null ? Math.max(0, Math.round(input.feeCents)) : estimateFeeCents(payment.amountCents, await getSettings("pricing"));
+  const res = await tx.payment.updateMany({
+    where: { id: payment.id, status: from },
+    data: {
+      status: "PAID",
+      paidAt: input.paidAt ?? new Date(),
+      providerPaymentId: input.providerPaymentId ?? undefined,
+      feeCents,
+      failureReason: null,
+    },
+  });
+  if (res.count === 0) return { ...base, applied: false, confirmed: false, note: "concurrent_update" };
+  const confirmation = await confirmEventIfDepositSatisfied(tx, payment.bookingId);
+  return { ...base, eventId: confirmation.eventId, applied: true, confirmed: confirmation.confirmed };
+}
+
+export async function applyPaymentFailed(
+  tx: Tx,
+  input: { paymentId: string; failureReason?: string | null },
+): Promise<PaymentApplyOutcome> {
+  const payment = await tx.payment.findUnique({
+    where: { id: input.paymentId },
+    select: { id: true, status: true, bookingId: true },
+  });
+  if (!payment) throw new NotFoundError("Pago no encontrado.");
+  const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null, confirmed: false };
+  // Nunca degradar un pago cobrado por un evento de fallo tardío.
+  if (payment.status !== "PENDING") return { ...base, applied: false, note: `ignored_${payment.status.toLowerCase()}` };
+  paymentStatusMachine.assert("PENDING", "FAILED");
+  const res = await tx.payment.updateMany({
+    where: { id: payment.id, status: "PENDING" },
+    data: {
+      status: "FAILED",
+      failedAt: new Date(),
+      failureReason: (input.failureReason ?? "El pago fue rechazado.").slice(0, 300),
+    },
+  });
+  return { ...base, applied: res.count === 1 };
+}
+
+/**
+ * Aplica un reembolso reportado por el proveedor (total acumulado reembolsado).
+ * Si el total supera lo registrado, crea el registro REFUND por la diferencia.
+ */
+export async function applyProviderRefund(
+  tx: Tx,
+  input: { paymentId: string; providerName: string; externalId: string; refundedCents?: number | null },
+): Promise<PaymentApplyOutcome> {
+  const located = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { bookingId: true, kind: true } });
+  if (!located) throw new NotFoundError("Pago no encontrado.");
+  if (located.kind !== "REFUND") {
+    // Serializa con los reembolsos del panel (mismo candado) para no duplicar filas REFUND.
+    await lockBooking(tx, located.bookingId);
+  }
+  const payment = await tx.payment.findUnique({ where: { id: input.paymentId } });
+  if (!payment) throw new NotFoundError("Pago no encontrado.");
+  const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null, confirmed: false };
+  if (payment.kind === "REFUND") return { ...base, applied: false, note: "refund_row" };
+  if (payment.status !== "PAID" && payment.status !== "PARTIAL_REFUND" && payment.status !== "REFUNDED") {
+    return { ...base, applied: false, note: `ignored_${payment.status.toLowerCase()}` };
+  }
+  const total = Math.min(payment.amountCents, Math.max(0, Math.round(input.refundedCents ?? payment.amountCents)));
+  if (total <= payment.refundedCents) {
+    // El reembolso ya estaba registrado desde el panel. Si el proveedor reporta el mismo total acumulado,
+    // los reembolsos que quedaron "en proceso" en la pasarela se dan por aplicados.
+    if (total === payment.refundedCents) {
+      const settled = await tx.payment.updateMany({
+        where: { refundOfId: payment.id, kind: "REFUND", status: "PENDING" },
+        data: { status: "PAID", paidAt: new Date() },
+      });
+      if (settled.count > 0) return { ...base, applied: true, note: "refund_settled" };
+    }
+    return { ...base, applied: false, note: "already_refunded" };
+  }
+  const plan = planRefund(payment, total - payment.refundedCents);
+  if (!plan.ok) return { ...base, applied: false, note: "refund_not_applicable" };
+  const res = await tx.payment.updateMany({
+    where: { id: payment.id, refundedCents: payment.refundedCents },
+    data: { refundedCents: plan.newRefundedCents, status: plan.nextStatus },
+  });
+  if (res.count === 0) return { ...base, applied: false, note: "concurrent_update" };
+  await tx.payment.create({
+    data: {
+      bookingId: payment.bookingId,
+      kind: "REFUND",
+      status: "PAID",
+      method: payment.method,
+      provider: input.providerName,
+      amountCents: total - payment.refundedCents,
+      currency: payment.currency,
+      idempotencyKey: `refund:${input.providerName}:${input.externalId}`.slice(0, 190),
+      refundOfId: payment.id,
+      paidAt: new Date(),
+      notes: "Reembolso reportado por la pasarela de pago.",
+    },
+  });
+  await audit(
+    {
+      action: "payment.refunded",
+      entityType: "Payment",
+      entityId: payment.id,
+      before: { status: payment.status, refundedCents: payment.refundedCents },
+      after: { status: plan.nextStatus, refundedCents: plan.newRefundedCents, source: "provider_webhook" },
+      actor: null,
+    },
+    tx,
+  );
+  return { ...base, applied: true };
+}
+
+// -----------------------------------------------------------------------------
+// Efectos posteriores al commit (notificaciones, ciclo de vida, analítica)
+// -----------------------------------------------------------------------------
+
+/** Tras registrar un pago cobrado: lifecycle + notificaciones (con dedupe) + analítica. Nunca lanza. */
+export async function runPaymentSuccessEffects(input: { paymentId: string; confirmed: boolean }): Promise<void> {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: input.paymentId },
+      select: {
+        id: true,
+        kind: true,
+        method: true,
+        provider: true,
+        amountCents: true,
+        booking: {
+          select: {
+            quoteId: true,
+            totalCents: true,
+            payments: { select: { kind: true, status: true, amountCents: true, refundedCents: true } },
+            customer: { select: { name: true, email: true, phone: true, whatsapp: true } },
+            event: { select: { id: true, title: true, eventDate: true, portalToken: true } },
+          },
+        },
+      },
+    });
+    if (!payment) return;
+    const { event, customer, quoteId } = payment.booking;
+    const portalUrl = appUrl(portalPath(event.portalToken));
+    const eventDate = formatLongDate(event.eventDate);
+    // Excedente (p. ej. dos checkouts abiertos pagados, o pago manual + pago en línea simultáneos).
+    const overpaidCents = netPaidCents(payment.booking.payments) - payment.booking.totalCents;
+    if (overpaidCents > 0) {
+      logger.warn("payments.overpaid", { paymentId: payment.id, eventId: event.id, overpaidCents });
+    }
+
+    if (input.confirmed) {
+      await onEventConfirmed(event.id);
+      await notifyCustomer(customer, {
+        type: "BOOKING_CONFIRMED",
+        data: { name: customer.name, eventTitle: event.title, eventDate, url: portalUrl },
+        eventId: event.id,
+        quoteId,
+        dedupeKey: `booking-confirmed:${event.id}`,
+      });
+    }
+    await notifyCustomer(customer, {
+      type: "PAYMENT_RECEIVED",
+      data: { name: customer.name, eventTitle: event.title, eventDate, amount: formatMXN(payment.amountCents), url: portalUrl },
+      eventId: event.id,
+      quoteId,
+      dedupeKey: `payment-received:${payment.id}`,
+    });
+    const settings = await getSettings("notifications");
+    await notify({
+      type: "GENERIC",
+      channel: "EMAIL",
+      to: settings.ownerNotificationEmail,
+      data: {
+        name: "equipo",
+        eventTitle: `Pago recibido · ${event.title}`,
+        message: `Se registró un pago de ${formatMXN(payment.amountCents)} (${PAYMENT_KIND_LABELS[payment.kind]}) de ${customer.name} para ${event.title} (${eventDate}).${input.confirmed ? " El evento quedó confirmado." : ""}${overpaidCents > 0 ? ` Atención: lo cobrado excede el total del evento por ${formatMXN(overpaidCents)}; revisa si procede un reembolso.` : ""}`,
+        url: appUrl(`/admin/events/${event.id}`),
+      },
+      eventId: event.id,
+      dedupeKey: `payment-received-team:${payment.id}`,
+    });
+    await track("PAYMENT_SUCCESS", {
+      eventId: event.id,
+      quoteId,
+      metadata: {
+        paymentId: payment.id,
+        kind: payment.kind,
+        method: payment.method,
+        provider: payment.provider,
+        amountCents: payment.amountCents,
+        confirmed: input.confirmed,
+      },
+    });
+  } catch (error) {
+    logger.error("payments.success_effects_failed", { error, paymentId: input.paymentId });
+  }
+}
+
+/** Aviso al equipo de una anomalía de cobro que requiere revisión manual. Nunca lanza. */
+export async function notifyTeamPaymentAnomaly(paymentId: string, input: { key: string; message: string }): Promise<void> {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { booking: { select: { event: { select: { id: true, title: true } } } } },
+    });
+    if (!payment) return;
+    const { event } = payment.booking;
+    const settings = await getSettings("notifications");
+    await notify({
+      type: "GENERIC",
+      channel: "EMAIL",
+      to: settings.ownerNotificationEmail,
+      data: {
+        name: "equipo",
+        eventTitle: `Revisar pago · ${event.title}`,
+        message: input.message,
+        url: appUrl(`/admin/events/${event.id}`),
+      },
+      eventId: event.id,
+      dedupeKey: input.key,
+    });
+  } catch (error) {
+    logger.error("payments.anomaly_notify_failed", { error, paymentId });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Pagos manuales (efectivo, transferencia, terminal)
+// -----------------------------------------------------------------------------
+
+export type ManualPaymentResult = { paymentId: string; eventId: string; confirmed: boolean };
+
+export async function recordManualPayment(
+  actor: SessionUser,
+  input: ManualPaymentInput,
+  ctx: { ip?: string | null; now?: Date } = {},
+): Promise<ManualPaymentResult> {
+  const now = ctx.now ?? new Date();
+  const booking = await prisma.booking.findUnique({
+    where: { eventId: input.eventId },
+    select: {
+      id: true,
+      totalCents: true,
+      depositRequiredCents: true,
+      currency: true,
+      cancelledAt: true,
+      event: { select: { id: true, status: true } },
+      payments: { select: { kind: true, status: true, amountCents: true, refundedCents: true } },
+    },
+  });
+  if (!booking) throw new AppError("Este evento aún no tiene una reserva; no se pueden registrar pagos.", "NO_BOOKING", 409);
+  if (booking.cancelledAt || booking.event.status === "CANCELLED") {
+    throw new AppError("El evento está cancelado; no se pueden registrar pagos.", "EVENT_CANCELLED", 409);
+  }
+  const max = maxManualAmountCents(booking, booking.payments);
+  if (max <= 0) throw new AppError(CHECKOUT_BLOCK_MESSAGES.NO_BALANCE, "NO_BALANCE", 409);
+  if (input.amountCents > max) {
+    throw new ValidationError("Revisa el monto.", {
+      amountCents: [`El monto excede el saldo pendiente (${formatMXN(max)}).`],
+    });
+  }
+  const today = localDateKey(now);
+  if (input.paidAt > today) {
+    throw new ValidationError("Revisa la fecha.", { paidAt: ["La fecha de pago no puede ser futura."] });
+  }
+  const paidAt = input.paidAt === today ? now : zonedDateTime(input.paidAt, "12:00");
+
+  const receiptMediaId = input.receiptMediaId || null;
+  if (receiptMediaId) {
+    const media = await prisma.mediaAsset.findUnique({ where: { id: receiptMediaId }, select: { purpose: true } });
+    if (!media || media.purpose !== "RECEIPT") {
+      throw new ValidationError("Revisa el comprobante.", { receiptMediaId: ["El comprobante no es válido."] });
+    }
+  }
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    // Re-verificar el saldo con la reserva bloqueada (evita doble registro concurrente que exceda el total).
+    await lockBooking(tx, booking.id);
+    const fresh = await tx.payment.findMany({
+      where: { bookingId: booking.id },
+      select: { kind: true, status: true, amountCents: true, refundedCents: true },
+    });
+    const freshMax = maxManualAmountCents(booking, fresh);
+    if (input.amountCents > freshMax) {
+      throw new ValidationError("Revisa el monto.", {
+        amountCents: [`El monto excede el saldo pendiente (${formatMXN(freshMax)}).`],
+      });
+    }
+    const payment = await tx.payment.create({
+      data: {
+        bookingId: booking.id,
+        kind: input.kind,
+        status: "PENDING",
+        method: input.method as PaymentMethod,
+        provider: "manual",
+        amountCents: input.amountCents,
+        currency: booking.currency || "MXN",
+        idempotencyKey: `manual:${generateToken(16)}`,
+        notes: input.notes?.trim() || null,
+        recordedById: actor.id,
+        receiptMediaId,
+      },
+    });
+    const applied = await applyPaymentSucceeded(tx, { paymentId: payment.id, feeCents: 0, paidAt });
+    if (!applied.applied) throw new AppError("No se pudo registrar el pago. Intenta de nuevo.", "PAYMENT_NOT_APPLIED", 409);
+    await audit(
+      {
+        action: "payment.manual_recorded",
+        entityType: "Payment",
+        entityId: payment.id,
+        after: {
+          eventId: booking.event.id,
+          bookingId: booking.id,
+          kind: input.kind,
+          method: input.method,
+          amountCents: input.amountCents,
+          paidAt: paidAt.toISOString(),
+          receiptMediaId,
+          notes: input.notes || null,
+          eventConfirmed: applied.confirmed,
+        },
+        actor,
+        ip: ctx.ip ?? null,
+      },
+      tx,
+    );
+    return applied;
+  });
+
+  await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
+  return { paymentId: outcome.paymentId, eventId: booking.event.id, confirmed: outcome.confirmed };
+}
+
+// -----------------------------------------------------------------------------
+// Reembolsos (desde el panel)
+// -----------------------------------------------------------------------------
+
+export type RefundResultSummary = {
+  refundPaymentId: string;
+  originalStatus: PaymentStatus;
+  refundedCents: number;
+  eventId: string;
+  providerStatus: "succeeded" | "pending" | "manual";
+};
+
+export async function refundPayment(
+  actor: SessionUser,
+  input: RefundInput,
+  ctx: { ip?: string | null } = {},
+): Promise<RefundResultSummary> {
+  const payment = await prisma.payment.findUnique({
+    where: { id: input.paymentId },
+    include: { booking: { select: { eventId: true } } },
+  });
+  if (!payment) throw new NotFoundError("No encontramos ese pago.");
+  const plan = planRefund(payment, input.amountCents);
+  if (!plan.ok) {
+    throw new ValidationError(plan.message, { amountCents: [plan.message] });
+  }
+
+  const isOnline = payment.provider !== "manual" && payment.method === "ONLINE";
+  const startedAt = new Date();
+  let providerRefundId: string | null = null;
+  let providerStatus: RefundResultSummary["providerStatus"] = "manual";
+  if (isOnline) {
+    if (!payment.providerPaymentId) {
+      throw new AppError("Este pago no tiene referencia del proveedor; regístralo como reembolso manual fuera de la pasarela.", "NO_PROVIDER_REF", 409);
+    }
+    const provider = getPaymentProviderByName(payment.provider);
+    if (!provider) {
+      throw new AppError("El proveedor de este pago no está disponible en este momento.", "PROVIDER_UNAVAILABLE", 409);
+    }
+    try {
+      const res = await provider.refund({
+        providerPaymentId: payment.providerPaymentId,
+        amountCents: input.amountCents,
+        idempotencyKey: `refund:${payment.id}:${payment.refundedCents}:${input.amountCents}`,
+        reason: input.reason,
+      });
+      if (res.status === "failed") {
+        throw new AppError("La pasarela rechazó el reembolso. Intenta de nuevo o revisa el panel del proveedor.", "REFUND_FAILED", 502);
+      }
+      providerRefundId = res.refundId;
+      providerStatus = res.status;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      logger.error("payments.refund_provider_failed", { error, paymentId: payment.id });
+      throw new AppError("No pudimos procesar el reembolso con la pasarela. Intenta de nuevo en unos minutos.", "REFUND_FAILED", 502);
+    }
+  }
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    // Mismo candado que los webhooks de reembolso: serializa y permite conciliar.
+    await lockBooking(tx, payment.bookingId);
+    const fresh = await tx.payment.findUniqueOrThrow({
+      where: { id: payment.id },
+      select: { kind: true, status: true, amountCents: true, refundedCents: true },
+    });
+    // Envío duplicado: la pasarela devolvió un reembolso que ya registramos (misma Idempotency-Key).
+    if (providerRefundId) {
+      const existing = await tx.payment.findFirst({
+        where: { refundOfId: payment.id, kind: "REFUND", providerPaymentId: providerRefundId },
+        select: { id: true },
+      });
+      if (existing) return { rowId: existing.id, status: fresh.status as PaymentStatus, refundedCents: fresh.refundedCents };
+    }
+    let effective: { newRefundedCents: number; nextStatus: PaymentStatus } = plan;
+    if (fresh.refundedCents !== payment.refundedCents || fresh.status !== payment.status) {
+      if (!providerRefundId) {
+        throw new AppError("El pago cambió mientras lo editabas. Actualiza la página e intenta de nuevo.", "CONFLICT", 409);
+      }
+      // El dinero YA salió por la pasarela: conciliar en lugar de fallar (si fallara, un reintento
+      // reembolsaría dos veces). Caso típico: el webhook del proveedor registró este reembolso
+      // (fila REFUND sin autor) antes que nosotros. Margen de 2 min por diferencias de reloj app/BD.
+      const reconciled =
+        fresh.refundedCents >= plan.newRefundedCents
+          ? await tx.payment.findFirst({
+              where: {
+                refundOfId: payment.id,
+                kind: "REFUND",
+                recordedById: null,
+                providerPaymentId: null,
+                createdAt: { gte: new Date(startedAt.getTime() - 120_000) },
+              },
+              orderBy: { createdAt: "desc" },
+              select: { id: true },
+            })
+          : null;
+      if (reconciled) {
+        await tx.payment.update({
+          where: { id: reconciled.id },
+          data: { recordedById: actor.id, notes: input.reason, providerPaymentId: providerRefundId },
+        });
+        await audit(
+          {
+            action: "payment.refunded",
+            entityType: "Payment",
+            entityId: payment.id,
+            before: { status: payment.status, refundedCents: payment.refundedCents },
+            after: {
+              status: fresh.status,
+              refundedCents: fresh.refundedCents,
+              refundAmountCents: input.amountCents,
+              refundPaymentId: reconciled.id,
+              providerRefundId,
+              reason: input.reason,
+              reconciledWithWebhook: true,
+            },
+            actor,
+            ip: ctx.ip ?? null,
+          },
+          tx,
+        );
+        return { rowId: reconciled.id, status: fresh.status as PaymentStatus, refundedCents: fresh.refundedCents };
+      }
+      const replan = planRefund(fresh, input.amountCents);
+      if (!replan.ok) {
+        logger.error("payments.refund_reconcile_failed", { paymentId: payment.id, providerRefundId });
+        throw new AppError(
+          "La pasarela aceptó el reembolso, pero el pago cambió mientras lo registrábamos. Revisa el panel del proveedor antes de volver a intentarlo.",
+          "REFUND_RECONCILE",
+          409,
+        );
+      }
+      effective = replan;
+    }
+    const res = await tx.payment.updateMany({
+      where: { id: payment.id, refundedCents: fresh.refundedCents, status: fresh.status },
+      data: { refundedCents: effective.newRefundedCents, status: effective.nextStatus },
+    });
+    if (res.count === 0) {
+      throw new AppError("El pago cambió mientras lo editabas. Actualiza la página e intenta de nuevo.", "CONFLICT", 409);
+    }
+    const row = await tx.payment.create({
+      data: {
+        bookingId: payment.bookingId,
+        kind: "REFUND",
+        status: providerStatus === "pending" ? "PENDING" : "PAID",
+        method: payment.method,
+        provider: payment.provider,
+        providerPaymentId: providerRefundId,
+        amountCents: input.amountCents,
+        currency: payment.currency,
+        idempotencyKey: providerRefundId ? `refund:${payment.provider}:${providerRefundId}` : `refund:manual:${generateToken(16)}`,
+        refundOfId: payment.id,
+        paidAt: new Date(),
+        notes: input.reason,
+        recordedById: actor.id,
+      },
+    });
+    await audit(
+      {
+        action: "payment.refunded",
+        entityType: "Payment",
+        entityId: payment.id,
+        before: { status: fresh.status, refundedCents: fresh.refundedCents },
+        after: {
+          status: effective.nextStatus,
+          refundedCents: effective.newRefundedCents,
+          refundAmountCents: input.amountCents,
+          refundPaymentId: row.id,
+          providerRefundId,
+          reason: input.reason,
+        },
+        actor,
+        ip: ctx.ip ?? null,
+      },
+      tx,
+    );
+    return { rowId: row.id, status: effective.nextStatus, refundedCents: effective.newRefundedCents };
+  });
+
+  return {
+    refundPaymentId: outcome.rowId,
+    originalStatus: outcome.status,
+    refundedCents: outcome.refundedCents,
+    eventId: payment.booking.eventId,
+    providerStatus,
+  };
+}

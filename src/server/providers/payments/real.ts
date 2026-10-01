@@ -1,14 +1,19 @@
 import type { PaymentProvider } from "./types";
+import { StripePaymentProvider } from "./stripe-provider";
+import { MercadoPagoPaymentProvider } from "./mercadopago-provider";
 
 /**
- * STUB — lo implementa el módulo Pagos (Stripe / Mercado Pago vía HTTP, sin SDK).
- * Devuelve null si el proveedor no está soportado (el registro cae al Mock).
+ * Proveedores reales de pago (Stripe / Mercado Pago) vía HTTP, sin SDK.
+ * Devuelve null si el proveedor no está soportado o falta configuración (el registro cae al Mock).
  */
 export function createRealPaymentProvider(
-  _provider: "stripe" | "mercadopago",
-  _secretKey: string,
-  _webhookSecret: string,
-  _appUrl: string,
+  provider: "stripe" | "mercadopago",
+  secretKey: string,
+  webhookSecret: string,
+  appUrl: string,
 ): PaymentProvider | null {
+  if (!secretKey) return null;
+  if (provider === "stripe") return new StripePaymentProvider({ secretKey, webhookSecret, appUrl });
+  if (provider === "mercadopago") return new MercadoPagoPaymentProvider({ accessToken: secretKey, webhookSecret, appUrl });
   return null;
 }

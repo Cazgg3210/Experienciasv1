@@ -1,0 +1,86 @@
+# =============================================================================
+# Ivonne & Rosa — Compose de PRODUCCIÓN (ejemplo)
+#
+# Sirve para dos cosas:
+#   1) Probar localmente la imagen de producción:
+#        cp .env.example .env.production   # y ajusta valores (ver docs/DEPLOY_DOKPLOY.md §4)
+#        docker compose -f docker-compose.prod.yml --env-file .env.production --profile with-db up -d --build
+#        → http://localhost:3000/api/health
+#      Con el perfil "with-db" se levanta un PostgreSQL 16 propio; en .env.production usa
+#        DATABASE_URL=postgresql://ivonne:<POSTGRES_PASSWORD>@postgres:5432/ivonne_rosa?schema=public
+#   2) Desplegar en Dokploy como servicio tipo "Compose" (alternativa al tipo "Application").
+#      En Dokploy → Environment define TODAS las variables de la app y además APP_ENV_FILE=.env
+#      (Dokploy escribe ese archivo junto al compose). Quita "ports" y publica con Domains.
+#
+# RECOMENDADO en producción: base de datos administrada por Dokploy (Databases → PostgreSQL 16),
+# con respaldos programados; el perfil "with-db" es para pruebas o instalaciones mínimas.
+# Los archivos subidos van SIEMPRE a S3 (STORAGE_DRIVER=s3), nunca al contenedor.
+# =============================================================================
+name: ivonne-rosa
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ivonne-rosa:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ${APP_ENV_FILE:-.env.production}
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # true (default): `prisma migrate deploy` al arrancar. false: migraciones manuales.
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false # si no se activa el perfil with-db, la app usa la DATABASE_URL externa
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["with-db"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ivonne}
+      # Obligatoria con el perfil with-db (sin ella el contenedor de Postgres no inicia).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-ivonne_rosa}
+    volumes:
+      - ir_prod_pgdata:/var/lib/postgresql/data
+    # Sin "ports": la base sólo es accesible desde la red interna del compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  ir_prod_pgdata:

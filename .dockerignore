@@ -1,0 +1,65 @@
+# =============================================================================
+# Ivonne & Rosa — contexto de build de Docker
+# Mantener el contexto pequeño (builds rápidos en Dokploy) y NUNCA enviar secretos.
+# =============================================================================
+
+# Dependencias y builds locales (se reinstalan/reconstruyen dentro de la imagen)
+node_modules
+**/node_modules
+.pnpm-store
+.next
+.next-*
+out
+build
+dist
+*.tsbuildinfo
+.tsbuild
+
+# Git / editores / SO
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Variables de entorno y secretos (se inyectan en tiempo de ejecución desde Dokploy)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Datos locales: logs, cookies de pruebas, uploads del driver local, respaldos
+.logs
+.uploads
+backups
+*.dump
+*.sql.gz
+.cookie*
+
+# Pruebas (no se necesitan en la imagen; CI las corre por separado)
+tests
+e2e
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.*
+playwright.config.*
+coverage
+playwright-report
+test-results
+blob-report
+
+# Documentación y archivos de desarrollo
+docs
+*.md
+!README.md
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+.prettierrc*
+.prettierignore

@@ -2,7 +2,7 @@
  * Seed DEMO — fase 1: usuarios, staff, catálogo (inventario, menús, add-ons, experiencias),
  * proveedores, contenido público, excepciones de disponibilidad y clientas.
  */
-import type { LeadSource, MediaPurpose, Prisma, PrismaClient, StaffFunction, StaffRateType } from "@prisma/client";
+import type { LeadSource, MediaPurpose, PrismaClient, StaffFunction, StaffRateType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +19,6 @@ import {
   INVENTORY,
   INVENTORY_LOCATION,
   MENUS,
-  MENU_COST_BASELINE_SLUG,
   STAFF,
   TESTIMONIALS,
   VENDORS,
@@ -30,7 +29,6 @@ import {
   type PricingArea,
   type PricingExperience,
   type PricingMenu,
-  addDaysToKey,
   emailFor,
   firstDateOnOrAfter,
 } from "./helpers";
@@ -80,7 +78,6 @@ export interface DemoRefs {
   styles: Record<string, { id: string; name: string; palette: string[] }>;
   vendors: Record<string, { id: string; name: string }>;
   customers: Record<string, CustomerRef>;
-  menuCostBaselineCents: number;
   dates: DemoDates;
 }
 
@@ -348,6 +345,7 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
       priceCents: created.priceCents,
       costCents: created.costCents,
       costCategory: created.costCategory,
+      maxQuantity: created.maxQuantity,
     };
   }
 
@@ -410,11 +408,16 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
       name: created.name,
       basePriceCents: created.basePriceCents,
       baseGuests: created.baseGuests,
+      minGuests: created.minGuests,
+      maxGuests: created.maxGuests,
       extraGuestPriceCents: created.extraGuestPriceCents,
       extraGuestCostCents: created.extraGuestCostCents,
       durationMinutes: created.durationMinutes,
-      costComponents: created.costComponents.map((c) => ({
+      costComponents: created.costComponents
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((c) => ({
         category: c.category,
+        description: c.description,
         amountCents: c.amountCents,
         perGuest: c.perGuest,
       })),
@@ -533,9 +536,6 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
     };
   }
 
-  const baseline = menus[MENU_COST_BASELINE_SLUG];
-  if (!baseline) throw new Error("Falta el menú de referencia");
-
   return {
     users,
     staff,
@@ -547,7 +547,6 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
     styles,
     vendors,
     customers,
-    menuCostBaselineCents: baseline.costPerGuestCents,
     dates,
   };
 }

@@ -5,19 +5,27 @@
  * IMPORTANTE: sólo imports relativos (sin alias "@/") y sin "server-only",
  * porque el seed se ejecuta con `tsx` fuera de Next.js.
  */
-import type { CostCategory, DiscountType, MenuPricingType, Prisma, QuoteItemType } from "@prisma/client";
+import type { MenuPricingType, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { generateCode, type CodePrefix } from "../../src/lib/codes";
-import { applyBps, marginBps } from "../../src/lib/money";
+import { applyBps } from "../../src/lib/money";
 import { dateOnly, localDateKey, toDateKey, weekdayOf, zonedDateTime } from "../../src/lib/dates";
 import { slugify } from "../../src/lib/slug";
+import { pricingSettingsSchema } from "../../src/features/settings/domain/settings-schema";
+import {
+  PRICING_VERSION,
+  calculateQuote,
+  type CostCategory,
+  type EngineCustomItem,
+  type EngineDiscount,
+  type EngineSettings,
+  type QuoteEngineInput,
+  type QuoteResult,
+} from "../../src/features/quotes/domain/quote-engine";
 
-export const PRICING_VERSION = "2026.09";
+export { PRICING_VERSION };
+export type { EngineCustomItem, EngineDiscount, QuoteResult };
 export const TERMS_VERSION = "2026-09";
-export const TAX_RATE_BPS = 1600;
-export const PAYMENT_FEE_BPS = 360;
-export const PAYMENT_FEE_FIXED_CENTS = 300;
-export const DEPOSIT_BPS = 5000;
 
 export const MINUTE_MS = 60_000;
 export const HOUR_MS = 60 * MINUTE_MS;
@@ -169,14 +177,23 @@ export function emailFor(name: string, domain = "example.com"): string {
   return `${slugify(name).replace(/-/g, ".")}@${domain}`;
 }
 
+
 // -----------------------------------------------------------------------------
-// Cotizaciones: cálculo consistente (precios con IVA incluido)
+// Cotizaciones: SIEMPRE con el motor real (src/features/quotes/domain/quote-engine).
+// El input se arma igual que `buildEngineInput` en src/features/quotes/server/pricing.ts.
 // -----------------------------------------------------------------------------
-export interface PricingCostComponent {
-  category: CostCategory;
-  amountCents: number;
-  perGuest: boolean;
-}
+
+/** Settings del motor = defaults de la sección "pricing" (lo mismo que siembra el seed base). */
+const PRICING_DEFAULTS = pricingSettingsSchema.parse({});
+export const ENGINE_SETTINGS: EngineSettings = {
+  taxRateBps: PRICING_DEFAULTS.taxRateBps,
+  pricesIncludeTax: PRICING_DEFAULTS.pricesIncludeTax,
+  depositBps: PRICING_DEFAULTS.depositBps,
+  paymentFeeBps: PRICING_DEFAULTS.paymentFeeBps,
+  paymentFeeFixedCents: PRICING_DEFAULTS.paymentFeeFixedCents,
+  minMarginBps: PRICING_DEFAULTS.minMarginBps,
+  maxStandardGuests: PRICING_DEFAULTS.maxStandardGuests,
+};
 
 export interface PricingExperience {
   id: string;
@@ -184,9 +201,11 @@ export interface PricingExperience {
   name: string;
   basePriceCents: number;
   baseGuests: number;
+  minGuests: number;
+  maxGuests: number;
   extraGuestPriceCents: number;
   extraGuestCostCents: number;
-  costComponents: PricingCostComponent[];
+  costComponents: { category: CostCategory; description: string; amountCents: number; perGuest: boolean }[];
 }
 
 export interface PricingMenu {
@@ -206,6 +225,7 @@ export interface PricingAddOn {
   priceCents: number;
   costCents: number;
   costCategory: CostCategory;
+  maxQuantity: number;
 }
 
 export interface PricingArea {
@@ -216,289 +236,98 @@ export interface PricingArea {
   logisticsCostCents: number;
 }
 
-export interface CustomLine {
-  description: string;
-  quantity: number;
-  unitPriceCents: number;
-  unitCostCents: number;
-  costCategory: CostCategory;
-}
-
-export interface QuoteCalcInput {
+export interface QuoteSelection {
   experience: PricingExperience;
   guestCount: number;
   menu?: PricingMenu | null;
-  /** Costo por invitada del menú incluido de referencia (los upgrades se costean de forma incremental). */
-  menuCostBaselineCents: number;
-  addOns: { addOn: PricingAddOn; quantity: number }[];
-  area: PricingArea;
-  custom?: CustomLine[];
-  discount?: { type: DiscountType; value: number; reason: string } | null;
+  addOns?: { addOn: PricingAddOn; quantity: number }[];
+  area?: PricingArea | null;
+  customItems?: EngineCustomItem[];
+  discount?: EngineDiscount | null;
 }
 
-export interface CalcItem {
-  type: QuoteItemType;
-  refId: string | null;
-  description: string;
-  quantity: number;
-  unitPriceCents: number;
-  unitCostCents: number;
-  totalPriceCents: number;
-  totalCostCents: number;
-  costCategory: CostCategory;
-  sortOrder: number;
-}
-
-export interface QuoteCalc {
-  items: CalcItem[];
-  subtotalCents: number;
-  discountType: DiscountType | null;
-  discountValue: number | null;
-  discountReason: string | null;
-  discountCents: number;
-  logisticsCents: number;
-  taxCents: number;
-  totalCents: number;
-  paymentFeeCents: number;
-  itemsCostCents: number;
-  estimatedCostCents: number;
-  estimatedMarginCents: number;
-  marginBps: number;
-  depositBps: number;
-  depositCents: number;
-  snapshot: Prisma.InputJsonValue;
-}
-
-export function experienceBaseCost(exp: PricingExperience): number {
-  return exp.costComponents.reduce(
-    (sum, c) => sum + (c.perGuest ? c.amountCents * exp.baseGuests : c.amountCents),
-    0,
-  );
-}
-
-/** IVA incluido en el precio: tax = total - total / 1.16 */
-export function includedTax(totalCents: number, taxRateBps = TAX_RATE_BPS): number {
-  return Math.round(totalCents - (totalCents * 10_000) / (10_000 + taxRateBps));
-}
-
-export function paymentFee(amountCents: number): number {
-  return applyBps(amountCents, PAYMENT_FEE_BPS) + PAYMENT_FEE_FIXED_CENTS;
-}
-
-export function calculateQuote(input: QuoteCalcInput): QuoteCalc {
-  const { experience: exp, guestCount, menu, area } = input;
-  const items: CalcItem[] = [];
-  let sort = 0;
-  const push = (item: Omit<CalcItem, "totalPriceCents" | "totalCostCents" | "sortOrder">) => {
-    items.push({
-      ...item,
-      totalPriceCents: item.unitPriceCents * item.quantity,
-      totalCostCents: item.unitCostCents * item.quantity,
-      sortOrder: sort++,
-    });
-  };
-
-  push({
-    type: "BASE_EXPERIENCE",
-    refId: exp.id,
-    description: `${exp.name} — experiencia base (${exp.baseGuests} invitadas)`,
-    quantity: 1,
-    unitPriceCents: exp.basePriceCents,
-    unitCostCents: experienceBaseCost(exp),
-    costCategory: "FOOD",
-  });
-
-  const extraGuests = Math.max(0, guestCount - exp.baseGuests);
-  if (extraGuests > 0) {
-    push({
-      type: "EXTRA_GUEST",
-      refId: exp.id,
-      description: `Invitada adicional (${extraGuests})`,
-      quantity: extraGuests,
-      unitPriceCents: exp.extraGuestPriceCents,
-      unitCostCents: exp.extraGuestCostCents,
-      costCategory: "FOOD",
-    });
-  }
-
-  if (menu && menu.pricingType !== "INCLUDED" && menu.priceCents > 0) {
-    const incrementalCost = Math.max(0, menu.costPerGuestCents - input.menuCostBaselineCents);
-    if (menu.pricingType === "PER_GUEST") {
-      push({
-        type: "MENU",
-        refId: menu.id,
-        description: `Menú ${menu.name} (upgrade por invitada)`,
-        quantity: guestCount,
-        unitPriceCents: menu.priceCents,
-        unitCostCents: incrementalCost,
-        costCategory: "FOOD",
-      });
-    } else {
-      push({
-        type: "MENU",
-        refId: menu.id,
-        description: `Menú ${menu.name} (upgrade)`,
-        quantity: 1,
-        unitPriceCents: menu.priceCents,
-        unitCostCents: incrementalCost * guestCount,
-        costCategory: "FOOD",
-      });
-    }
-  }
-
-  for (const { addOn, quantity } of input.addOns) {
-    const perGuest = addOn.pricingType === "PER_GUEST";
-    push({
-      type: "ADDON",
-      refId: addOn.id,
-      description: perGuest ? `${addOn.name} (por invitada)` : quantity > 1 ? `${addOn.name} ×${quantity}` : addOn.name,
-      quantity: perGuest ? guestCount * quantity : quantity,
-      unitPriceCents: addOn.priceCents,
-      unitCostCents: addOn.costCents,
-      costCategory: addOn.costCategory,
-    });
-  }
-
-  for (const line of input.custom ?? []) {
-    push({
-      type: "CUSTOM",
-      refId: null,
-      description: line.description,
-      quantity: line.quantity,
-      unitPriceCents: line.unitPriceCents,
-      unitCostCents: line.unitCostCents,
-      costCategory: line.costCategory,
-    });
-  }
-
-  if (area.logisticsFeeCents > 0) {
-    push({
-      type: "LOGISTICS",
-      refId: area.id,
-      description: `Logística y traslado — ${area.name}`,
-      quantity: 1,
-      unitPriceCents: area.logisticsFeeCents,
-      unitCostCents: area.logisticsCostCents,
-      costCategory: "TRANSPORT",
-    });
-  }
-
-  const subtotalCents = items.reduce((s, i) => s + i.totalPriceCents, 0);
-  const itemsCostCents = items.reduce((s, i) => s + i.totalCostCents, 0);
-  const discount = input.discount ?? null;
-  const discountCents = discount
-    ? discount.type === "PERCENT"
-      ? applyBps(subtotalCents, discount.value)
-      : Math.min(discount.value, subtotalCents)
-    : 0;
-  const totalCents = subtotalCents - discountCents;
-  const taxCents = includedTax(totalCents);
-  const paymentFeeCents = paymentFee(totalCents);
-  const estimatedCostCents = itemsCostCents + paymentFeeCents;
-  const netRevenue = totalCents - taxCents;
-  const estimatedMarginCents = netRevenue - estimatedCostCents;
-  const depositCents = Math.round((totalCents * DEPOSIT_BPS) / 10_000);
-  const logisticsCents = area.logisticsFeeCents;
-
-  const snapshot = json({
-    pricingVersion: PRICING_VERSION,
-    currency: "MXN",
-    taxRateBps: TAX_RATE_BPS,
-    pricesIncludeTax: true,
-    paymentFeeBps: PAYMENT_FEE_BPS,
-    paymentFeeFixedCents: PAYMENT_FEE_FIXED_CENTS,
-    depositBps: DEPOSIT_BPS,
-    guestCount,
+export function buildEngineInput(sel: QuoteSelection): QuoteEngineInput {
+  const exp = sel.experience;
+  return {
     experience: {
       id: exp.id,
-      slug: exp.slug,
       name: exp.name,
       basePriceCents: exp.basePriceCents,
       baseGuests: exp.baseGuests,
+      minGuests: exp.minGuests,
+      maxGuests: exp.maxGuests,
       extraGuestPriceCents: exp.extraGuestPriceCents,
       extraGuestCostCents: exp.extraGuestCostCents,
-      baseCostCents: experienceBaseCost(exp),
+      costComponents: exp.costComponents.map((c) => ({
+        category: c.category,
+        description: c.description,
+        amountCents: c.amountCents,
+        perGuest: c.perGuest,
+      })),
     },
-    menu: menu
+    guestCount: sel.guestCount,
+    menu: sel.menu
       ? {
-          id: menu.id,
-          slug: menu.slug,
-          name: menu.name,
-          pricingType: menu.pricingType,
-          priceCents: menu.priceCents,
-          costPerGuestCents: menu.costPerGuestCents,
-          costBasis: "incremental_vs_included_menu",
+          id: sel.menu.id,
+          name: sel.menu.name,
+          pricingType: sel.menu.pricingType,
+          priceCents: sel.menu.priceCents,
+          costPerGuestCents: sel.menu.costPerGuestCents,
         }
       : null,
-    serviceArea: {
-      id: area.id,
-      slug: area.slug,
-      name: area.name,
-      logisticsFeeCents: area.logisticsFeeCents,
-      logisticsCostCents: area.logisticsCostCents,
-    },
-    addOns: input.addOns.map(({ addOn, quantity }) => ({
+    addOns: (sel.addOns ?? []).map(({ addOn, quantity }) => ({
       id: addOn.id,
-      slug: addOn.slug,
       name: addOn.name,
       pricingType: addOn.pricingType,
       priceCents: addOn.priceCents,
       costCents: addOn.costCents,
+      costCategory: addOn.costCategory,
       quantity,
+      maxQuantity: addOn.maxQuantity,
     })),
-    discount,
-    totals: {
-      subtotalCents,
-      discountCents,
-      totalCents,
-      taxCents,
-      paymentFeeCents,
-      itemsCostCents,
-      estimatedCostCents,
-      estimatedMarginCents,
-    },
-  });
-
-  return {
-    items,
-    subtotalCents,
-    discountType: discount?.type ?? null,
-    discountValue: discount?.value ?? null,
-    discountReason: discount?.reason ?? null,
-    discountCents,
-    logisticsCents,
-    taxCents,
-    totalCents,
-    paymentFeeCents,
-    itemsCostCents,
-    estimatedCostCents,
-    estimatedMarginCents,
-    marginBps: marginBps(estimatedMarginCents, netRevenue),
-    depositBps: DEPOSIT_BPS,
-    depositCents,
-    snapshot,
+    serviceArea: sel.area
+      ? {
+          id: sel.area.id,
+          name: sel.area.name,
+          logisticsFeeCents: sel.area.logisticsFeeCents,
+          logisticsCostCents: sel.area.logisticsCostCents,
+        }
+      : null,
+    customItems: sel.customItems,
+    discount: sel.discount ?? null,
+    settings: ENGINE_SETTINGS,
   };
 }
 
-/** Estimado público (sin costos) para ConfigurationSnapshot.estimate */
-export function publicEstimate(calc: QuoteCalc): Prisma.InputJsonValue {
+/** Cotiza con el motor real. */
+export function priceQuote(sel: QuoteSelection): QuoteResult {
+  return calculateQuote(buildEngineInput(sel));
+}
+
+/** Comisión de pasarela (misma fórmula que el motor) para pagos en línea individuales. */
+export function paymentFee(amountCents: number): number {
+  return applyBps(amountCents, ENGINE_SETTINGS.paymentFeeBps) + ENGINE_SETTINGS.paymentFeeFixedCents;
+}
+
+/** Misma forma que `publicEstimate` de src/features/quotes/server/pricing.ts (sin costos ni márgenes). */
+export function publicEstimate(result: QuoteResult): Prisma.InputJsonValue {
+  const publicWarnings = ["GUESTS_BELOW_MINIMUM", "GUESTS_ABOVE_EXPERIENCE_MAX", "SPECIAL_REQUEST_GUESTS", "ADDON_QUANTITY_CAPPED"];
   return json({
-    pricingVersion: PRICING_VERSION,
-    currency: "MXN",
-    lines: calc.items.map((i) => ({
-      type: i.type,
-      description: i.description,
-      quantity: i.quantity,
-      unitPriceCents: i.unitPriceCents,
-      totalPriceCents: i.totalPriceCents,
+    pricingVersion: result.pricingVersion,
+    guestCount: result.guestCount,
+    extraGuests: result.extraGuests,
+    lines: result.lines.map((l) => ({
+      type: l.type,
+      description: l.description,
+      quantity: l.quantity,
+      unitPriceCents: l.unitPriceCents,
+      totalPriceCents: l.totalPriceCents,
     })),
-    subtotalCents: calc.subtotalCents,
-    discountCents: calc.discountCents,
-    logisticsCents: calc.logisticsCents,
-    taxCents: calc.taxCents,
-    totalCents: calc.totalCents,
-    depositBps: calc.depositBps,
-    depositCents: calc.depositCents,
-    pricesIncludeTax: true,
+    subtotalCents: result.subtotalCents,
+    discountCents: result.discountCents,
+    taxCents: result.taxCents,
+    totalCents: result.totalCents,
+    depositCents: result.depositCents,
+    warnings: result.warnings.filter((w) => publicWarnings.includes(w.code)).map((w) => w.message),
   });
 }

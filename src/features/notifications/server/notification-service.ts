@@ -1,5 +1,5 @@
 import "server-only";
-import type { NotificationChannel, NotificationStatus, NotificationType } from "@prisma/client";
+import { Prisma, type NotificationChannel, type NotificationStatus, type NotificationType } from "@prisma/client";
 import { prisma } from "@/db";
 import { logger } from "@/lib/logger";
 import { isEnabled } from "@/lib/flags";
@@ -100,6 +100,14 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     });
     return { id: log.id, status };
   } catch (error) {
+    // Carrera entre dos ejecuciones con el mismo dedupeKey (p. ej. cron + botón manual):
+    // la restricción única evita el duplicado; devolvemos el registro existente.
+    if (input.dedupeKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.notificationLog
+        .findUnique({ where: { dedupeKey: input.dedupeKey }, select: { id: true, status: true } })
+        .catch(() => null);
+      if (existing) return existing;
+    }
     logger.error("notifications.failed", { error, type: input.type, channel: input.channel });
     return null;
   }

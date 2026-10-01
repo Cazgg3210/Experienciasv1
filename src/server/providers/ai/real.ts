@@ -1,13 +1,25 @@
+import { AnthropicAIProvider } from "./anthropic-provider";
+import { OpenAIProvider } from "./openai-provider";
 import type { AIProvider } from "./types";
 
 /**
- * STUB — lo implementa el módulo AI Designer (Anthropic / OpenAI vía HTTP, sin SDK).
- * Devuelve null si el proveedor no está soportado (el registro cae al Mock + motor de reglas).
+ * Proveedores LLM reales (Anthropic / OpenAI vía HTTP, sin SDK).
+ * Devuelve null si el proveedor no está soportado o falta la API key
+ * (el registro cae al Mock y el diseñador usa el motor de reglas).
  */
 export function createRealAIProvider(
-  _provider: "anthropic" | "openai",
-  _apiKey: string,
-  _model?: string,
+  provider: "anthropic" | "openai",
+  apiKey: string,
+  model?: string,
 ): AIProvider | null {
-  return null;
+  const key = apiKey?.trim();
+  if (!key) return null;
+  switch (provider) {
+    case "anthropic":
+      return new AnthropicAIProvider(key, model);
+    case "openai":
+      return new OpenAIProvider(key, model);
+    default:
+      return null;
+  }
 }

@@ -1,11 +1,14 @@
 "use server";
 
 import { z } from "zod";
-import { AppError } from "@/lib/errors";
+import { NotFoundError } from "@/lib/errors";
 import { publicAction } from "@/server/action";
+import { paymentStatusQuerySchema } from "../schemas";
+import { resolveBookingFromToken, startCheckout } from "./payment-service";
+import { isValidPaymentResultSignature } from "./payment-links";
+import { getPaymentResult } from "./queries";
 
 /**
- * STUB — lo implementa el módulo Pagos.
  * Inicia un checkout (anticipo, saldo o pago completo) a partir de un token público:
  *  - tokenType "quote": Quote.publicToken de una cotización ACEPTADA (anticipo tras aceptar)
  *  - tokenType "portal": Event.portalToken (pagar saldo desde el portal de la clienta)
@@ -19,7 +22,34 @@ const schema = z.object({
 
 export const startCheckoutAction = publicAction(
   { name: "payments.start_checkout", schema, rateLimit: { limit: 10, windowMs: 60_000 } },
-  async (_input): Promise<{ url: string }> => {
-    throw new AppError("Los pagos en línea aún no están disponibles.");
+  async (input): Promise<{ url: string }> => {
+    const { bookingId } = await resolveBookingFromToken(input.token, input.tokenType);
+    const { url } = await startCheckout(bookingId, input.kind, { source: input.tokenType });
+    return { url };
+  },
+);
+
+export type PaymentStatusView = {
+  status: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
+  eventConfirmed: boolean;
+  failureReason: string | null;
+};
+
+/**
+ * Estado de un pago para /pago/resultado (polling). Requiere la firma HMAC del enlace.
+ * Nunca expone datos de otros pagos ni de la reserva.
+ */
+export const getPaymentStatusAction = publicAction(
+  { name: "payments.status", schema: paymentStatusQuerySchema, rateLimit: { limit: 90, windowMs: 60_000 } },
+  async (input): Promise<PaymentStatusView> => {
+    if (!isValidPaymentResultSignature(input.p, input.s)) throw new NotFoundError("No encontramos este pago.");
+    const payment = await getPaymentResult(input.p);
+    if (!payment) throw new NotFoundError("No encontramos este pago.");
+    const eventStatus = payment.booking.event.status;
+    return {
+      status: payment.status,
+      eventConfirmed: ["CONFIRMED", "PLANNING", "READY", "IN_PROGRESS", "COMPLETED"].includes(eventStatus),
+      failureReason: payment.status === "FAILED" ? payment.failureReason : null,
+    };
   },
 );

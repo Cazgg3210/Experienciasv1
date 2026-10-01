@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   // Permite varios servidores de desarrollo en paralelo (p. ej. QA) con carpetas de build distintas.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
+  // Permite abrir el servidor de desarrollo desde otros dispositivos de la red local (p. ej. el celular).
+  allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean),
   reactStrictMode: true,
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },

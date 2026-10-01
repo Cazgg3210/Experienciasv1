@@ -13,6 +13,10 @@ export type NotificationData = {
   url?: string; // CTA principal
   message?: string;
   staffFunction?: string;
+  /** Días que faltan (EVENT_7D); default 7 */
+  daysLeft?: number;
+  /** Reemplaza el texto del botón/CTA por defecto de la plantilla */
+  ctaLabel?: string;
 };
 
 export type RenderedNotification = {
@@ -78,9 +82,9 @@ const COPY: Record<NotificationType, Copy> = {
     cta: "Confirmar asistencia",
   },
   EVENT_7D: {
-    subject: () => "¡Falta una semana!",
+    subject: (d) => (d.daysLeft && d.daysLeft !== 7 ? `¡Faltan ${d.daysLeft} días!` : "¡Falta una semana!"),
     body: (d) =>
-      `${hi(d)} en 7 días celebramos ${d.eventTitle ?? ""}. Revisa invitadas, alergias y detalles finales en tu portal.`,
+      `${hi(d)} en ${d.daysLeft ?? 7} días celebramos ${d.eventTitle ?? ""}. Revisa invitadas, alergias y detalles finales en tu portal.`,
     cta: "Revisar detalles",
   },
   EVENT_48H: {
@@ -92,7 +96,7 @@ const COPY: Record<NotificationType, Copy> = {
   POST_EVENT: {
     subject: () => "Gracias por celebrar con nosotras",
     body: (d) =>
-      `${hi(d)} fue un honor ser parte de ${d.eventTitle ?? "tu celebración"}. Tu Memory Capsule con fotos y mensajes ya está disponible.`,
+      `${hi(d)} fue un honor ser parte de ${d.eventTitle ?? "tu celebración"}. ${d.message ?? "Tu Memory Capsule con fotos y mensajes ya está disponible."}`,
     cta: "Ver Memory Capsule",
   },
   REVIEW_REQUEST: {
@@ -128,7 +132,8 @@ export function escapeHtml(s: string): string {
 }
 
 export function renderNotification(type: NotificationType, data: NotificationData): RenderedNotification {
-  const copy = COPY[type];
+  const base = COPY[type];
+  const copy: Copy = data.ctaLabel ? { ...base, cta: data.ctaLabel } : base;
   const brand = data.brandName ?? "Ivonne & Rosa";
   const subject = copy.subject(data).replace(/\s+/g, " ").trim();
   const body = copy.body(data).replace(/\s+/g, " ").trim();

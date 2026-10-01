@@ -240,7 +240,7 @@ export async function seedDemoActivity(
   const e4Balance = e4.paymentIds.find((p) => p.kind === "BALANCE")!;
   await prisma.auditLog.createMany({
     data: [
-      audit("ivonne", "quote.discount_applied", "Quote", e2Quote.id, clock.at(-39, "10:20"), { discountCents: 0, totalCents: e2Quote.calc.subtotalCents }, { discountType: "PERCENT", discountValue: 500, discountCents: e2Quote.calc.discountCents, totalCents: e2Quote.calc.totalCents, reason: e2Quote.calc.discountReason }),
+      audit("ivonne", "quote.discount_applied", "Quote", e2Quote.id, clock.at(-39, "10:20"), { discountCents: 0, totalCents: e2Quote.calc.subtotalCents }, { discountType: "PERCENT", discountValue: 500, discountCents: e2Quote.calc.discountCents, totalCents: e2Quote.calc.totalCents, reason: e2Quote.discount?.reason ?? null }),
       audit("rosa", "quote.sent", "Quote", e2Quote.id, clock.at(-39, "10:30"), { status: "DRAFT" }, { status: "SENT" }),
       audit("ivonne", "quote.sent", "Quote", lucia.id, lucia.sentAt!, { status: "DRAFT" }, { status: "SENT" }),
       audit("rosa", "payment.manual_recorded", "Payment", e3Deposit2.id, clock.at(-17, "11:20"), null, { kind: "DEPOSIT", method: "TRANSFER", amountCents: e3Deposit2.amountCents, reference: "SPEI 0849321" }),
