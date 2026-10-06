@@ -11,6 +11,7 @@ import { AppError, NotFoundError, ValidationError } from "@/lib/errors";
 import { generateToken } from "@/lib/tokens";
 import { signMockPayload } from "@/server/providers/payments/mock-signature";
 import { getPaymentProvider } from "@/server/providers";
+import { MockPaymentProvider } from "@/server/providers/payments/mock-provider";
 import { testOwner, uid } from "./helpers";
 
 const hoisted = vi.hoisted(() => ({
@@ -49,6 +50,7 @@ import { getPaymentStatusAction, startCheckoutAction } from "@/features/payments
 import { mockCheckoutAction } from "@/features/payments/server/mock-checkout-actions";
 import { recordManualPaymentAction, refundPaymentAction } from "@/features/payments/server/actions";
 import { estimateFeeCents } from "@/features/payments/domain/amounts";
+import { cancelEvent } from "@/features/events/server/event-service";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { getBookingPaymentSummary, getPaymentResult, getPaymentsPanelData, listRecentPayments } from "@/features/payments/server/queries";
 import { isValidPaymentResultSignature, paymentResultRelativePath } from "@/features/payments/server/payment-links";
@@ -160,6 +162,61 @@ async function notificationCount(eventId: string, type: "PAYMENT_RECEIVED" | "BO
   return prisma.notificationLog.count({ where: { eventId, type, channel } });
 }
 
+/**
+ * Retiene un candado de fila (SELECT ... FOR UPDATE) en una transacción propia para forzar un orden
+ * determinista entre procesos que compiten por él (las esperas por candado de Postgres son FIFO).
+ *  - waitBlocked(n): espera a que n sesiones estén bloqueadas, directa o transitivamente, detrás de ella.
+ *  - run(fn): ejecuta algo dentro de esa transacción (p. ej. cambiar el pago) antes de soltarla.
+ *  - release(): confirma la transacción y suelta el candado.
+ */
+async function holdRowLock(table: "Booking" | "Payment", id: string) {
+  type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const jobs: ((tx: Tx) => Promise<void>)[] = [];
+  let ready!: (pid: number) => void;
+  const pidReady = new Promise<number>((resolve) => (ready = resolve));
+  const done = prisma.$transaction(
+    async (tx) => {
+      const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      if (table === "Booking") await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`;
+      else await tx.$queryRaw`SELECT "id" FROM "Payment" WHERE "id" = ${id} FOR UPDATE`;
+      ready(row!.pid);
+      await released;
+      for (const job of jobs) await job(tx);
+    },
+    { maxWait: 10_000, timeout: 25_000 },
+  );
+  const holder = await Promise.race([
+    pidReady,
+    done.then(() => {
+      throw new Error("La transacción que retiene el candado terminó antes de tiempo");
+    }),
+  ]);
+  return {
+    async waitBlocked(n: number) {
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const [row] = await prisma.$queryRaw<{ blocked: number }[]>`
+          WITH RECURSIVE chain(pid) AS (
+            SELECT a.pid FROM pg_stat_activity a WHERE ${holder}::int = ANY(pg_blocking_pids(a.pid))
+            UNION
+            SELECT a.pid FROM pg_stat_activity a JOIN chain c ON c.pid = ANY(pg_blocking_pids(a.pid))
+          )
+          SELECT count(*)::int AS blocked FROM chain`;
+        if ((row?.blocked ?? 0) >= n) return;
+        if (Date.now() > deadline) throw new Error(`Se esperaban ${n} sesiones bloqueadas por el candado; hay ${row?.blocked ?? 0}`);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    },
+    async release(job?: (tx: Tx) => Promise<void>) {
+      if (job) jobs.push(job);
+      release();
+      await done;
+    },
+  };
+}
+
 beforeEach(() => {
   hoisted.onEventConfirmed.mockClear();
   hoisted.paymentsEnabled.value = true;
@@ -234,6 +291,16 @@ describe("startCheckout", () => {
       paidAt: localDateKey(),
     });
     await expect(startCheckout(booking.id, "BALANCE")).rejects.toThrow("No hay saldo pendiente");
+  });
+
+  it("solicitudes simultáneas de la misma reserva comparten un solo pago pendiente (candado de la reserva)", async () => {
+    const { booking, event } = await makeFixture();
+    const results = await Promise.all([1, 2, 3].map(() => startCheckout(booking.id, "DEPOSIT", { source: "portal" })));
+    expect(new Set(results.map((r) => r.paymentId)).size).toBe(1);
+    expect(new Set(results.map((r) => r.url)).size).toBe(1);
+    expect(results.filter((r) => !r.reused)).toHaveLength(1);
+    expect(await prisma.payment.count({ where: { bookingId: booking.id } })).toBe(1);
+    expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(1);
   });
 
   it("rechaza eventos cancelados y pagos deshabilitados", async () => {
@@ -827,6 +894,257 @@ describe("Checkout simulado (mockCheckoutAction)", () => {
   });
 });
 
+describe("Cancelación del evento con checkouts abiertos", () => {
+  const prevInternal = process.env.INTERNAL_APP_URL;
+  beforeEach(() => {
+    // Puerto inalcanzable: el checkout simulado procesa su webhook firmado directamente
+    process.env.INTERNAL_APP_URL = "http://127.0.0.1:9";
+  });
+  afterAll(() => {
+    if (prevInternal === undefined) delete process.env.INTERNAL_APP_URL;
+    else process.env.INTERNAL_APP_URL = prevInternal;
+  });
+
+  it("cancelar anula los checkouts PENDING (FAILED «Evento cancelado.»), lo audita y el checkout simulado ya no cobra", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+
+    const r = await cancelEvent({ eventId: event.id, reason: "La clienta canceló (prueba)", notifyCustomer: false }, owner);
+    expect(r.status).toBe("cancelled");
+    const voided = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(voided).toMatchObject({ status: "FAILED", failureReason: "Evento cancelado." });
+    expect(voided.failedAt).toBeInstanceOf(Date);
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "event.cancelled", entityId: event.id } });
+    expect(log.after).toMatchObject({ voidedPayments: [paymentId] });
+
+    const res = await mockCheckoutAction({ checkoutId: voided.providerCheckoutId!, outcome: "success" });
+    expect(res).toMatchObject({ ok: false, code: "EVENT_CANCELLED" });
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).status).toBe("FAILED");
+    expect(await prisma.webhookEvent.count({ where: { payload: { path: ["paymentId"], equals: paymentId } } })).toBe(0);
+    await expect(startCheckout(booking.id, "DEPOSIT")).rejects.toMatchObject({ code: "EVENT_CANCELLED" });
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED")).toBe(0);
+  });
+
+  it("cancelar pide a la pasarela expirar las sesiones anuladas (best-effort: si falla, la cancelación sigue)", async () => {
+    const owner = await testOwner();
+    const expire = vi.spyOn(MockPaymentProvider.prototype, "expireCheckout");
+    try {
+      const first = await makeFixture();
+      const { paymentId } = await startCheckout(first.booking.id, "DEPOSIT");
+      await cancelEvent({ eventId: first.event.id, reason: "La clienta canceló (prueba)", notifyCustomer: false }, owner);
+      const voided = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+      expect(expire).toHaveBeenCalledTimes(1);
+      expect(expire).toHaveBeenCalledWith(voided.providerCheckoutId);
+
+      // La pasarela rechaza la expiración (p. ej. ya expirada o caída): la cancelación no falla.
+      expire.mockClear();
+      expire.mockRejectedValueOnce(new Error("pasarela no disponible (prueba)"));
+      const second = await makeFixture();
+      const other = await startCheckout(second.booking.id, "DEPOSIT");
+      const r = await cancelEvent({ eventId: second.event.id, reason: "La clienta canceló (prueba)", notifyCustomer: false }, owner);
+      expect(r.status).toBe("cancelled");
+      expect(expire).toHaveBeenCalledTimes(1);
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id: other.paymentId } })).status).toBe("FAILED");
+
+      // Sin checkouts abiertos no se llama a la pasarela.
+      expire.mockClear();
+      const third = await makeFixture();
+      await cancelEvent({ eventId: third.event.id, reason: "La clienta canceló (prueba)", notifyCustomer: false }, owner);
+      expect(expire).not.toHaveBeenCalled();
+    } finally {
+      expire.mockRestore();
+    }
+  });
+
+  it("un pago cobrado normalmente y un evento cancelado después no se presenta como cobro tardío", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    const hook = mockWebhook(payment, "payment.succeeded");
+    expect((await postWebhook("mock", hook.body, hook.signature)).json).toMatchObject({ applied: true });
+    await cancelEvent({ eventId: event.id, reason: "Cancelación con anticipo retenido", notifyCustomer: false }, owner);
+    const s = new URL(paymentResultRelativePath(paymentId), "http://x").searchParams.get("s")!;
+    expect(await getPaymentStatusAction({ p: paymentId, s })).toMatchObject({
+      ok: true,
+      data: { status: "PAID", eventCancelled: true, collectedAfterCancellation: false },
+    });
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).notes).toBeNull();
+  });
+
+  it("cancelación y checkout simultáneos nunca dejan un pago pendiente en una reserva cancelada", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const [checkout, cancel] = await Promise.allSettled([
+      startCheckout(booking.id, "DEPOSIT"),
+      cancelEvent({ eventId: event.id, reason: "Cancelación simultánea (prueba)", notifyCustomer: false }, owner),
+    ]);
+    expect(cancel.status).toBe("fulfilled");
+    if (checkout.status === "rejected") expect(checkout.reason).toMatchObject({ code: "EVENT_CANCELLED" });
+    expect(await prisma.payment.count({ where: { bookingId: booking.id, status: "PENDING" } })).toBe(0);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it("un cobro que la pasarela confirma tras cancelar queda PAID con «Reembolso requerido», sin reconfirmar ni avisar a la clienta", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    await cancelEvent({ eventId: event.id, reason: "Cancelación con sesión abierta", notifyCustomer: false }, owner);
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+
+    const hook = mockWebhook(payment, "payment.succeeded");
+    const res = await postWebhook("mock", hook.body, hook.signature);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ applied: true, note: "cancelled_booking" });
+    const paid = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(paid.status).toBe("PAID");
+    expect(paid.failureReason).toBeNull();
+    expect(paid.notes).toMatch(/^Reembolso requerido: /);
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CANCELLED");
+    expect(hoisted.onEventConfirmed).not.toHaveBeenCalled();
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED")).toBe(0);
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED", "WHATSAPP")).toBe(0);
+    expect(await notificationCount(event.id, "BOOKING_CONFIRMED")).toBe(0);
+    expect(await prisma.notificationLog.count({ where: { dedupeKey: `payment-received-team:${paymentId}` } })).toBe(0);
+    const alert = await prisma.notificationLog.findUniqueOrThrow({ where: { dedupeKey: `cancelled-booking-payment:${paymentId}` } });
+    expect(alert.type).toBe("GENERIC");
+    expect(alert.body).toContain("ya estaba cancelado");
+    expect(await prisma.auditLog.count({ where: { action: "payment.collected_after_cancellation", entityId: paymentId } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "event.confirmed_by_payment", entityId: event.id } })).toBe(0);
+    expect((await prisma.webhookEvent.findFirstOrThrow({ where: { externalId: String(hook.payload.id) } })).error).toBe("cancelled_booking");
+    // El resultado que consulta la clienta lo marca por el propio pago (no sólo por el evento cancelado).
+    const s = new URL(paymentResultRelativePath(paymentId), "http://x").searchParams.get("s")!;
+    expect(await getPaymentStatusAction({ p: paymentId, s })).toMatchObject({
+      ok: true,
+      data: { status: "PAID", eventCancelled: true, collectedAfterCancellation: true, failureReason: null },
+    });
+
+    const dup = await postWebhook("mock", hook.body, hook.signature);
+    expect(dup.json).toMatchObject({ duplicate: true });
+    expect(await prisma.notificationLog.count({ where: { dedupeKey: `cancelled-booking-payment:${paymentId}` } })).toBe(1);
+
+    // El equipo lo reembolsa desde el panel (el cobro cuenta como pagado para poder devolverlo).
+    const refund = await refundPayment(owner, { paymentId, amountCents: paid.amountCents, reason: "Evento cancelado" });
+    expect(refund.originalStatus).toBe("REFUNDED");
+  });
+
+  it("un pago manual no se registra si el evento se canceló (también dentro del candado)", async () => {
+    const owner = await testOwner();
+    const { event } = await makeFixture();
+    const [manual, cancel] = await Promise.allSettled([
+      recordManualPayment(owner, { eventId: event.id, amountCents: DEPOSIT, kind: "DEPOSIT", method: "CASH", paidAt: localDateKey() }),
+      cancelEvent({ eventId: event.id, reason: "Cancelación simultánea (prueba)", notifyCustomer: false }, owner),
+    ]);
+    // O el pago se registra antes de la cancelación, o se rechaza por evento cancelado; nunca un cobro
+    // manual «para reembolso» sobre una reserva ya cancelada.
+    expect([manual.status, cancel.status]).toContain("fulfilled");
+    if (manual.status === "rejected") expect(manual.reason).toMatchObject({ code: "EVENT_CANCELLED" });
+    if (cancel.status === "rejected") expect(cancel.reason).toMatchObject({ code: "CONFLICT" });
+    expect(await prisma.payment.count({ where: { notes: { startsWith: "Reembolso requerido" }, booking: { eventId: event.id } } })).toBe(0);
+  });
+
+  it("webhook de cobro que leyó el pago PENDING mientras se cancelaba: queda PAID con «Reembolso requerido» y aviso al equipo, nunca FAILED", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    const hook = mockWebhook(await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } }), "payment.succeeded");
+
+    // Orden forzado: la cancelación toma el candado de la reserva primero; el webhook lee el pago (PENDING)
+    // antes de que la cancelación confirme y luego espera el mismo candado.
+    const lock = await holdRowLock("Booking", booking.id);
+    const cancel = cancelEvent({ eventId: event.id, reason: "Cancelación simultánea al cobro (prueba)", notifyCustomer: false }, owner);
+    await lock.waitBlocked(1);
+    const webhook = postWebhook("mock", hook.body, hook.signature);
+    await lock.waitBlocked(2);
+    await lock.release();
+    const [cancelled, res] = await Promise.all([cancel, webhook]);
+
+    expect(cancelled.status).toBe("cancelled");
+    const cancelAudit = await prisma.auditLog.findFirstOrThrow({ where: { action: "event.cancelled", entityId: event.id } });
+    expect(cancelAudit.after).toMatchObject({ voidedPayments: [paymentId] });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ applied: true, note: "cancelled_booking" });
+    const after = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(after.status, "el dinero cobrado nunca queda como «Evento cancelado.» FAILED").toBe("PAID");
+    expect(after.failureReason).toBeNull();
+    expect(after.providerPaymentId).toBe(hook.payload.providerPaymentId);
+    expect(after.notes).toMatch(/^Reembolso requerido: /);
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CANCELLED");
+    expect(await prisma.auditLog.count({ where: { action: "payment.collected_after_cancellation", entityId: paymentId } })).toBe(1);
+    expect(await prisma.notificationLog.count({ where: { dedupeKey: `cancelled-booking-payment:${paymentId}` } })).toBe(1);
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED")).toBe(0);
+    expect(hoisted.onEventConfirmed).not.toHaveBeenCalled();
+    const record = await prisma.webhookEvent.findFirstOrThrow({ where: { externalId: String(hook.payload.id) } });
+    expect(record.processedAt).toBeInstanceOf(Date);
+    expect(record.error).toBe("cancelled_booking");
+  });
+
+  it("webhook de cobro que toma el candado antes que la cancelación: PAID + CONFIRMED y la cancelación falla por conflicto", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    const hook = mockWebhook(await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } }), "payment.succeeded");
+
+    const lock = await holdRowLock("Booking", booking.id);
+    const webhook = postWebhook("mock", hook.body, hook.signature);
+    await lock.waitBlocked(1);
+    const cancel = cancelEvent({ eventId: event.id, reason: "Cancelación simultánea al cobro (prueba)", notifyCustomer: false }, owner).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await lock.waitBlocked(2);
+    await lock.release();
+    const [res, cancelled] = await Promise.all([webhook, cancel]);
+
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ applied: true });
+    expect(res.json.note).toBeUndefined();
+    expect(cancelled.ok).toBe(false);
+    if (!cancelled.ok) expect(cancelled.error).toMatchObject({ code: "CONFLICT" });
+    const after = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(after.status).toBe("PAID");
+    expect(after.notes).toBeNull();
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CONFIRMED");
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).cancelledAt).toBeNull();
+    expect(hoisted.onEventConfirmed).toHaveBeenCalledWith(event.id);
+    expect(await prisma.auditLog.count({ where: { action: "event.cancelled", entityId: event.id } })).toBe(0);
+  });
+
+  it("un webhook de cobro que pierde una carrera (el pago cambió entre la lectura y la escritura) no se marca procesado: 500 y el reintento lo aplica", async () => {
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    const hook = mockWebhook(await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } }), "payment.succeeded");
+
+    // Un escritor que no toma el candado de la reserva cambia el pago mientras el webhook intenta aplicarlo.
+    const lock = await holdRowLock("Payment", paymentId);
+    const webhook = postWebhook("mock", hook.body, hook.signature);
+    await lock.waitBlocked(1);
+    await lock.release(async (tx) => {
+      await tx.payment.update({
+        where: { id: paymentId },
+        data: { status: "FAILED", failedAt: new Date(), failureReason: "Rechazado por el banco (prueba)." },
+      });
+    });
+    const res = await webhook;
+
+    expect(res.status, "el proveedor debe reintentar").toBe(500);
+    const record = await prisma.webhookEvent.findFirstOrThrow({ where: { externalId: String(hook.payload.id) } });
+    expect(record.processedAt).toBeNull();
+    expect(record.error).toContain("concurrent_update");
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).status).toBe("FAILED");
+
+    const retry = await postWebhook("mock", hook.body, hook.signature);
+    expect(retry.status).toBe(200);
+    expect(retry.json).toMatchObject({ applied: true });
+    const after = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(after.status).toBe("PAID");
+    expect(after.failureReason).toBeNull();
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CONFIRMED");
+    expect((await prisma.webhookEvent.findFirstOrThrow({ where: { externalId: String(hook.payload.id) } })).processedAt).toBeInstanceOf(Date);
+  });
+});
+
 describe("Server Actions: tokens, RBAC y validación", () => {
   it("startCheckoutAction con token de cotización/portal devuelve la URL; token ajeno → 404 genérico", async () => {
     const { quote, event } = await makeFixture();
@@ -846,7 +1164,10 @@ describe("Server Actions: tokens, RBAC y validación", () => {
     const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
     const url = new URL(paymentResultRelativePath(paymentId), "http://x");
     const ok = await getPaymentStatusAction({ p: paymentId, s: url.searchParams.get("s")! });
-    expect(ok).toEqual({ ok: true, data: { status: "PENDING", eventConfirmed: false, failureReason: null } });
+    expect(ok).toEqual({
+      ok: true,
+      data: { status: "PENDING", eventConfirmed: false, eventCancelled: false, collectedAfterCancellation: false, failureReason: null },
+    });
     const forged = await getPaymentStatusAction({ p: paymentId, s: "A".repeat(32) });
     expect(forged).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });

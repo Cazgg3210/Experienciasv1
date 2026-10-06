@@ -70,6 +70,14 @@ export const mockCheckoutAction = publicAction(
 
     const resultPath = paymentResultRelativePath(payment.id);
     const state = checkoutLinkState(payment, payment.booking, payment.booking.payments);
+    // Igual que un proveedor real con la sesión expirada: una reserva cancelada nunca se cobra.
+    if (state === "cancelled") {
+      throw new AppError(
+        "Esta reserva fue cancelada, por lo que este enlace ya no acepta pagos. No se realizó ningún cargo.",
+        "EVENT_CANCELLED",
+        409,
+      );
+    }
     if (state === "processed") return { redirectTo: resultPath };
     if (state === "expired") {
       throw new AppError("Este enlace de pago expiró. Vuelve a tu portal para generar uno nuevo.", "CHECKOUT_EXPIRED", 410);

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { formatMXN } from "@/lib/money";
 import { PAYMENT_KIND_LABELS } from "@/lib/labels";
 import { PaymentResultPoller } from "@/features/payments/components/payment-result-poller";
+import { paymentStatusView } from "@/features/payments/domain/amounts";
 import { isValidPaymentResultSignature, portalPath } from "@/features/payments/server/payment-links";
 import { getPaymentResult } from "@/features/payments/server/queries";
 
@@ -12,8 +13,6 @@ export const metadata: Metadata = {
   title: "Resultado de tu pago",
   robots: { index: false, follow: false },
 };
-
-const CONFIRMED_STATUSES = ["CONFIRMED", "PLANNING", "READY", "IN_PROGRESS", "COMPLETED"];
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
@@ -33,21 +32,17 @@ export default async function PaymentResultPage({
 
   const { event } = payment.booking;
   const portalHref = portalPath(event.portalToken);
-  const retry =
-    event.status !== "CANCELLED"
-      ? { token: event.portalToken, kind: payment.kind as "DEPOSIT" | "BALANCE" | "FULL" }
-      : null;
+  const initial = paymentStatusView(payment, payment.booking);
+  const retry = !initial.eventCancelled
+    ? { token: event.portalToken, kind: payment.kind as "DEPOSIT" | "BALANCE" | "FULL" }
+    : null;
 
   return (
     <div className="bg-card rounded-3xl border px-5 py-10 shadow-xs sm:px-10 sm:py-12">
       <PaymentResultPoller
         p={p}
         s={s}
-        initial={{
-          status: payment.status,
-          eventConfirmed: CONFIRMED_STATUSES.includes(event.status),
-          failureReason: payment.status === "FAILED" ? payment.failureReason : null,
-        }}
+        initial={initial}
         portalHref={portalHref}
         retry={retry}
         amountLabel={formatMXN(payment.amountCents)}

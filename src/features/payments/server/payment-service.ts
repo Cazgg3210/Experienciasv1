@@ -19,9 +19,14 @@ import { onEventConfirmed } from "@/features/events/server/lifecycle";
 import { eventStatusMachine, type EventStatus } from "@/features/events/domain/event-status";
 import { netPaidCents, paymentStatusMachine, type PaymentStatus } from "../domain/payment-status";
 import {
+  CANCELLED_BOOKING_PAYMENT_MESSAGE,
+  CANCELLED_CHECKOUT_REASON,
   CHECKOUT_BLOCK_MESSAGES,
+  CHECKOUT_KINDS,
+  REFUND_REQUIRED_NOTE_PREFIX,
   checkoutAmountCents,
   estimateFeeCents,
+  isBookingCancelled,
   isReusablePendingCheckout,
   maxManualAmountCents,
   planRefund,
@@ -65,10 +70,44 @@ export async function resolveBookingFromToken(token: string, tokenType: Checkout
 
 export type StartCheckoutResult = { url: string; paymentId: string; reused: boolean };
 
+/** Tiempo máximo para que el proveedor abra la sesión de checkout (la reserva está bloqueada mientras tanto). */
+const PROVIDER_CHECKOUT_TIMEOUT_MS = 15_000;
+/**
+ * Duración máxima de la transacción de startCheckout. Debe cubrir la espera del candado (otra solicitud
+ * de la misma reserva abriendo su sesión, hasta PROVIDER_CHECKOUT_TIMEOUT_MS) más la sesión propia.
+ */
+const CHECKOUT_TX_TIMEOUT_MS = 2 * PROVIDER_CHECKOUT_TIMEOUT_MS + 10_000;
+
+/**
+ * Opciones de las demás transacciones que toman el candado de la reserva (cancelación del evento,
+ * webhooks, pagos manuales y reembolsos). Pueden esperar a un startCheckout que conserva el candado
+ * mientras la pasarela abre la sesión (hasta PROVIDER_CHECKOUT_TIMEOUT_MS): con el límite por defecto de
+ * Prisma (5 s) fallarían si la pasarela responde lento. El límite cubre esa espera más el trabajo propio.
+ * Cada checkout en curso retiene una conexión del pool; ver `connection_limit` en docs/DEPLOY_DOKPLOY.md.
+ */
+export const BOOKING_LOCK_TX_OPTIONS = { maxWait: 10_000, timeout: PROVIDER_CHECKOUT_TIMEOUT_MS + 15_000 } as const;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: sin respuesta en ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+type CheckoutTxResult =
+  | { outcome: "reused"; url: string; paymentId: string }
+  | { outcome: "failed"; paymentId: string }
+  | { outcome: "created"; url: string; paymentId: string; amountCents: number; eventId: string; quoteId: string | null };
+
 /**
  * Inicia (o reutiliza) un checkout para una reserva.
  *  - DEPOSIT = max(0, anticipo − pagado neto); BALANCE/FULL = total − pagado neto.
  *  - Reutiliza un pago PENDING del mismo tipo y monto creado hace < 1 h.
+ *  - Serializado por reserva (candado de fila): dos solicitudes simultáneas (dos pestañas, doble envío,
+ *    reintento de red) nunca abren dos cobros. La sesión del proveedor se crea con la reserva bloqueada,
+ *    así la segunda solicitud ya ve el checkoutUrl de la primera y lo reutiliza. La cancelación del
+ *    evento usa el mismo candado: nunca queda un checkout abierto de una reserva cancelada.
  *  - La confirmación del pago llega SÓLO por webhook firmado (nunca por el redirect).
  */
 export async function startCheckout(
@@ -79,121 +118,194 @@ export async function startCheckout(
   if (!(await isEnabled("PAYMENTS_ENABLED"))) {
     throw new AppError(PAYMENTS_DISABLED_MESSAGE, "PAYMENTS_DISABLED", 409);
   }
-  const now = opts.now ?? new Date();
   const source = opts.source ?? "portal";
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      customer: { select: { name: true, email: true, phone: true, whatsapp: true } },
-      quote: { select: { id: true, publicToken: true } },
-      event: { select: { id: true, title: true, status: true, portalToken: true, eventDate: true } },
-      payments: {
-        select: {
-          id: true,
-          kind: true,
-          status: true,
-          amountCents: true,
-          refundedCents: true,
-          provider: true,
-          checkoutUrl: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "desc" },
-      },
-    },
-  });
-  if (!booking) throw new NotFoundError(GENERIC_NOT_FOUND);
-  if (booking.cancelledAt || booking.event.status === "CANCELLED") {
-    throw new AppError(
-      "Esta reserva fue cancelada, por lo que no podemos recibir pagos. Escríbenos si necesitas ayuda.",
-      "EVENT_CANCELLED",
-      409,
-    );
-  }
-
-  const calc = checkoutAmountCents(kind, booking, booking.payments);
-  if (!calc.ok) throw new AppError(CHECKOUT_BLOCK_MESSAGES[calc.reason], calc.reason, 409);
-
   const provider = getPaymentProvider();
   const decorate = (url: string) => (provider.isMock && source === "quote" ? withParam(url, "from", "quote") : url);
 
-  const reusable = booking.payments.find((p) =>
-    isReusablePendingCheckout(p, { kind, amountCents: calc.amountCents, provider: provider.name }, now),
-  );
-  if (reusable?.checkoutUrl) {
-    return { url: decorate(reusable.checkoutUrl), paymentId: reusable.id, reused: true };
-  }
+  const result = await prisma.$transaction<CheckoutTxResult>(
+    async (tx) => {
+      await lockBooking(tx, bookingId);
+      // La hora se toma ya con el candado: si esperamos a otra solicitud, su pago es "más nuevo" que una
+      // hora tomada antes de esperar y no se reconocería como reutilizable.
+      const now = opts.now ?? new Date();
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          customer: { select: { name: true, email: true, phone: true, whatsapp: true } },
+          quote: { select: { id: true, publicToken: true } },
+          event: { select: { id: true, title: true, status: true, portalToken: true, eventDate: true } },
+          payments: {
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              amountCents: true,
+              refundedCents: true,
+              provider: true,
+              checkoutUrl: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+          },
+        },
+      });
+      if (!booking) throw new NotFoundError(GENERIC_NOT_FOUND);
+      if (isBookingCancelled(booking)) throw new AppError(CANCELLED_BOOKING_PAYMENT_MESSAGE, "EVENT_CANCELLED", 409);
 
-  const idempotencyKey = `${booking.id}:${kind}:${generateToken(12)}`;
-  const payment = await prisma.payment.create({
-    data: {
-      bookingId: booking.id,
-      kind,
-      status: "PENDING",
-      method: "ONLINE",
-      provider: provider.name,
-      amountCents: calc.amountCents,
-      currency: booking.currency || "MXN",
-      idempotencyKey,
-    },
-  });
+      const calc = checkoutAmountCents(kind, booking, booking.payments);
+      if (!calc.ok) throw new AppError(CHECKOUT_BLOCK_MESSAGES[calc.reason], calc.reason, 409);
 
-  const cancelUrl =
-    source === "quote" && booking.quote?.publicToken
-      ? appUrl(quotePath(booking.quote.publicToken))
-      : appUrl(portalPath(booking.event.portalToken));
+      // Dentro del candado: ve el pago pendiente que otra solicitud acaba de crear (y su checkoutUrl).
+      const reusable = booking.payments.find((p) =>
+        isReusablePendingCheckout(p, { kind, amountCents: calc.amountCents, provider: provider.name }, now),
+      );
+      if (reusable?.checkoutUrl) return { outcome: "reused", url: reusable.checkoutUrl, paymentId: reusable.id };
 
-  let session: Awaited<ReturnType<typeof provider.createCheckout>>;
-  try {
-    session = await provider.createCheckout({
-      paymentId: payment.id,
-      amountCents: calc.amountCents,
-      currency: "MXN",
-      description: `${PAYMENT_KIND_LABELS[kind]} · ${booking.event.title}`,
-      customer: {
-        name: booking.customer.name,
-        email: booking.customer.email,
-        phone: booking.customer.whatsapp ?? booking.customer.phone,
-      },
-      successUrl: paymentResultUrl(payment.id),
-      cancelUrl,
-      idempotencyKey,
-      metadata: {
-        paymentId: payment.id,
-        bookingId: booking.id,
-        bookingCode: booking.code,
-        eventId: booking.event.id,
-        kind,
-      },
-    });
-  } catch (error) {
-    logger.error("payments.checkout_create_failed", { error, paymentId: payment.id, provider: provider.name });
-    await prisma.payment
-      .update({
+      const idempotencyKey = `${booking.id}:${kind}:${generateToken(12)}`;
+      const payment = await tx.payment.create({
+        data: {
+          bookingId: booking.id,
+          kind,
+          status: "PENDING",
+          method: "ONLINE",
+          provider: provider.name,
+          amountCents: calc.amountCents,
+          currency: booking.currency || "MXN",
+          idempotencyKey,
+        },
+      });
+
+      const cancelUrl =
+        source === "quote" && booking.quote?.publicToken
+          ? appUrl(quotePath(booking.quote.publicToken))
+          : appUrl(portalPath(booking.event.portalToken));
+
+      let session: Awaited<ReturnType<typeof provider.createCheckout>>;
+      try {
+        session = await withTimeout(
+          provider.createCheckout({
+            paymentId: payment.id,
+            amountCents: calc.amountCents,
+            currency: "MXN",
+            description: `${PAYMENT_KIND_LABELS[kind]} · ${booking.event.title}`,
+            customer: {
+              name: booking.customer.name,
+              email: booking.customer.email,
+              phone: booking.customer.whatsapp ?? booking.customer.phone,
+            },
+            successUrl: paymentResultUrl(payment.id),
+            cancelUrl,
+            idempotencyKey,
+            metadata: {
+              paymentId: payment.id,
+              bookingId: booking.id,
+              bookingCode: booking.code,
+              eventId: booking.event.id,
+              kind,
+            },
+          }),
+          PROVIDER_CHECKOUT_TIMEOUT_MS,
+          `${provider.name}.createCheckout`,
+        );
+      } catch (error) {
+        logger.error("payments.checkout_create_failed", { error, paymentId: payment.id, provider: provider.name });
+        // Se conserva el intento como FAILED (misma transacción) y se responde con error tras el commit.
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: "FAILED", failedAt: new Date(), failureReason: "No se pudo abrir la pasarela de pago." },
+        });
+        return { outcome: "failed", paymentId: payment.id };
+      }
+
+      await tx.payment.update({
         where: { id: payment.id },
-        data: { status: "FAILED", failedAt: new Date(), failureReason: "No se pudo abrir la pasarela de pago." },
-      })
-      .catch(() => undefined);
+        data: { providerCheckoutId: session.checkoutId, checkoutUrl: session.url },
+      });
+      return {
+        outcome: "created",
+        url: session.url,
+        paymentId: payment.id,
+        amountCents: calc.amountCents,
+        eventId: booking.event.id,
+        quoteId: booking.quote?.id ?? null,
+      };
+    },
+    { maxWait: 10_000, timeout: CHECKOUT_TX_TIMEOUT_MS },
+  );
+
+  if (result.outcome === "failed") {
     throw new AppError(
       "No pudimos abrir la pasarela de pago. Intenta de nuevo en unos minutos o escríbenos por WhatsApp.",
       "CHECKOUT_FAILED",
       502,
     );
   }
-
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: { providerCheckoutId: session.checkoutId, checkoutUrl: session.url },
-  });
+  if (result.outcome === "reused") return { url: decorate(result.url), paymentId: result.paymentId, reused: true };
 
   await track("START_PAYMENT", {
-    eventId: booking.event.id,
-    quoteId: booking.quote?.id ?? null,
+    eventId: result.eventId,
+    quoteId: result.quoteId,
     path: source === "quote" ? "/cotizacion" : "/mi-evento",
-    metadata: { kind, amountCents: calc.amountCents, provider: provider.name, paymentId: payment.id },
+    metadata: { kind, amountCents: result.amountCents, provider: provider.name, paymentId: result.paymentId },
   });
 
-  return { url: decorate(session.url), paymentId: payment.id, reused: false };
+  return { url: decorate(result.url), paymentId: result.paymentId, reused: false };
+}
+
+/**
+ * Cancelación de una reserva: los checkouts en línea abiertos (PENDING) dejan de ser pagables y pasan a
+ * FAILED con motivo «Evento cancelado». Debe ejecutarse dentro de la transacción que cancela el evento,
+ * ANTES de tocar el evento: toma el mismo candado de la reserva que startCheckout y los webhooks (orden
+ * reserva → evento), así ningún checkout se abre ni se cobra a la mitad de la cancelación.
+ * Las filas REFUND pendientes (reembolsos en proceso en la pasarela) no se tocan.
+ * Devuelve los ids de los pagos anulados.
+ */
+export async function voidOpenCheckoutsForCancelledBooking(tx: Tx, bookingId: string, now: Date = new Date()): Promise<string[]> {
+  await lockBooking(tx, bookingId);
+  const open = await tx.payment.findMany({
+    where: { bookingId, status: "PENDING", kind: { in: [...CHECKOUT_KINDS] } },
+    select: { id: true },
+  });
+  if (!open.length) return [];
+  paymentStatusMachine.assert("PENDING", "FAILED");
+  const ids = open.map((p) => p.id);
+  await tx.payment.updateMany({
+    where: { id: { in: ids }, status: "PENDING" },
+    data: { status: "FAILED", failedAt: now, failureReason: CANCELLED_CHECKOUT_REASON },
+  });
+  return ids;
+}
+
+/** Tiempo máximo por sesión para pedirle a la pasarela que la expire (best-effort, tras la cancelación). */
+const PROVIDER_EXPIRE_TIMEOUT_MS = 10_000;
+
+/**
+ * Tras confirmar la cancelación: pide a la pasarela que expire las sesiones de checkout anuladas para que
+ * la clienta ya no pueda pagarlas (Stripe/Mercado Pago las mantienen pagables hasta 1 h). Best-effort: si
+ * falla, el cobro tardío se registra como «Reembolso requerido» y se avisa al equipo
+ * (ver applyPaymentSucceeded). Nunca lanza.
+ */
+export async function expireVoidedCheckouts(paymentIds: string[]): Promise<void> {
+  if (!paymentIds.length) return;
+  try {
+    const payments = await prisma.payment.findMany({
+      where: { id: { in: paymentIds }, providerCheckoutId: { not: null } },
+      select: { id: true, provider: true, providerCheckoutId: true },
+    });
+    await Promise.all(
+      payments.map(async (p) => {
+        const provider = getPaymentProviderByName(p.provider);
+        if (!provider?.expireCheckout || !p.providerCheckoutId) return;
+        try {
+          await withTimeout(provider.expireCheckout(p.providerCheckoutId), PROVIDER_EXPIRE_TIMEOUT_MS, `${provider.name}.expireCheckout`);
+        } catch (error) {
+          logger.warn("payments.checkout_expire_failed", { error, paymentId: p.id, provider: p.provider });
+        }
+      }),
+    );
+  } catch (error) {
+    logger.error("payments.checkout_expire_lookup_failed", { error, paymentIds });
+  }
 }
 
 function withParam(url: string, key: string, value: string): string {
@@ -264,30 +376,57 @@ export async function confirmEventIfDepositSatisfied(
   return { confirmed: res.count === 1, eventId };
 }
 
+/** Nota de resultado: la pasarela cobró un pago de una reserva ya cancelada (requiere reembolso). */
+export const CANCELLED_BOOKING_PAYMENT_NOTE = "cancelled_booking";
+/**
+ * Nota de resultado: el pago cambió entre la lectura y la escritura y la transición NO se aplicó.
+ * El webhook la trata como reintentable (no marca el evento procesado y responde 500).
+ */
+export const CONCURRENT_UPDATE_NOTE = "concurrent_update";
+
 /**
  * Marca un pago como PAID (si su estado lo permite) y confirma el evento cuando el anticipo
  * queda cubierto. Idempotente: si otro proceso ya lo aplicó, devuelve applied=false.
+ *
+ * Regla de cobros sobre reservas canceladas: si la pasarela confirma un cobro cuando la reserva/evento
+ * ya está cancelado (p. ej. la clienta pagó en una sesión del proveedor abierta antes de la cancelación),
+ * el dinero existe y se registra como PAID —para que cuente en lo cobrado y se pueda reembolsar desde el
+ * panel—, pero el evento NO se reconfirma, el pago queda con la nota «Reembolso requerido», se audita y se
+ * devuelve note=CANCELLED_BOOKING_PAYMENT_NOTE para que el webhook avise al equipo en lugar de mandarle a
+ * la clienta la confirmación normal de pago.
+ *
+ * El estado del pago se lee DESPUÉS de tomar el candado de la reserva: la cancelación del evento anula
+ * (PENDING → FAILED) los checkouts abiertos bajo ese mismo candado, y un webhook que hubiera leído el pago
+ * antes de esperar el candado vería un PENDING ya obsoleto y perdería el cobro.
  */
 export async function applyPaymentSucceeded(
   tx: Tx,
   input: { paymentId: string; providerPaymentId?: string | null; feeCents?: number | null; paidAt?: Date },
 ): Promise<PaymentApplyOutcome> {
-  const payment = await tx.payment.findUnique({
+  const located = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { bookingId: true, kind: true } });
+  if (!located) throw new NotFoundError("Pago no encontrado.");
+  const base = { paymentId: input.paymentId, bookingId: located.bookingId, eventId: null };
+  if (located.kind === "REFUND") return { ...base, applied: false, confirmed: false, note: "refund_row" };
+  // Serializa con la cancelación, los checkouts y los demás pagos de la misma reserva (así la suma para
+  // confirmar el anticipo ve todos los pagos) y después lee el estado vigente del pago.
+  await lockBooking(tx, located.bookingId);
+  const payment = await tx.payment.findUniqueOrThrow({
     where: { id: input.paymentId },
-    select: { id: true, status: true, kind: true, bookingId: true, amountCents: true },
+    select: { id: true, status: true, bookingId: true, amountCents: true, notes: true },
   });
-  if (!payment) throw new NotFoundError("Pago no encontrado.");
-  const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null };
-  if (payment.kind === "REFUND") return { ...base, applied: false, confirmed: false, note: "refund_row" };
-  // Serializa pagos concurrentes de la misma reserva: así la suma para confirmar el anticipo ve ambos.
-  await lockBooking(tx, payment.bookingId);
   const from = payment.status as PaymentStatus;
   if (!paymentStatusMachine.can(from, "PAID")) {
     return { ...base, applied: false, confirmed: false, note: `already_${from.toLowerCase()}` };
   }
   paymentStatusMachine.assert(from, "PAID");
+  const booking = await tx.booking.findUniqueOrThrow({
+    where: { id: payment.bookingId },
+    select: { cancelledAt: true, event: { select: { id: true, status: true } } },
+  });
+  const cancelledBooking = isBookingCancelled(booking);
   const feeCents =
     input.feeCents != null ? Math.max(0, Math.round(input.feeCents)) : estimateFeeCents(payment.amountCents, await getSettings("pricing"));
+  const refundNote = `${REFUND_REQUIRED_NOTE_PREFIX}: la pasarela confirmó este cobro cuando el evento ya estaba cancelado. Reembólsalo a la clienta desde este panel.`;
   const res = await tx.payment.updateMany({
     where: { id: payment.id, status: from },
     data: {
@@ -296,9 +435,25 @@ export async function applyPaymentSucceeded(
       providerPaymentId: input.providerPaymentId ?? undefined,
       feeCents,
       failureReason: null,
+      ...(cancelledBooking ? { notes: [refundNote, payment.notes].filter(Boolean).join(" · ").slice(0, 500) } : {}),
     },
   });
-  if (res.count === 0) return { ...base, applied: false, confirmed: false, note: "concurrent_update" };
+  if (res.count === 0) return { ...base, applied: false, confirmed: false, note: CONCURRENT_UPDATE_NOTE };
+  if (cancelledBooking) {
+    logger.error("payments.collected_after_cancellation", { paymentId: payment.id, eventId: booking.event.id });
+    await audit(
+      {
+        action: "payment.collected_after_cancellation",
+        entityType: "Payment",
+        entityId: payment.id,
+        before: { status: from },
+        after: { status: "PAID", amountCents: payment.amountCents, eventId: booking.event.id, refundRequired: true },
+        actor: null,
+      },
+      tx,
+    );
+    return { ...base, eventId: booking.event.id, applied: true, confirmed: false, note: CANCELLED_BOOKING_PAYMENT_NOTE };
+  }
   const confirmation = await confirmEventIfDepositSatisfied(tx, payment.bookingId);
   return { ...base, eventId: confirmation.eventId, applied: true, confirmed: confirmation.confirmed };
 }
@@ -307,11 +462,14 @@ export async function applyPaymentFailed(
   tx: Tx,
   input: { paymentId: string; failureReason?: string | null },
 ): Promise<PaymentApplyOutcome> {
-  const payment = await tx.payment.findUnique({
+  const located = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { bookingId: true } });
+  if (!located) throw new NotFoundError("Pago no encontrado.");
+  // Mismo candado que el cobro y la cancelación: las transiciones de un pago nunca se pisan entre sí.
+  await lockBooking(tx, located.bookingId);
+  const payment = await tx.payment.findUniqueOrThrow({
     where: { id: input.paymentId },
     select: { id: true, status: true, bookingId: true },
   });
-  if (!payment) throw new NotFoundError("Pago no encontrado.");
   const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null, confirmed: false };
   // Nunca degradar un pago cobrado por un evento de fallo tardío.
   if (payment.status !== "PENDING") return { ...base, applied: false, note: `ignored_${payment.status.toLowerCase()}` };
@@ -367,7 +525,7 @@ export async function applyProviderRefund(
     where: { id: payment.id, refundedCents: payment.refundedCents },
     data: { refundedCents: plan.newRefundedCents, status: plan.nextStatus },
   });
-  if (res.count === 0) return { ...base, applied: false, note: "concurrent_update" };
+  if (res.count === 0) return { ...base, applied: false, note: CONCURRENT_UPDATE_NOTE };
   await tx.payment.create({
     data: {
       bookingId: payment.bookingId,
@@ -509,6 +667,33 @@ export async function notifyTeamPaymentAnomaly(paymentId: string, input: { key: 
   }
 }
 
+/**
+ * Efectos de un cobro que la pasarela confirmó sobre una reserva ya cancelada (ver applyPaymentSucceeded):
+ * sólo se avisa al equipo para reembolsar; la clienta NO recibe «Recibimos tu pago» ni se ejecuta el ciclo
+ * de vida del evento. Nunca lanza.
+ */
+export async function runCancelledBookingPaymentEffects(input: { paymentId: string; providerName: string }): Promise<void> {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: input.paymentId },
+      select: {
+        id: true,
+        kind: true,
+        amountCents: true,
+        booking: { select: { customer: { select: { name: true } }, event: { select: { title: true, eventDate: true } } } },
+      },
+    });
+    if (!payment) return;
+    const { customer, event } = payment.booking;
+    await notifyTeamPaymentAnomaly(payment.id, {
+      key: `cancelled-booking-payment:${payment.id}`,
+      message: `La pasarela (${input.providerName}) confirmó un cobro de ${formatMXN(payment.amountCents)} (${PAYMENT_KIND_LABELS[payment.kind]}) de ${customer.name} para ${event.title} (${formatLongDate(event.eventDate)}), pero el evento ya estaba cancelado. Se registró como pagado con la nota «${REFUND_REQUIRED_NOTE_PREFIX}», el evento sigue cancelado y no se le envió confirmación de pago a la clienta. Reembólsalo desde el panel de pagos del evento y contáctala.`,
+    });
+  } catch (error) {
+    logger.error("payments.cancelled_booking_effects_failed", { error, paymentId: input.paymentId });
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Pagos manuales (efectivo, transferencia, terminal)
 // -----------------------------------------------------------------------------
@@ -534,9 +719,8 @@ export async function recordManualPayment(
     },
   });
   if (!booking) throw new AppError("Este evento aún no tiene una reserva; no se pueden registrar pagos.", "NO_BOOKING", 409);
-  if (booking.cancelledAt || booking.event.status === "CANCELLED") {
-    throw new AppError("El evento está cancelado; no se pueden registrar pagos.", "EVENT_CANCELLED", 409);
-  }
+  const cancelledError = () => new AppError("El evento está cancelado; no se pueden registrar pagos.", "EVENT_CANCELLED", 409);
+  if (isBookingCancelled(booking)) throw cancelledError();
   const max = maxManualAmountCents(booking, booking.payments);
   if (max <= 0) throw new AppError(CHECKOUT_BLOCK_MESSAGES.NO_BALANCE, "NO_BALANCE", 409);
   if (input.amountCents > max) {
@@ -561,6 +745,12 @@ export async function recordManualPayment(
   const outcome = await prisma.$transaction(async (tx) => {
     // Re-verificar el saldo con la reserva bloqueada (evita doble registro concurrente que exceda el total).
     await lockBooking(tx, booking.id);
+    // ...y que el evento no se haya cancelado mientras tanto (la cancelación toma el mismo candado).
+    const current = await tx.booking.findUniqueOrThrow({
+      where: { id: booking.id },
+      select: { cancelledAt: true, event: { select: { status: true } } },
+    });
+    if (isBookingCancelled(current)) throw cancelledError();
     const fresh = await tx.payment.findMany({
       where: { bookingId: booking.id },
       select: { kind: true, status: true, amountCents: true, refundedCents: true },
@@ -610,7 +800,7 @@ export async function recordManualPayment(
       tx,
     );
     return applied;
-  });
+  }, BOOKING_LOCK_TX_OPTIONS);
 
   await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
   return { paymentId: outcome.paymentId, eventId: booking.event.id, confirmed: outcome.confirmed };
@@ -793,7 +983,7 @@ export async function refundPayment(
       tx,
     );
     return { rowId: row.id, status: effective.nextStatus, refundedCents: effective.newRefundedCents };
-  });
+  }, BOOKING_LOCK_TX_OPTIONS);
 
   return {
     refundPaymentId: outcome.rowId,

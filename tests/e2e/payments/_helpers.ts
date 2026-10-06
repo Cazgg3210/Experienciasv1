@@ -110,7 +110,13 @@ export function mockCheckoutCall(
 }
 
 export function paymentStatusCall(request: APIRequestContext, baseURL: string, routePath: string, p: string, s: string) {
-  return callAction<{ status: string; eventConfirmed: boolean; failureReason: string | null }>(
+  return callAction<{
+    status: string;
+    eventConfirmed: boolean;
+    eventCancelled: boolean;
+    collectedAfterCancellation: boolean;
+    failureReason: string | null;
+  }>(
     request,
     baseURL,
     "getPaymentStatusAction",

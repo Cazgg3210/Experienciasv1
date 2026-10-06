@@ -184,9 +184,9 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
 
   test(
     "[PAY-019] dos solicitudes simultáneas de checkout (dos pestañas / reintento de red) no deben duplicar el pago pendiente",
-    { tag: ["@P2", "@negative"] },
+    { tag: ["@P2", "@negative", "@regression"] },
     async ({ db, request, baseURL, evidence }) => {
-      test.info().annotations.push({ type: "bug", description: "SAL-BUG-01" });
+      test.info().annotations.push({ type: "regression", description: "BUG-007" });
       evidence("clienta", "Dos startCheckoutAction DEPOSIT en paralelo para la misma reserva");
       const { quote, booking } = await createAcceptedQuote(db, request, baseURL!);
       const [a, b] = await Promise.all([
@@ -197,6 +197,8 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       const pending = await db.payment.findMany({ where: { bookingId: booking.id, status: "PENDING" }, select: { id: true, amountCents: true } });
       expect(pending, `pagos pendientes: ${JSON.stringify(pending)} urls: ${urls.join(" ")}`).toHaveLength(1);
       expect(new Set(urls).size).toBe(1);
+      expect(await db.payment.count({ where: { bookingId: booking.id } }), "un solo registro de pago para la reserva").toBe(1);
+      expect(pending[0]!.amountCents).toBe(booking.depositRequiredCents);
     },
   );
 
@@ -234,7 +236,13 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       const pb = (await startDepositCheckout(db, request, baseURL!, b.quote.publicToken)).payment;
       const route = `/cotizacion/${a.quote.publicToken}`;
       const ok = okData(await paymentStatusCall(request, baseURL!, route, pa.id, signResult(pa.id)));
-      expect(ok).toEqual({ status: "PENDING", eventConfirmed: false, failureReason: null });
+      expect(ok).toEqual({
+        status: "PENDING",
+        eventConfirmed: false,
+        eventCancelled: false,
+        collectedAfterCancellation: false,
+        failureReason: null,
+      });
       const tampered = failure(await paymentStatusCall(request, baseURL!, route, pa.id, signResult(pa.id).replace(/^./, (c) => (c === "A" ? "B" : "A"))));
       expect(tampered.code).toBe("NOT_FOUND");
       const crossed = failure(await paymentStatusCall(request, baseURL!, route, pb.id, signResult(pa.id)));
@@ -446,9 +454,9 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
 
   test(
     "[PAY-021] un checkout abierto antes de que el equipo cancele el evento ya no debe poder cobrarse",
-    { tag: ["@P1", "@negative"] },
+    { tag: ["@P1", "@negative", "@regression"] },
     async ({ page, db, apiAs, request, baseURL, evidence }) => {
-      test.info().annotations.push({ type: "bug", description: "SAL-BUG-03" });
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
       evidence("clienta", "Clienta abre el pago; la fundadora cancela el evento (cancelEventAction); la clienta paga el enlace abierto");
       const { quote, booking, event } = await createAcceptedQuote(db, request, baseURL!);
       const { url, checkoutId, payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
@@ -471,6 +479,145 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       expect(payable, "la pasarela no debe ofrecer pagar un evento cancelado").toBe(0);
       expect(res.result?.ok, "el checkout simulado debe rechazar el cobro").toBe(false);
       expect(after.status, "no se cobra un anticipo de un evento cancelado").not.toBe("PAID");
+      // Corrección: la cancelación anula el checkout abierto en la misma transacción y la pasarela lo explica.
+      expect(res.result).toMatchObject({ ok: false, code: "EVENT_CANCELLED" });
+      expect(after.status).toBe("FAILED");
+      expect(after.failureReason).toBe("Evento cancelado.");
+      await expect(page.getByRole("heading", { level: 1, name: "Esta reserva fue cancelada" })).toBeVisible();
+      await expect(page.getByText(/ya no acepta pagos y no se realizó ningún cargo/)).toBeVisible();
+      expect(await db.webhookEvent.count({ where: { payload: { path: ["paymentId"], equals: payment.id } } }), "no se emitió ningún webhook").toBe(0);
+      expect(await db.notificationLog.count({ where: { eventId: event.id, type: "PAYMENT_RECEIVED" } })).toBe(0);
+      const cancelAudit = await db.auditLog.findFirstOrThrow({ where: { action: "event.cancelled", entityId: event.id } });
+      expect(cancelAudit.after).toMatchObject({ voidedPayments: [payment.id] });
+      // El enlace de resultado del pago anulado no ofrece reintentar ni asegura que no hubo cobro
+      // (con una pasarela real la clienta pudo alcanzar a pagar; ese cobro se reembolsa).
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "Este pago se anuló" })).toBeVisible();
+      await expect(page.getByText(/te lo reembolsaremos/)).toBeVisible();
+      await expect(page.getByText(/No se realizó ningún cobro/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Intentar de nuevo" })).toHaveCount(0);
+    },
+  );
+
+  test(
+    "[PAY-023] si la pasarela confirma un cobro de un evento ya cancelado, se registra para reembolso sin reconfirmar ni avisar a la clienta",
+    { tag: ["@P1", "@negative", "@regression"] },
+    async ({ page, rolePage, db, apiAs, request, baseURL, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
+      evidence("clienta", "Checkout abierto → la fundadora cancela → la pasarela (webhook firmado) reporta el cobro igualmente");
+      const { quote, booking, event } = await createAcceptedQuote(db, request, baseURL!);
+      const { payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
+      const owner = await apiAs("owner");
+      okData(
+        await callAction(owner, baseURL!, "cancelEventAction", { eventId: event.id, reason: "Cancelado antes del cobro (E2E)", notifyCustomer: false }, `/admin/events/${event.id}`),
+      );
+      expect((await db.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe("FAILED");
+
+      // Un proveedor real con la sesión todavía viva confirma el cobro: el dinero existe.
+      const notifBefore = await db.notificationLog.count({ where: { eventId: event.id } });
+      const evt = mockEvent(payment);
+      const res = await postWebhook(request, evt);
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ applied: true, note: "cancelled_booking" });
+
+      const p = await db.payment.findUniqueOrThrow({ where: { id: payment.id } });
+      expect(p.status, "el cobro se registra para poder reembolsarlo").toBe("PAID");
+      expect(p.amountCents).toBe(booking.depositRequiredCents);
+      expect(p.providerPaymentId).toBe(evt.providerPaymentId);
+      expect(p.notes).toMatch(/^Reembolso requerido: /);
+      expect((await db.event.findUniqueOrThrow({ where: { id: event.id } })).status, "el evento no se reconfirma").toBe("CANCELLED");
+      expect((await db.booking.findUniqueOrThrow({ where: { id: booking.id } })).cancelledAt).not.toBeNull();
+      expect(await db.auditLog.count({ where: { action: "event.confirmed_by_payment", entityId: event.id } })).toBe(0);
+      expect(await db.auditLog.count({ where: { action: "payment.collected_after_cancellation", entityId: payment.id } })).toBe(1);
+      expect((await db.webhookEvent.findFirstOrThrow({ where: { externalId: evt.id } })).error).toBe("cancelled_booking");
+      // Sin confirmación normal a la clienta; el equipo recibe el aviso para reembolsar.
+      expect(await db.notificationLog.count({ where: { eventId: event.id, type: { in: ["PAYMENT_RECEIVED", "BOOKING_CONFIRMED"] } } })).toBe(0);
+      expect(await db.notificationLog.count({ where: { dedupeKey: `payment-received-team:${payment.id}` } })).toBe(0);
+      const alert = await db.notificationLog.findUniqueOrThrow({ where: { dedupeKey: `cancelled-booking-payment:${payment.id}` } });
+      expect(alert.type).toBe("GENERIC");
+      expect(alert.eventId).toBe(event.id);
+      expect(alert.subject).toContain("Revisar pago");
+      expect(alert.body).toContain("ya estaba cancelado");
+      expect(alert.body).toContain(formatMXN(payment.amountCents));
+      expect(await db.notificationLog.count({ where: { eventId: event.id } }), "sólo el aviso al equipo").toBe(notifBefore + 1);
+
+      // Reenvío del mismo evento del proveedor: idempotente, sin avisos duplicados.
+      const dup = await postWebhook(request, evt);
+      expect(dup.json).toMatchObject({ duplicate: true });
+      expect(await db.notificationLog.count({ where: { eventId: event.id } })).toBe(notifBefore + 1);
+      expect((await db.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe("PAID");
+
+      // La clienta no ve «¡Pago recibido!» genérico: se le explica que se le reembolsará.
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "Recibimos tu pago, pero tu evento está cancelado" })).toBeVisible();
+      await expect(page.getByText(/avisamos al equipo para reembolsártelo/)).toBeVisible();
+
+      // El panel del evento lo marca para reembolso.
+      const admin = await rolePage("owner");
+      await admin.goto(`/admin/events/${event.id}`);
+      await expect(admin.getByRole("main").getByText("Reembolso requerido", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    },
+  );
+
+  test(
+    "[PAY-024] si el equipo cancela mientras la clienta espera la confirmación, el resultado no asegura «sin cobro» ni ofrece reintentar",
+    { tag: ["@P1", "@negative", "@regression"] },
+    async ({ page, db, apiAs, request, baseURL, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
+      evidence("clienta", "Clienta en /pago/resultado esperando la confirmación → la fundadora cancela el evento → la página se actualiza sola");
+      const { quote, event } = await createAcceptedQuote(db, request, baseURL!);
+      const { payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "Confirmando tu pago…" })).toBeVisible();
+
+      const owner = await apiAs("owner");
+      okData(
+        await callAction(owner, baseURL!, "cancelEventAction", { eventId: event.id, reason: "Cancelación mientras la clienta paga (E2E)", notifyCustomer: false }, `/admin/events/${event.id}`),
+      );
+      expect((await db.payment.findUniqueOrThrow({ where: { id: payment.id } })).failureReason).toBe("Evento cancelado.");
+
+      // El poller recibe el pago anulado y el evento cancelado (la página se abrió cuando aún se podía reintentar).
+      await expect(page.getByRole("heading", { level: 1, name: "Este pago se anuló" })).toBeVisible();
+      await expect(page.getByText(/Si alcanzaste a completar el cobro en la pasarela, te lo reembolsaremos/)).toBeVisible();
+      await expect(page.getByText(/No se realizó ningún cobro/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Intentar de nuevo" })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "Volver a mi evento" })).toBeVisible();
+      const status = okData(await paymentStatusCall(request, baseURL!, `/cotizacion/${quote.publicToken}`, payment.id, signResult(payment.id)));
+      expect(status).toEqual({
+        status: "FAILED",
+        eventConfirmed: false,
+        eventCancelled: true,
+        collectedAfterCancellation: false,
+        failureReason: "Evento cancelado.",
+      });
+    },
+  );
+
+  test(
+    "[PAY-025] un anticipo pagado antes de cancelar el evento no se presenta como cobro por reembolsar",
+    { tag: ["@P2", "@regression"] },
+    async ({ page, db, apiAs, request, baseURL, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
+      evidence("clienta", "Paga el anticipo → evento confirmado → la fundadora lo cancela después → la clienta reabre su enlace de resultado");
+      const { quote, event } = await createAcceptedQuote(db, request, baseURL!);
+      const { payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
+      const res = await postWebhook(request, mockEvent(payment));
+      expect(res.json).toMatchObject({ applied: true });
+      expect((await db.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CONFIRMED");
+      const owner = await apiAs("owner");
+      okData(
+        await callAction(owner, baseURL!, "cancelEventAction", { eventId: event.id, reason: "Cancelación con anticipo retenido (E2E)", notifyCustomer: false }, `/admin/events/${event.id}`),
+      );
+      const paid = await db.payment.findUniqueOrThrow({ where: { id: payment.id } });
+      expect(paid.status).toBe("PAID");
+      expect(paid.notes, "un pago previo a la cancelación no lleva la nota de reembolso").toBeNull();
+
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "¡Pago recibido!", exact: true })).toBeVisible();
+      await expect(page.getByText(/Tu celebración está cancelada/)).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Recibimos tu pago, pero tu evento está cancelado" })).toHaveCount(0);
+      await expect(page.getByText(/reembolsártelo/)).toHaveCount(0);
+      await expect(page.getByText(/invitar a tus amigas/)).toHaveCount(0);
     },
   );
 

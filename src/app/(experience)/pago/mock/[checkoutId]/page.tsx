@@ -45,11 +45,13 @@ export default async function MockCheckoutPage({
   const heading =
     state === "payable"
       ? `Hola, ${firstName}`
-      : state === "processed"
-        ? "Este pago ya fue procesado"
-        : state === "expired"
-          ? "Este enlace de pago expiró"
-          : "Este enlace ya no está vigente";
+      : state === "cancelled"
+        ? "Esta reserva fue cancelada"
+        : state === "processed"
+          ? "Este pago ya fue procesado"
+          : state === "expired"
+            ? "Este enlace de pago expiró"
+            : "Este enlace ya no está vigente";
 
   return (
     <div className="space-y-6">
@@ -109,9 +111,11 @@ export default async function MockCheckoutPage({
             <div className="space-y-4 text-center">
               <p className="text-muted-foreground inline-flex items-start gap-2 text-left text-sm">
                 <Clock className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
-                {state === "expired"
-                  ? "Por seguridad, los enlaces de pago duran una hora. Genera uno nuevo desde tu portal; no se realizó ningún cargo."
-                  : "Tu saldo cambió desde que se creó este enlace (por ejemplo, ya registramos otro pago). Genera uno nuevo desde tu portal."}
+                {state === "cancelled"
+                  ? "Tu celebración fue cancelada, así que este enlace ya no acepta pagos y no se realizó ningún cargo. Si tienes dudas, escríbenos por WhatsApp."
+                  : state === "expired"
+                    ? "Por seguridad, los enlaces de pago duran una hora. Genera uno nuevo desde tu portal; no se realizó ningún cargo."
+                    : "Tu saldo cambió desde que se creó este enlace (por ejemplo, ya registramos otro pago). Genera uno nuevo desde tu portal."}
               </p>
               <Button asChild size="xl" className="w-full">
                 <Link href={backHref}>{from === "quote" ? "Volver a mi propuesta" : "Volver a mi evento"}</Link>

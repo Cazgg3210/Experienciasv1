@@ -13,6 +13,11 @@ import type { SessionUser } from "@/server/auth/session";
 import { checkAvailability } from "@/features/bookings/server/availability-service";
 import type { AvailabilityResult } from "@/features/bookings/domain/availability";
 import { notifyCustomer } from "@/features/notifications/server/notification-service";
+import {
+  BOOKING_LOCK_TX_OPTIONS,
+  expireVoidedCheckouts,
+  voidOpenCheckoutsForCancelledBooking,
+} from "@/features/payments/server/payment-service";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { CAPACITY_STATUSES, eventStatusMachine } from "../domain/event-status";
 import {
@@ -531,7 +536,10 @@ export async function cancelEvent(input: CancelEventInput, actor: SessionUser): 
   if (!eventStatusMachine.can(from, "CANCELLED")) throw invalidTransition(from, "CANCELLED");
 
   const now = new Date();
-  const released = await prisma.$transaction(async (tx) => {
+  const { released, voidedPayments } = await prisma.$transaction(async (tx) => {
+    // Primero la reserva (mismo candado y orden que checkout/webhooks): los checkouts en línea abiertos
+    // quedan anulados en esta misma transacción y ya no se pueden pagar.
+    const voidedPayments = event.booking ? await voidOpenCheckoutsForCancelledBooking(tx, event.booking.id, now) : [];
     const res = await tx.event.updateMany({
       where: { id: event.id, status: from },
       data: { status: "CANCELLED", cancelledAt: now, cancellationReason: reason },
@@ -571,13 +579,17 @@ export async function cancelEvent(input: CancelEventInput, actor: SessionUser): 
         entityType: "Event",
         entityId: event.id,
         before: { status: from },
-        after: { status: "CANCELLED", reason, releasedReservations: reservations.length },
+        after: { status: "CANCELLED", reason, releasedReservations: reservations.length, voidedPayments },
         actor,
       },
       tx,
     );
-    return reservations.length;
-  });
+    return { released: reservations.length, voidedPayments };
+  }, BOOKING_LOCK_TX_OPTIONS);
+
+  // Best-effort: la pasarela deja de aceptar las sesiones anuladas (un cobro tardío igual queda registrado
+  // para reembolso y el equipo recibe el aviso).
+  await expireVoidedCheckouts(voidedPayments);
 
   let notified = false;
   if (input.notifyCustomer) {

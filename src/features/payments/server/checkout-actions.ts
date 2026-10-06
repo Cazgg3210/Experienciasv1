@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { NotFoundError } from "@/lib/errors";
 import { publicAction } from "@/server/action";
+import { paymentStatusView, type PaymentStatusView } from "../domain/amounts";
 import { paymentStatusQuerySchema } from "../schemas";
 import { resolveBookingFromToken, startCheckout } from "./payment-service";
 import { isValidPaymentResultSignature } from "./payment-links";
@@ -29,12 +30,6 @@ export const startCheckoutAction = publicAction(
   },
 );
 
-export type PaymentStatusView = {
-  status: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
-  eventConfirmed: boolean;
-  failureReason: string | null;
-};
-
 /**
  * Estado de un pago para /pago/resultado (polling). Requiere la firma HMAC del enlace.
  * Nunca expone datos de otros pagos ni de la reserva.
@@ -45,11 +40,6 @@ export const getPaymentStatusAction = publicAction(
     if (!isValidPaymentResultSignature(input.p, input.s)) throw new NotFoundError("No encontramos este pago.");
     const payment = await getPaymentResult(input.p);
     if (!payment) throw new NotFoundError("No encontramos este pago.");
-    const eventStatus = payment.booking.event.status;
-    return {
-      status: payment.status,
-      eventConfirmed: ["CONFIRMED", "PLANNING", "READY", "IN_PROGRESS", "COMPLETED"].includes(eventStatus),
-      failureReason: payment.status === "FAILED" ? payment.failureReason : null,
-    };
+    return paymentStatusView(payment, payment.booking);
   },
 );

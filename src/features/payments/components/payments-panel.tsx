@@ -18,7 +18,14 @@ import { getPaymentProvider } from "@/server/providers";
 import { whatsappLink } from "@/server/providers/whatsapp/links";
 import { signedMediaPath } from "@/features/media/server/media-url";
 import { getSettings } from "@/features/settings/server/settings-service";
-import { UNDERPAID_REVIEW_NOTE_PREFIX, checkoutLinkState, refundableCents } from "../domain/amounts";
+import {
+  UNDERPAID_REVIEW_NOTE_PREFIX,
+  checkoutLinkState,
+  refundableCents,
+  wasCollectedAfterCancellation,
+  type BookingAmounts,
+  type BookingCancellation,
+} from "../domain/amounts";
 import { paymentLinkMessage } from "../domain/share-message";
 import { getPaymentsPanelData, type PaymentRow } from "../server/queries";
 import { portalPath } from "../server/payment-links";
@@ -35,7 +42,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 function statusView(
   p: PaymentRow,
-  booking: { totalCents: number; depositRequiredCents: number; payments: PaymentRow[] },
+  booking: BookingAmounts & BookingCancellation & { payments: PaymentRow[] },
   now: Date,
 ): { label: string; tone: Tone } {
   if (p.kind === "REFUND") {
@@ -47,9 +54,14 @@ function statusView(
     // La pasarela reportó un cobro distinto al esperado (ver nota): requiere acción del equipo.
     return { label: "Revisar cobro", tone: "danger" };
   }
+  if (p.status === "PAID" && wasCollectedAfterCancellation(p)) {
+    // La pasarela cobró cuando el evento ya estaba cancelado (ver nota): el equipo debe reembolsarlo.
+    return { label: "Reembolso requerido", tone: "danger" };
+  }
   if (p.status === "PENDING" && p.provider !== "manual") {
     // Un checkout en línea sin completar: la sesión del proveedor dura 1 h y su monto puede quedar desactualizado.
     const state = checkoutLinkState(p, booking, booking.payments, now);
+    if (state === "cancelled") return { label: "Anulado", tone: "muted" };
     if (state === "expired") return { label: "Enlace vencido", tone: "muted" };
     if (state === "stale") return { label: "Reemplazado", tone: "muted" };
     return { label: "Esperando pago", tone: "warning" };
@@ -111,6 +123,7 @@ export async function PaymentsPanel({ eventId }: { eventId: string }) {
   const provider = getPaymentProvider();
   const business = await getSettings("business");
   const cancelled = event.status === "CANCELLED" || !!booking.cancelledAt;
+  const bookingState = { ...booking, event: { status: event.status } };
   const portalUrl = appUrl(portalPath(event.portalToken));
   const phone = event.customer.whatsapp ?? event.customer.phone;
   const dueLabel = booking.balanceDueAt ? formatLongDate(booking.balanceDueAt) : null;
@@ -204,7 +217,7 @@ export async function PaymentsPanel({ eventId }: { eventId: string }) {
           {/* Móvil: tarjetas */}
           <ul className="space-y-3 @3xl:hidden" aria-label="Pagos registrados">
             {payments.map((p) => {
-              const st = statusView(p, booking, now);
+              const st = statusView(p, bookingState, now);
               const refundable = refundableCents(p);
               return (
                 <li key={p.id} className="bg-card rounded-xl border p-4">
@@ -308,7 +321,7 @@ export async function PaymentsPanel({ eventId }: { eventId: string }) {
               </thead>
               <tbody className="divide-y">
                 {payments.map((p) => {
-                  const st = statusView(p, booking, now);
+                  const st = statusView(p, bookingState, now);
                   const refundable = refundableCents(p);
                   return (
                     <tr key={p.id} className="align-top">

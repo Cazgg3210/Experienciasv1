@@ -7,10 +7,14 @@ import { getPaymentProviderByName } from "@/server/providers";
 import type { NormalizedPaymentEvent } from "@/server/providers/payments/types";
 import { UNDERPAID_REVIEW_NOTE_PREFIX } from "../domain/amounts";
 import {
+  BOOKING_LOCK_TX_OPTIONS,
+  CANCELLED_BOOKING_PAYMENT_NOTE,
+  CONCURRENT_UPDATE_NOTE,
   applyPaymentFailed,
   applyPaymentSucceeded,
   applyProviderRefund,
   notifyTeamPaymentAnomaly,
+  runCancelledBookingPaymentEffects,
   runPaymentSuccessEffects,
   type PaymentApplyOutcome,
 } from "./payment-service";
@@ -19,7 +23,7 @@ type Tx = Prisma.TransactionClient;
 
 const AMOUNT_MISMATCH_NOTE = "amount_mismatch";
 /** Notas que se guardan en WebhookEvent.error para revisión (el evento sí se marca procesado). */
-const ANOMALY_NOTES = ["payment_not_found", AMOUNT_MISMATCH_NOTE];
+const ANOMALY_NOTES = ["payment_not_found", AMOUNT_MISMATCH_NOTE, CANCELLED_BOOKING_PAYMENT_NOTE];
 const isAnomaly = (note?: string) => !!note && ANOMALY_NOTES.some((n) => note.startsWith(n));
 
 export type WebhookResponse = { status: number; body: Record<string, unknown> };
@@ -141,11 +145,25 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
+ * La transición no se aplicó porque el pago cambió a la mitad (otro proceso lo escribió entre la lectura y
+ * la escritura). Se revierte la transacción SIN marcar el evento como procesado y se responde 500 para que
+ * el proveedor reintente: el reintento lee el estado vigente (las transiciones son idempotentes). Marcarlo
+ * procesado con 200 perdería un cobro real.
+ */
+class RetryableWebhookError extends Error {
+  constructor(note: string) {
+    super(`${note}: el pago cambió mientras se procesaba el evento; se reintentará`);
+    this.name = "RetryableWebhookError";
+  }
+}
+
+/**
  * Punto único de entrada de webhooks de pago (route handler, checkout simulado, pruebas).
  *  1. Proveedor por nombre (desconocido → 404).
  *  2. Firma verificada sobre el cuerpo crudo (inválida → 400, sin procesar).
  *  3. Idempotencia con WebhookEvent (provider + externalId): duplicado procesado → 200 { duplicate }.
- *  4. Procesamiento transaccional; falla → 500 para que el proveedor reintente.
+ *  4. Procesamiento transaccional; falla (o una transición que perdió una carrera) → 500 para que el
+ *     proveedor reintente, sin marcar el evento como procesado.
  *  5. Efectos post-commit (lifecycle, notificaciones, analítica) sólo si hubo cambio real.
  */
 export async function handlePaymentWebhook(
@@ -195,12 +213,13 @@ export async function handlePaymentWebhook(
   try {
     processed = await prisma.$transaction(async (tx) => {
       const result = await processPaymentEvent(tx, provider.name, event);
+      if (result.note === CONCURRENT_UPDATE_NOTE) throw new RetryableWebhookError(result.note);
       await tx.webhookEvent.update({
         where: { id: recordId },
         data: { processedAt: new Date(), error: isAnomaly(result.note) ? result.note : null },
       });
       return result;
-    });
+    }, BOOKING_LOCK_TX_OPTIONS);
   } catch (error) {
     logger.error("payments.webhook_processing_failed", { error, provider: provider.name, externalId: event.externalId });
     const message = error instanceof Error ? error.message : String(error);
@@ -212,7 +231,12 @@ export async function handlePaymentWebhook(
 
   const outcome = processed.outcome;
   if (processed.type === "payment.succeeded" && outcome?.applied) {
-    await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
+    if (outcome.note === CANCELLED_BOOKING_PAYMENT_NOTE) {
+      // Cobro sobre una reserva cancelada: sólo aviso al equipo para reembolsar (sin «Recibimos tu pago»).
+      await runCancelledBookingPaymentEffects({ paymentId: outcome.paymentId, providerName: provider.name });
+    } else {
+      await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
+    }
   }
   if (outcome && processed.note?.startsWith(AMOUNT_MISMATCH_NOTE)) {
     const [expected, received] = processed.note.slice(AMOUNT_MISMATCH_NOTE.length + 1).split("/").map(Number);

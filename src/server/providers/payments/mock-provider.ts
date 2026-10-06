@@ -73,4 +73,7 @@ export class MockPaymentProvider implements PaymentProvider {
   async refund(input: RefundInput): Promise<RefundResult> {
     return { refundId: `mock_re_${generateToken(12)}`, status: input.amountCents > 0 ? "succeeded" : "failed" };
   }
+
+  /** El checkout simulado consulta la reserva en cada intento (una cancelada nunca se cobra): no hay sesión externa. */
+  async expireCheckout(_checkoutId: string): Promise<void> {}
 }

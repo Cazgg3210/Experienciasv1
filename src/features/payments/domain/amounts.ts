@@ -48,6 +48,10 @@ export function checkoutAmountCents(
 /** Prefijo de la nota que deja un webhook cuyo cobro fue menor al esperado (el pago queda en revisión). */
 export const UNDERPAID_REVIEW_NOTE_PREFIX = "Revisión manual";
 
+/** Mensaje para la clienta cuando intenta pagar una reserva cancelada. */
+export const CANCELLED_BOOKING_PAYMENT_MESSAGE =
+  "Esta reserva fue cancelada, por lo que no podemos recibir pagos. Escríbenos si necesitas ayuda.";
+
 /** Comisión estimada de la pasarela (cuando el proveedor no la reporta). */
 export function estimateFeeCents(
   amountCents: number,
@@ -82,21 +86,93 @@ export function isReusablePendingCheckout(
   );
 }
 
-export type CheckoutLinkState = "payable" | "processed" | "expired" | "stale";
+/** Datos mínimos para saber si una reserva sigue viva (la cancelación vive en la reserva y en su evento). */
+export type BookingCancellation = { cancelledAt: Date | null; event: { status: string } };
+
+/** ¿La reserva (o su evento) está cancelada? Una reserva cancelada nunca acepta cobros nuevos. */
+export function isBookingCancelled(booking: BookingCancellation): boolean {
+  return booking.cancelledAt != null || booking.event.status === "CANCELLED";
+}
+
+/** Motivo con el que se anulan los checkouts abiertos de una reserva al cancelar su evento. */
+export const CANCELLED_CHECKOUT_REASON = "Evento cancelado.";
+
+/** Prefijo de la nota de un cobro que la pasarela confirmó cuando la reserva ya estaba cancelada. */
+export const REFUND_REQUIRED_NOTE_PREFIX = "Reembolso requerido";
+
+/** Estados de un pago en los que el dinero ya se cobró (aunque después se haya reembolsado). */
+export function isCollectedPaymentStatus(status: string): boolean {
+  return status === "PAID" || status === "PARTIAL_REFUND" || status === "REFUNDED";
+}
+
+/**
+ * ¿La pasarela confirmó este cobro cuando la reserva ya estaba cancelada? Lo determina el propio pago
+ * (la nota «Reembolso requerido» que deja el webhook), no el estado actual del evento: un anticipo pagado
+ * normalmente y un evento cancelado después NO es un cobro tardío.
+ */
+export function wasCollectedAfterCancellation(payment: { status: string; notes?: string | null }): boolean {
+  return isCollectedPaymentStatus(payment.status) && !!payment.notes?.startsWith(REFUND_REQUIRED_NOTE_PREFIX);
+}
+
+/**
+ * ¿Un cobro quedó registrado después de la cancelación de su reserva? Sirve para revisar casos anteriores a
+ * la nota «Reembolso requerido» (ver scripts/report-cancelled-booking-payments.ts).
+ */
+export function isPaidAfterCancellation(
+  payment: { kind: string; status: string; paidAt: Date | null },
+  cancelledAt: Date | null,
+): boolean {
+  if (payment.kind === "REFUND" || !isCollectedPaymentStatus(payment.status)) return false;
+  if (!payment.paidAt || !cancelledAt) return false;
+  return payment.paidAt.getTime() > cancelledAt.getTime();
+}
+
+const CONFIRMED_EVENT_STATUSES: readonly string[] = ["CONFIRMED", "PLANNING", "READY", "IN_PROGRESS", "COMPLETED"];
+
+export type PaymentResultStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
+
+/** Lo que ve la clienta en /pago/resultado (sin notas internas ni datos de otros pagos). */
+export type PaymentStatusView = {
+  status: PaymentResultStatus;
+  eventConfirmed: boolean;
+  /** La reserva/evento está cancelado: ya no se ofrece reintentar el pago. */
+  eventCancelled: boolean;
+  /** La pasarela cobró cuando el evento ya estaba cancelado: el equipo debe reembolsarlo. */
+  collectedAfterCancellation: boolean;
+  failureReason: string | null;
+};
+
+export function paymentStatusView(
+  payment: { status: PaymentResultStatus; failureReason: string | null; notes: string | null },
+  booking: BookingCancellation,
+): PaymentStatusView {
+  return {
+    status: payment.status,
+    eventConfirmed: CONFIRMED_EVENT_STATUSES.includes(booking.event.status),
+    eventCancelled: isBookingCancelled(booking),
+    collectedAfterCancellation: wasCollectedAfterCancellation(payment),
+    failureReason: payment.status === "FAILED" ? payment.failureReason : null,
+  };
+}
+
+export type CheckoutLinkState = "payable" | "processed" | "expired" | "stale" | "cancelled";
 
 /**
  * Estado de un enlace de checkout existente (usado por el checkout simulado, igual que un proveedor real):
+ *  - cancelled: la reserva/evento se canceló y el pago no se había cobrado (nunca se puede pagar)
  *  - processed: ya no está PENDING
  *  - expired: creado hace más de `ttlMs` (las sesiones del proveedor expiran en 1 h)
  *  - stale: el saldo cambió (p. ej. ya se pagó otra cosa) y el monto ya no corresponde
  */
 export function checkoutLinkState(
   payment: { kind: string; status: string; amountCents: number; createdAt: Date },
-  booking: BookingAmounts,
+  booking: BookingAmounts & BookingCancellation,
   payments: PaymentLike[],
   now: Date = new Date(),
   ttlMs = 60 * 60 * 1000,
 ): CheckoutLinkState {
+  // Un cobro ya hecho se sigue mostrando como procesado (su resultado existe); lo demás queda anulado.
+  if (isBookingCancelled(booking) && !isCollectedPaymentStatus(payment.status)) return "cancelled";
   if (payment.status !== "PENDING") return "processed";
   if (now.getTime() - payment.createdAt.getTime() > ttlMs) return "expired";
   if (payment.kind !== "DEPOSIT" && payment.kind !== "BALANCE" && payment.kind !== "FULL") return "stale";

@@ -239,4 +239,9 @@ export class StripePaymentProvider implements PaymentProvider {
       refund.status === "succeeded" ? "succeeded" : refund.status === "pending" || refund.status === "requires_action" ? "pending" : "failed";
     return { refundId: refund.id, status };
   }
+
+  /** POST /v1/checkout/sessions/{id}/expire: la sesión deja de aceptar pagos (sólo si sigue abierta). */
+  async expireCheckout(checkoutId: string): Promise<void> {
+    await this.request<{ id: string; status?: string }>(`/checkout/sessions/${encodeURIComponent(checkoutId)}/expire`, "");
+  }
 }
