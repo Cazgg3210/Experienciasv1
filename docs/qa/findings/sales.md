@@ -114,7 +114,7 @@ Envolver búsqueda + creación en una transacción con `lockBooking(tx, bookingI
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-008 (commit `75085d4`); verificado en E2E carril 3 (ver «Resolution»)
 **Type:** APPLICATION BUG (calidad de datos / regla «busca o crea clienta por email/teléfono»)
 **Module:** leads (lead-intake) / configurator / marketing / ai-designer
 **Role:** Anónimo
@@ -149,6 +149,9 @@ Normalización de teléfono por canal en lugar de en el punto único de captura.
 
 ### Recommended Fix
 Normalizar en `createInboundLead` con `normalizeMxPhone10` → `+52XXXXXXXXXX` para todas las fuentes y buscar por la forma normalizada (y, en transición, por las variantes de 10/12 dígitos); migración para normalizar `Customer.phone`/`Lead.phone` existentes.
+
+### Resolution
+Corregido como **BUG-008** (mismo defecto que COM-BUG-02). Detalle en `commercial.md` › COM-BUG-02 › Resolution. [CONF-022] es `@regression` y pasa 3/3 (`--repeat-each=3 --retries=0`, carril 3) y en la corrida completa de `tests/e2e/configurator`.
 
 ---
 

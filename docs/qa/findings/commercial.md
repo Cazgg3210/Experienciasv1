@@ -4,6 +4,7 @@
 **Entorno:** TEST — build de producción local `.next-e2e` (Next 15.5.27), commit `f26b1a1` (sin cambios de código de la app), 2026-10-06
 **Alcance:** leads (`LEAD`), clientas (`CUST`), catálogo (`CAT`), cotizaciones (`QUO`) — `tests/e2e/{leads,customers,catalog,quotes}/`
 **Resumen de bugs:** 0 Blocker · 0 Critical · 0 High · 2 Medium · 1 Low (IDs provisionales; el consolidado los re-numera)
+**Actualización (corrección de bugs, carril 3):** COM-BUG-02 → BUG-008 **Fixed** · COM-BUG-01 → BUG-014 **Fixed** · COM-BUG-03 → BUG-006 sin cambios (fuera del alcance de esta corrección).
 
 | ID | Severidad | Resumen |
 |---|---|---|
@@ -19,7 +20,7 @@ Todos reproducidos 2/2 con `--repeat-each=2 --retries=0` y de nuevo en la corrid
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-008 (commit `75085d4`); verificado en E2E carril 3 (ver «Resolution»)
 **Type:** APPLICATION BUG (integridad de datos: clientas duplicadas, historial partido)
 **Module:** customers / leads (captura única `createInboundLead`)
 **Role:** OWNER (ivonne@ivonne-rosa.test)
@@ -62,6 +63,14 @@ No hay una forma canónica única del teléfono: el perfil (y el seed) guardan e
 
 ### Recommended Fix
 Normalizar el teléfono en **todas** las escrituras (perfil, seed, cotización rápida) con la misma función (`normPhone` → idealmente E.164 `+52…`), migrar los datos existentes y buscar por la forma normalizada (o una columna `phoneNormalized` indexada). Agregar prueba `@regression` (CUST-016 ya la cubre).
+
+### Resolution (BUG-008)
+- **Forma canónica única** — `src/lib/phone.ts` (pura, `src/lib/phone.test.ts`): `normalizePhone` → E.164 (`+52` + 10 dígitos para México; acepta 10 dígitos, `+52`, `52`, el prefijo legado `521` y espacios, guiones, puntos y paréntesis; otros países `+lada…`). Los esquemas Zod de clientas, leads, contacto, diseñador IA, cotización y alta de evento validan con la misma función.
+- **Todas las escrituras** guardan la forma canónica (`phoneForStorage` en `src/features/customers/server/customer-contact.ts`): `createInboundLead` (configurador, diseñador IA, contacto, captura manual), editar lead, editar clienta (teléfono y WhatsApp), alta de evento y cotización con «Clienta nueva». Un mismo número que sólo cambia de formato no se reporta como cambio (timeline/auditoría).
+- **Búsqueda tolerante en lugar de migración de datos** — `findCustomerByContact` / `findCustomerByPhone` (regla única «correo y luego teléfono», usada por la captura de leads, el alta de evento y la cotización) compara sólo los dígitos del teléfono guardado contra las formas del mismo número (10 / 52+10 / 521+10). Se eligió sobre una migración SQL porque no reescribe datos de clientas en producción (irreversible), reconoce cualquier formato previo —incluidas filas escritas fuera de la app— y cada edición deja el dato canónico. Costo: recorrido de `Customer` por captura (tabla pequeña); si crece, el siguiente paso es una columna normalizada indexada (requiere coordinar `schema.prisma`).
+- **Búsquedas** de clientas, leads y buscadores de clienta (eventos/cotizaciones): un teléfono completo en cualquier formato se busca por su número nacional (`phoneSearchDigits`). Límite conocido: una fila heredada **con separadores** sólo aparece al buscar con ese mismo formato (como antes) hasta que se vuelva a guardar.
+- **Seed**: teléfonos de clientas y leads en forma canónica (`demo-setup.ts`, `demo-sales.ts`).
+- **Verificación** (carril 3, commit `75085d4`): [CUST-016] y [CONF-022] `@regression` pasan 3/3 (`--repeat-each=3 --retries=0`; antes 0/2); carpetas completas `customers`, `leads`, `configurator`, `public`, `ai-designer` (+ suite global del flag IA), `events`, `quotes` y `critical/sales.spec.ts` sin fallas nuevas — sólo fallan pruebas ya anotadas con otros bugs abiertos ([LEAD-037]/[EVT-038] = BUG-006, [EVT-024] = BUG-002, [EVT-037] = BUG-009) y [QUO-018] salió FLAKY por un locator ambiguo de la prueba («Datos actualizados» coincide con el toast y con el historial; TEST BUG ajeno a este cambio); integración `leads-customers` agrega formato heredado reconocido sin modificarlo, otra lada no se confunde y mismo número con otro formato no es cambio.
 
 ---
 
@@ -120,7 +129,7 @@ Interacción del router de Next 15.5 con respuestas RSC en streaming (gzip/chunk
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-014 (commit `cf05a32`); verificado en E2E carril 3 (ver «Resolution»)
 **Type:** APPLICATION BUG (con REQUIREMENT AMBIGUITY: no hay requisito escrito; la intención del código es no notificar capturas manuales)
 **Module:** leads
 **Role:** OWNER
@@ -156,6 +165,10 @@ Se mezcla el origen del lead (marketing) con el canal por el que se capturó (pa
 
 ### Recommended Fix
 Pasar un indicador explícito (p. ej. `ctx.actor` presente o `{ notify: false }` desde `createManualLead`) y notificar sólo capturas públicas; si se desea avisar a la clienta en capturas manuales, hacerlo con una opción explícita en el formulario.
+
+### Resolution (BUG-014)
+- `createInboundLead` exige `ctx.channel: "public" | "team"`; sólo `"public"` dispara «Recibimos tu solicitud» y «Nuevo lead» (regla pura `notifiesInboundLead` en `src/features/leads/domain/lead-workflow.ts`, con prueba unitaria). Configurador, diseñador IA y contacto declaran `"public"`; `createManualLead` declara `"team"`. No se usa `ctx.actor` como indicador porque las acciones públicas también lo reciben cuando quien las usa tiene sesión.
+- **Verificación** (carril 3, commit `cf05a32`): [LEAD-036] `@regression` pasa 3/3 (`--repeat-each=3 --retries=0`; antes 0/2) y [LEAD-035] (control, `@regression`) 3/3; las capturas públicas siguen avisando (contacto en `tests/e2e/public` y [CRIT-010], configurador en `tests/e2e/configurator` y [CRIT-001], diseñador IA en `tests/e2e/ai-designer`, todas en verde); integración: captura del equipo con origen Instagram = 0 avisos, contacto público = `LEAD_RECEIVED` + aviso al equipo.
 
 ---
 
