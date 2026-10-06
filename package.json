@@ -25,7 +25,17 @@
     "db:studio": "prisma studio",
     "storage:init": "tsx scripts/storage-init.ts",
     "postinstall": "prisma generate",
-    "test:integration:prepare": "node scripts/prepare-test-db.mjs"
+    "test:integration:prepare": "node scripts/prepare-test-db.mjs",
+    "e2e:infra": "playwright test --project=chromium --grep @infra",
+    "e2e:smoke": "playwright test --project=chromium --grep @smoke",
+    "e2e:critical": "playwright test --grep @P0",
+    "e2e:auth": "playwright test --project=chromium --grep @auth",
+    "e2e:permissions": "playwright test --project=chromium --grep @permissions",
+    "e2e:regression": "playwright test --project=chromium --project=mobile-chrome --grep \"@P0|@regression\"",
+    "e2e:report": "playwright show-report",
+    "qa:discover": "node .claude/skills/e2e-quality-gate/scripts/discover.mjs",
+    "qa:preflight": "node .claude/skills/e2e-quality-gate/scripts/preflight.mjs",
+    "qa:gate": "node .claude/skills/e2e-quality-gate/scripts/quality-gate.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1144.0",
@@ -55,6 +65,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",

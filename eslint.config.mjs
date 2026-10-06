@@ -18,6 +18,11 @@ const eslintConfig = [
     },
   },
   {
+    // Playwright: el parámetro `use` de los fixtures no es un hook de React.
+    files: ["tests/e2e/**/*.ts"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
+  },
+  {
     ignores: [
       "node_modules/**",
       ".next/**",

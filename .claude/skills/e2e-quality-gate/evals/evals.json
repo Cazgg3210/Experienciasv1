@@ -1,0 +1,23 @@
+{
+  "skill_name": "e2e-quality-gate",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/e2e-quality-gate smoke",
+      "expected_output": "Preflight y discovery ejecutados; delegación a qa-e2e-engineer en modo smoke; pruebas @smoke corridas en chromium; gate calculado por scripts/quality-gate.mjs y reportado con checkpoints [QA]; sin cambios al código de la app.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Antes de hacer deploy quiero saber si un staff puede ver o modificar eventos que no tiene asignados. Revisa los permisos.",
+      "expected_output": "La skill se activa en modo permissions: matriz de roles actualizada, pruebas de UI + replay de Server Actions/IDOR para staff con evento no asignado, verificación en base de que nada cambió, veredicto del gate con evidencia.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "/e2e-quality-gate module quotes",
+      "expected_output": "Pruebas del módulo de cotizaciones (crear, precios en servidor, descuento con auditoría, enviar, versión, duplicar, vencer, token público aceptar/rechazar) con persistencia verificada en base; filas del módulo en el mapa y la matriz de cobertura; gate del módulo.",
+      "files": []
+    }
+  ]
+}

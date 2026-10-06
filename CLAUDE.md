@@ -67,3 +67,8 @@ src/components/ ui (shadcn), layout, feedback, data, forms, media, admin, staff,
 - Comandos: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:integration` (prepara con `pnpm test:integration:prepare`), `pnpm test:e2e`.
 - Varios dev servers en paralelo: `NEXT_DIST_DIR=.next-<nombre> pnpm next dev -p <puerto>` (detenerlos al terminar).
 - Cuentas demo (sólo desarrollo, contraseña `Demo2026!`): superadmin@ivonne-rosa.test, ivonne@ivonne-rosa.test, rosa@ivonne-rosa.test (OWNER), staff@ivonne-rosa.test, staff2@ivonne-rosa.test (STAFF).
+
+## QA End-to-End (Quality Gate)
+- Skill `/e2e-quality-gate [full|smoke|critical|auth|permissions|regression|module <nombre>]` (`.claude/skills/e2e-quality-gate/`), ejecutada por el agente `qa-e2e-engineer` (`.claude/agents/`). Documentos en `docs/qa/`.
+- E2E corre contra un build de producción local (:3200) y la base `*_e2e` re-sembrada por corrida — nunca dev ni producción. Carriles paralelos `E2E_LANE=1..9`; suites aparte `E2E_SUITE=global|ratelimit`.
+- Pruebas: importar `test`/`expect` desde `tests/e2e/fixtures`; ID `[PREFIJO-NNN]` en el título y etiquetas `@P0..@P3`, `@module:<m>`; validar UI + base + recarga. Comandos: `pnpm qa:preflight`, `pnpm qa:discover`, `pnpm e2e:infra|smoke|critical|auth|permissions|regression`, `pnpm qa:gate`.

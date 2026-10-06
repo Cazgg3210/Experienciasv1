@@ -9,7 +9,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Docker/Dokploy usa "standalone". NEXT_STANDALONE=false lo desactiva (servidor E2E local en Windows,
+  // donde copiar symlinks del build standalone falla con EPERM). `next start` no lo necesita.
+  output: process.env.NEXT_STANDALONE === "false" ? undefined : "standalone",
   // Permite varios servidores de desarrollo en paralelo (p. ej. QA) con carpetas de build distintas.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
