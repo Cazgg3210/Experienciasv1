@@ -10,7 +10,7 @@ import { whatsappLink } from "@/server/providers/whatsapp/links";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify } from "@/features/notifications/server/notification-service";
 import { netPaidCents } from "@/features/payments/domain/payment-status";
-import { firstName, rsvpStats, type RsvpStats } from "@/features/guests/domain/rsvp";
+import { firstName, possibleDuplicateIds, rsvpStats, type RsvpStats } from "@/features/guests/domain/rsvp";
 import {
   PORTAL_ACCESS_LOOKBACK_DAYS,
   PORTAL_ACCESS_NEUTRAL_MESSAGE,
@@ -132,6 +132,8 @@ export type PortalGuest = {
   inviteUrl: string;
   whatsappUrl: string;
   canRemove: boolean;
+  /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
+  possibleDuplicate: boolean;
 };
 
 export type PortalMessage = {
@@ -267,6 +269,7 @@ const dashboardSelect = {
       comment: true,
       source: true,
       respondedAt: true,
+      createdAt: true,
     },
   },
   timeline: {
@@ -309,6 +312,7 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
     city: event.city,
   };
 
+  const duplicates = possibleDuplicateIds(event.guests);
   const guests: PortalGuest[] = event.guests.map((g) => {
     const url = appUrl(`/e/${event.micrositeSlug}/${g.token}`);
     const text = buildGuestInvitationText({ ...invitationBase, guestName: g.name, url });
@@ -328,6 +332,7 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       inviteUrl: url,
       whatsappUrl: whatsappLink(g.phone, text),
       canRemove: g.source === "HOST" && g.rsvpStatus === "PENDING",
+      possibleDuplicate: duplicates.has(g.id),
     };
   });
 

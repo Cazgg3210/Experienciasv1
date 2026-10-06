@@ -142,7 +142,9 @@ describe("resolución de tokens", () => {
 });
 
 describe("RSVP del micrositio", () => {
-  it("link genérico crea invitada SELF_RSVP y una segunda respuesta con el mismo nombre la actualiza", async () => {
+  // BUG-003: el link general ya NO re-identifica por nombre/email (permitía sobrescribir la respuesta de
+  // otra invitada y recibir su link personal). Cada respuesta con el link general es una invitada nueva.
+  it("link general crea invitada SELF_RSVP; otra respuesta con el mismo nombre crea otra (posible duplicado) sin tocar la primera", async () => {
     const ev = await makeEvent();
     const first = await submitRsvp({
       slug: ev.micrositeSlug,
@@ -151,6 +153,7 @@ describe("RSVP del micrositio", () => {
     });
     expect(first.outcome).toBe("created");
     expect(first.via).toBe("invite");
+    expect(first.possibleDuplicate).toBe(false);
     expect(first.guestToken).not.toBe(ev.inviteToken);
 
     const created = await prisma.eventGuest.findUniqueOrThrow({ where: { id: first.guestId } });
@@ -159,38 +162,88 @@ describe("RSVP del micrositio", () => {
     expect(created.respondedAt).not.toBeNull();
     expect(created.dietaryRestrictions).toEqual(["VEGAN"]);
 
-    const second = await submitRsvp({
-      slug: ev.micrositeSlug,
-      token: ev.inviteToken,
-      rsvp: rsvp({ name: "  camila   TORRES ", rsvpStatus: "NOT_ATTENDING", honoreeMessage: "Te quiero" }),
-    });
-    expect(second.outcome).toBe("updated");
-    expect(second.guestId).toBe(first.guestId);
-    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(1);
-    const updated = await prisma.eventGuest.findUniqueOrThrow({ where: { id: first.guestId } });
-    expect(updated.rsvpStatus).toBe("NOT_ATTENDING");
-    expect(updated.plusOne).toBe(false);
+    const second = await submitRsvp(
+      {
+        slug: ev.micrositeSlug,
+        token: ev.inviteToken,
+        rsvp: rsvp({ name: "  camila   TORRES ", rsvpStatus: "NOT_ATTENDING", honoreeMessage: "Te quiero" }),
+      },
+      { ip: "203.0.113.7" },
+    );
+    expect(second.outcome).toBe("created");
+    expect(second.possibleDuplicate).toBe(true);
+    expect(second.guestId).not.toBe(first.guestId);
+    expect(second.guestToken).not.toBe(first.guestToken);
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(2);
+    // La primera invitada queda intacta
+    expect(await prisma.eventGuest.findUniqueOrThrow({ where: { id: first.guestId } })).toEqual(created);
+    const other = await prisma.eventGuest.findUniqueOrThrow({ where: { id: second.guestId } });
+    expect(other).toMatchObject({ source: "SELF_RSVP", rsvpStatus: "NOT_ATTENDING", name: "camila TORRES", plusOne: false });
 
-    // mensaje para la homenajeada: uno por invitada, actualizado
-    const honoree = await prisma.eventMessage.findMany({ where: { eventId: ev.id, kind: "HONOREE" } });
-    expect(honoree).toHaveLength(1);
-    expect(honoree[0]!.body).toBe("Te quiero");
-    expect(honoree[0]!.guestId).toBe(first.guestId);
-    expect(honoree[0]!.authorType).toBe("GUEST");
+    // mensaje para la homenajeada: uno por invitada, cada una el suyo
+    const honoree = await prisma.eventMessage.findMany({ where: { eventId: ev.id, kind: "HONOREE" }, orderBy: { createdAt: "asc" } });
+    expect(honoree.map((m) => [m.guestId, m.body, m.authorType])).toEqual([
+      [first.guestId, "¡Feliz cumple!", "GUEST"],
+      [second.guestId, "Te quiero", "GUEST"],
+    ]);
+
+    // Rastro para el equipo y marca visible para la anfitriona (sólo en la segunda)
+    const audits = await prisma.auditLog.findMany({ where: { action: "guest.possible_duplicate", entityId: second.guestId } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.ip).toBe("203.0.113.7");
+    expect(audits[0]!.after).toMatchObject({ eventId: ev.id, matchedGuestIds: [first.guestId] });
+    expect(await prisma.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: first.guestId } })).toBe(0);
+    const dashboard = await getPortalDashboard(ev.portalToken);
+    expect(dashboard?.guests.map((g) => [g.id, g.possibleDuplicate])).toEqual([
+      [first.guestId, false],
+      [second.guestId, true],
+    ]);
 
     const tracked = await prisma.analyticsEvent.count({ where: { type: "RSVP_SUBMIT", eventId: ev.id } });
     expect(tracked).toBe(2);
   });
 
-  it("link genérico empata con una invitada agregada por la anfitriona (no duplica)", async () => {
+  it("link general nunca toma a una invitada existente por nombre ni por email: no la modifica ni entrega su token", async () => {
     const ev = await makeEvent();
-    const added = await addGuestAsHost(ev.portalToken, { name: "Valentina Ortega", contact: "" });
-    const res = await submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name: "valentina ortega" }) });
-    expect(res.guestId).toBe(added.id);
-    expect(res.guestToken).toBe(added.token);
-    const g = await prisma.eventGuest.findUniqueOrThrow({ where: { id: added.id } });
-    expect(g.source).toBe("HOST");
-    expect(g.rsvpStatus).toBe("ATTENDING");
+    const added = await addGuestAsHost(ev.portalToken, { name: "Valentina Ortega", contact: "vale@example.test" });
+    await prisma.eventGuest.update({
+      where: { id: added.id },
+      data: {
+        rsvpStatus: "ATTENDING",
+        dietaryRestrictions: ["VEGAN"],
+        dietaryNotes: "Alergia severa a la nuez",
+        comment: "Llego tarde",
+        respondedAt: new Date(),
+      },
+    });
+    const before = await prisma.eventGuest.findUniqueOrThrow({ where: { id: added.id } });
+
+    const byName = await submitRsvp({
+      slug: ev.micrositeSlug,
+      token: ev.inviteToken,
+      rsvp: rsvp({ name: "valentina ortega", rsvpStatus: "NOT_ATTENDING" }),
+    });
+    const byEmail = await submitRsvp({
+      slug: ev.micrositeSlug,
+      token: ev.inviteToken,
+      rsvp: rsvp({ name: "Otra Persona", email: "VALE@example.test", rsvpStatus: "MAYBE" }),
+    });
+    for (const res of [byName, byEmail]) {
+      expect(res.outcome).toBe("created");
+      expect(res.possibleDuplicate).toBe(true);
+      expect(res.guestId).not.toBe(added.id);
+      expect(res.guestToken).not.toBe(added.token);
+    }
+    expect(await prisma.eventGuest.findUniqueOrThrow({ where: { id: added.id } })).toEqual(before);
+    expect(await prisma.eventGuest.findUniqueOrThrow({ where: { id: byEmail.guestId } })).toMatchObject({
+      source: "SELF_RSVP",
+      email: "vale@example.test",
+      rsvpStatus: "MAYBE",
+    });
+    // El link personal recibido es el de la invitada nueva: no muestra datos de la original
+    const view = await getInviteView(ev.micrositeSlug, byName.guestToken);
+    expect(view?.guest).toMatchObject({ name: "valentina ortega", rsvpStatus: "NOT_ATTENDING", dietaryNotes: null, comment: null });
+    expect(JSON.stringify(view)).not.toContain("Alergia severa a la nuez");
   });
 
   it("token personal actualiza a la invitada correcta y no toca a las demás", async () => {
@@ -214,21 +267,22 @@ describe("RSVP del micrositio", () => {
     expect(untouched.respondedAt).toBeNull();
   });
 
-  it("link genérico: reenviar sin mensaje no borra el mensaje para la homenajeada; el link personal sí puede", async () => {
+  it("link general: reenviar sin mensaje no borra el mensaje para la homenajeada; el link personal sí puede", async () => {
     const ev = await makeEvent();
     const first = await submitRsvp({
       slug: ev.micrositeSlug,
       token: ev.inviteToken,
       rsvp: rsvp({ name: "Paula Mena", honoreeMessage: "¡Te quiero mucho!" }),
     });
-    // Segunda respuesta con el link genérico (formulario vacío): el mensaje se conserva.
-    await submitRsvp({
+    // Segunda respuesta con el link general (formulario vacío): es otra invitada y el mensaje se conserva.
+    const second = await submitRsvp({
       slug: ev.micrositeSlug,
       token: ev.inviteToken,
       rsvp: rsvp({ name: "paula mena", rsvpStatus: "MAYBE", honoreeMessage: "" }),
     });
+    expect(second.guestId).not.toBe(first.guestId);
     let msgs = await prisma.eventMessage.findMany({ where: { eventId: ev.id, kind: "HONOREE" } });
-    expect(msgs.map((m) => m.body)).toEqual(["¡Te quiero mucho!"]);
+    expect(msgs.map((m) => [m.guestId, m.body])).toEqual([[first.guestId, "¡Te quiero mucho!"]]);
 
     // Con su link personal (formulario precargado), dejarlo vacío lo elimina.
     await submitRsvp({ slug: ev.micrositeSlug, token: first.guestToken, rsvp: rsvp({ name: "Paula Mena", honoreeMessage: "" }) });

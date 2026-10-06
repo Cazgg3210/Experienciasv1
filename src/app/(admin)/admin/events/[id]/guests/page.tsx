@@ -23,7 +23,7 @@ export default async function EventGuestsPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const overview = await getGuestsOverview(id);
   if (!overview) notFound();
-  const { event, summary, dietary } = overview;
+  const { event, summary, dietary, possibleDuplicates } = overview;
   const canWrite = can(user.role, "guests:write");
 
   const eventDay = formatLongDate(event.eventDate);
@@ -45,6 +45,7 @@ export default async function EventGuestsPage({ params }: { params: Promise<{ id
       dietaryNotes: g.dietaryNotes,
       comment: g.comment,
       source: g.source,
+      possibleDuplicate: possibleDuplicates.has(g.id),
       respondedAtLabel: g.respondedAt ? formatDateTime(g.respondedAt) : null,
       rsvpUrl,
       whatsappUrl: g.phone ? whatsappLink(g.phone, text) : null,

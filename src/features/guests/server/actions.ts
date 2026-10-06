@@ -10,11 +10,14 @@ import { addGuestAsHost, removeGuestAsHost } from "./guest-service";
 
 const TEN_MINUTES = 10 * 60_000;
 
-/** RSVP del micrositio (público, sin sesión). */
+/**
+ * RSVP del micrositio (público, sin sesión). `personalPath` siempre es el link de la invitada que
+ * respondió: con el link general es una invitada nueva, nunca el de otra (BUG-003).
+ */
 export const submitRsvpAction = publicAction(
   { name: "guests.submit_rsvp", schema: submitRsvpSchema, rateLimit: { limit: 10, windowMs: TEN_MINUTES } },
-  async (input): Promise<{ name: string; rsvpStatus: RsvpStatus; personalPath: string }> => {
-    const result = await submitRsvp(input);
+  async (input, { ip }): Promise<{ name: string; rsvpStatus: RsvpStatus; personalPath: string }> => {
+    const result = await submitRsvp(input, { ip });
     const personalPath = `/e/${result.slug}/${result.guestToken}`;
     revalidatePath(`/e/${result.slug}/${input.token}`);
     if (personalPath !== `/e/${result.slug}/${input.token}`) revalidatePath(personalPath);

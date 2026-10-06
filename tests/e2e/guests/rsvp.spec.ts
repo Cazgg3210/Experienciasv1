@@ -121,13 +121,14 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     await expect(list).toContainText("Confirmó con la invitación general");
   });
 
-  test("[GST-014] con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal", { tag: ["@P0", "@permissions"] }, async ({ anonPage, db, evidence }) => {
+  test("[GST-014] con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal", { tag: ["@P0", "@permissions", "@regression"] }, async ({ anonPage, db, evidence }) => {
     evidence("invitada", "Link general › nombre de una invitada existente (sin email) › No podré ir");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-03" });
+    test.info().annotations.push({ type: "regression", description: "BUG-003" });
     const ev = await createEventFixture(db, { status: "CONFIRMED", addressLine: "Privada Secreta 7" });
+    const victimEmail = uniqEmail("camila");
     const victim = await createGuestFixture(db, ev, {
       name: `Camila Ruiz ${uniq("V")}`,
-      email: uniqEmail("camila"),
+      email: victimEmail,
       rsvpStatus: "ATTENDING",
       dietaryRestrictions: ["VEGAN"],
       dietaryNotes: "Alergia severa a la nuez",
@@ -146,6 +147,73 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     expect(after?.rsvpStatus, "la respuesta de otra invitada no debe cambiar").toBe("ATTENDING");
     expect(landed, "no debe entregarse el link personal de otra invitada").not.toBe(victim.path);
     expect(leaked, "no debe exponerse la nota alimentaria de otra invitada").not.toContain("Alergia severa a la nuez");
+    // Ningún dato de la invitada original se pierde (nombre, email, restricciones, nota, comentario)
+    expect(after, "los datos de la invitada original quedan intactos").toMatchObject({
+      name: victim.name,
+      email: victimEmail,
+      dietaryRestrictions: ["VEGAN"],
+      dietaryNotes: "Alergia severa a la nuez",
+      comment: "Llego tarde",
+    });
+    // Comportamiento seguro: la respuesta se registra como invitada NUEVA y recibe SU propio link personal
+    const own = await db.eventGuest.findMany({ where: { eventId: ev.id, id: { not: victim.id } } });
+    expect(own, "se crea una sola invitada nueva").toHaveLength(1);
+    expect(own[0]).toMatchObject({ source: "SELF_RSVP", rsvpStatus: "NOT_ATTENDING", name: victim.name.toLowerCase() });
+    expect(landed, "recibe su propio link personal").toBe(`/e/${ev.micrositeSlug}/${own[0]!.token}`);
+  });
+
+  test("[GST-023] posible duplicado del link general (nombre o email de otra invitada): se marca para la anfitriona y el equipo sin tocar ni revelar a la original", { tag: ["@P1", "@regression"] }, async ({ anonPage, rolePage, apiAs, db, evidence }) => {
+    evidence("invitada", "Link general › aviso de link personal + submitRsvpAction con el nombre / el email de otra invitada → admin y portal");
+    test.info().annotations.push({ type: "regression", description: "BUG-003" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const victimEmail = uniqEmail("renata");
+    const victim = await createGuestFixture(db, ev, {
+      name: `Renata Gil ${uniq("D")}`,
+      email: victimEmail,
+      rsvpStatus: "ATTENDING",
+      dietaryNotes: "Celiaca estricta",
+    });
+    const before = await db.eventGuest.findUniqueOrThrow({ where: { id: victim.id } });
+    // En el link general se pide a quien ya tiene link personal que responda desde ahí
+    const page = await anonPage();
+    const section = await openRsvp(page, ev.invitePath);
+    await expect(section.getByText(/ya te mandó tu link personal\? Responde desde ese enlace para no duplicar tu lugar en la lista/)).toBeVisible();
+
+    const api = await apiAs(null);
+    const byName = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: victim.name.toUpperCase(), rsvpStatus: "NOT_ATTENDING" }), { path: ev.invitePath });
+    const byEmail = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: "Alguien Más", email: victimEmail.toUpperCase(), rsvpStatus: "MAYBE" }), { path: ev.invitePath });
+    for (const r of [byName, byEmail]) {
+      expect(r.outcome, d(r)).toBe("accepted");
+      expect(r.data?.personalPath).not.toBe(victim.path);
+      expect(r.raw, "la respuesta no revela el token de la invitada original").not.toContain(victim.token);
+    }
+    expect(await db.eventGuest.findUniqueOrThrow({ where: { id: victim.id } }), "la invitada original no cambia").toEqual(before);
+    const created = await db.eventGuest.findMany({ where: { eventId: ev.id, id: { not: victim.id } }, orderBy: { createdAt: "asc" } });
+    expect(created.map((g) => [g.source, g.rsvpStatus, `/e/${ev.micrositeSlug}/${g.token}`])).toEqual([
+      ["SELF_RSVP", "NOT_ATTENDING", byName.data?.personalPath],
+      ["SELF_RSVP", "MAYBE", byEmail.data?.personalPath],
+    ]);
+    expect(created[1]?.email).toBe(victimEmail.toLowerCase());
+    const audits = await db.auditLog.findMany({ where: { action: "guest.possible_duplicate", entityId: { in: created.map((g) => g.id) } } });
+    expect(audits.map((a) => (a.after as { matchedGuestIds?: string[] } | null)?.matchedGuestIds)).toEqual([[victim.id], [victim.id]]);
+
+    // El equipo ve los auto-registros marcados (la original no)
+    const owner = await rolePage("owner");
+    await owner.goto(`/admin/events/${ev.id}/guests`);
+    await expect(owner.getByText("2 invitadas que se registraron con el link general coinciden", { exact: false })).toBeVisible();
+    const table = owner.getByRole("table", { name: "Invitadas del evento" });
+    await expect(table.getByText("Posible duplicado")).toHaveCount(2);
+    await expect(table.getByRole("row", { name: new RegExp(victim.name) })).not.toContainText("Posible duplicado");
+    await expect(table.getByRole("row", { name: /Alguien Más/ })).toContainText("Posible duplicado");
+
+    // La anfitriona también, con la indicación de qué hacer
+    const host = await anonPage();
+    await host.goto(ev.portalPath);
+    const list = host.getByRole("list", { name: "Lista de invitadas" });
+    await expect(list.getByText("Posible duplicado")).toHaveCount(2);
+    await expect(list.getByRole("listitem").filter({ hasText: "Alguien Más" })).toContainText("Si es la misma persona, escríbenos y dejamos un solo registro.");
+    // RegExp (sensible a mayúsculas): el registro en MAYÚSCULAS es el duplicado, no la original
+    await expect(list.getByRole("listitem").filter({ hasText: new RegExp(victim.name) })).not.toContainText("Posible duplicado");
   });
 
   test("[GST-015] mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar", { tag: ["@P1"] }, async ({ anonPage, rolePage, db, evidence }) => {
