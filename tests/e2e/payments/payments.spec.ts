@@ -623,9 +623,10 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
 
   test(
     "[PAY-022] accesibilidad del checkout simulado y del resultado del pago",
-    { tag: ["@P2", "@a11y"] },
+    { tag: ["@P2", "@a11y", "@regression"] },
     async ({ page, db, request, baseURL }, testInfo) => {
       test.info().annotations.push({ type: "rol", description: "clienta" });
+      test.info().annotations.push({ type: "regression", description: "BUG-009" });
       const { quote } = await createAcceptedQuote(db, request, baseURL!);
       const { url, payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
       await page.goto(url);
@@ -642,7 +643,6 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       await settle();
       const b = await scanA11y(page, testInfo);
       const blocking = [...a.blocking, ...b.blocking].map((v) => `${v.id}: ${v.help} [${v.nodes.map((n) => n.html).join(" | ").slice(0, 200)}]`);
-      if (blocking.length) test.info().annotations.push({ type: "bug", description: "SAL-BUG-04" });
       expect(blocking).toEqual([]);
     },
   );

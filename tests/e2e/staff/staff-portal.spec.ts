@@ -256,9 +256,10 @@ test.describe("Portal de staff · tareas", { tag: ["@module:staff"] }, () => {
     expect(box!.height, "botón táctil ≥ 40 px").toBeGreaterThanOrEqual(40);
   });
 
-  test("[STF-024] el portal staff (lista y detalle con checklist) no tiene violaciones WCAG 2.1 AA graves", { tag: ["@P2", "@a11y"] }, async ({ rolePage, db, evidence }, testInfo) => {
+  test("[STF-024] el portal staff (lista y detalle con checklist) no tiene violaciones WCAG 2.1 AA graves", { tag: ["@P2", "@a11y", "@regression"] }, async ({ rolePage, db, evidence }, testInfo) => {
     evidence("staff", "axe en /staff y /staff/events/<id>");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-05" });
+    test.info().annotations.push({ type: "regression", description: "BUG-011" }); // aria-controls a un id inexistente
+    test.info().annotations.push({ type: "regression", description: "BUG-009" }); // contraste del tono warning
     const { ev } = await setup(db);
     const page = await rolePage("staff");
     await page.goto("/staff");
@@ -269,5 +270,31 @@ test.describe("Portal de staff · tareas", { tag: ["@module:staff"] }, () => {
     const detail = await scanA11y(page, testInfo);
     const blocking = [...list.blocking, ...detail.blocking].map((v) => `${v.id} (${v.impact}): ${v.help}`);
     expect(blocking, "violaciones critical/serious").toEqual([]);
+  });
+
+  test("[STF-025] teclado: «Agregar nota» lleva el foco al campo (sin aria-controls roto) y «Cancelar» lo regresa al botón", { tag: ["@P3", "@a11y", "@regression"] }, async ({ rolePage, db, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-011" });
+    evidence("staff", "Portal › Agregar nota (Enter) → Cancelar (Enter), sin mouse; la nota no se guarda");
+    const { ev, item } = await setup(db);
+    const page = await rolePage("staff");
+    await page.goto(`/staff/events/${ev.id}`);
+    const card = page.getByRole("listitem").filter({ hasText: item.title });
+    const add = await ready(card.getByRole("button", { name: "Agregar nota" }));
+    // Ninguna referencia ARIA del botón apunta a un elemento inexistente.
+    const dangling = await add.evaluate((b) =>
+      ["aria-controls", "aria-describedby", "aria-labelledby"]
+        .flatMap((a) => (b.getAttribute(a) ?? "").split(/\s+/).filter(Boolean))
+        .filter((id) => !document.getElementById(id)),
+    );
+    expect(dangling, "ids referenciados que no existen").toEqual([]);
+    await add.focus();
+    await page.keyboard.press("Enter");
+    await expect(card.getByLabel("Nota para coordinación")).toBeFocused();
+    await page.keyboard.type("no se guarda");
+    await card.getByRole("button", { name: "Cancelar" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(card.getByLabel("Nota para coordinación")).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Agregar nota" }), "el foco vuelve al botón que abrió el campo").toBeFocused();
+    expect((await db.eventChecklistItem.findUniqueOrThrow({ where: { id: item.id } })).notes).toBeNull();
   });
 });

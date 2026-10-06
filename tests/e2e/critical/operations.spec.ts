@@ -3,6 +3,7 @@
  * pago manual del saldo con auditoría, y cierre del evento con costos → finanzas.
  */
 import {
+  ACCOUNTS,
   createBookedEvent,
   createChecklistItem,
   createStaffUser,
@@ -114,7 +115,9 @@ test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critica
       expect(payment?.provider).toBe("manual");
       expect(payment?.method).toBe("TRANSFER");
       expect(payment?.notes).toBe(note);
-      const ownerUser = await db.user.findFirst({ where: { role: "OWNER", email: { contains: "ivonne" } } });
+      // La cuenta exacta de deskPage("owner"): otras pruebas del carril crean OWNER con «ivonne» en el dominio.
+      const ownerUser = await db.user.findUnique({ where: { email: ACCOUNTS.owner.email } });
+      expect(ownerUser?.role).toBe("OWNER");
       expect(payment?.recordedById).toBe(ownerUser?.id);
       const audit = await db.auditLog.findFirst({ where: { action: "payment.manual_recorded", entityId: payment!.id } });
       expect(audit, "auditoría del pago manual").not.toBeNull();

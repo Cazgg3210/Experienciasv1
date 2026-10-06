@@ -203,9 +203,9 @@ test.describe("Eventos · enlaces, programa y mensajes", { tag: ["@module:events
     expect(after?.portalToken).toBe(ev.portalToken);
   });
 
-  test("[EVT-037] accesibilidad (WCAG 2.1 AA) del listado, el alta y el detalle de evento", { tag: ["@P2", "@a11y"] }, async ({ rolePage, db, evidence }, testInfo) => {
+  test("[EVT-037] accesibilidad (WCAG 2.1 AA) del listado, el alta y el detalle de evento", { tag: ["@P2", "@a11y", "@regression"] }, async ({ rolePage, db, evidence }, testInfo) => {
     evidence("owner", "axe en /admin/events, /admin/events/new y /admin/events/[id]");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-04" });
+    test.info().annotations.push({ type: "regression", description: "BUG-009" });
     const ev = await createEventFixture(db, { status: "CONFIRMED", booking: { totalCents: 900_000, depositCents: 450_000 } });
     const page = await rolePage("owner");
     const found: string[] = [];

@@ -50,7 +50,7 @@ export default async function CatalogAreasPage() {
           {areas.map((a) => {
             const logisticsMargin = a.logisticsFeeCents - a.logisticsCostCents;
             return (
-              <li key={a.id} className={cn("bg-card rounded-2xl border p-4 shadow-xs", !a.active && "opacity-80")}>
+              <li key={a.id} className={cn("bg-card rounded-2xl border p-4 shadow-xs", !a.active && "bg-muted/50")}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">

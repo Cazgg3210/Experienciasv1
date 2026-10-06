@@ -40,9 +40,7 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const experience = await getExperienceDetail(slug).catch(() => null);
-  // Slug inexistente/inactivo → página not-found con <meta name="robots" content="noindex">.
-  // Nota: como la ruta transmite (streaming) detrás de loading.tsx, Next responde HTTP 200
-  // (no 404) aun para crawlers; el noindex evita que se indexe (soft 404 controlado).
+  // Slug inexistente/inactivo: ./layout.tsx ya respondió 404 real antes del streaming; esto es defensivo.
   if (!experience) notFound();
   const description = truncate(
     [experience.tagline, paragraphs(experience.description)[0]].filter(Boolean).join(" "),

@@ -154,9 +154,9 @@ test.describe("Memory Capsule · pública", { tag: ["@module:memory"] }, () => {
     await expect(page.getByText(approved === 1 ? "1 foto" : `${approved} fotos`, { exact: true })).toBeVisible();
   });
 
-  test("[MEM-019] accesibilidad (WCAG 2.1 AA) de la cápsula pública", { tag: ["@P2", "@a11y"] }, async ({ anonPage, evidence }, testInfo) => {
+  test("[MEM-019] accesibilidad (WCAG 2.1 AA) de la cápsula pública", { tag: ["@P2", "@a11y", "@regression"] }, async ({ anonPage, evidence }, testInfo) => {
     evidence("invitada", `axe en /memory/${TOKENS.memoryValeria}`);
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-04" });
+    test.info().annotations.push({ type: "regression", description: "BUG-009" });
     const page = await anonPage();
     await page.goto(`/memory/${TOKENS.memoryValeria}`);
     await expect(page.getByRole("main")).toBeVisible();

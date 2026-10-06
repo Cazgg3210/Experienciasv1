@@ -292,15 +292,20 @@ function DetailCard({
   children: React.ReactNode;
   className?: string;
 }) {
+  // El <div> hijo directo del <dl> contiene SÓLO <dt> y <dd> (HTML válido para lectores de pantalla);
+  // el ícono decorativo vive dentro del <dt>.
   return (
-    <div className={cn("bg-card flex gap-3 rounded-2xl border p-4 shadow-xs", className)}>
-      <span className="bg-sage-soft text-olive flex size-10 shrink-0 items-center justify-center rounded-full">
-        <Icon className="size-5" aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <dt className="text-muted-foreground text-sm">{label}</dt>
-        <dd className="mt-0.5">{children}</dd>
-      </div>
+    <div className={cn("bg-card relative min-w-0 rounded-2xl border p-4 pl-[4.25rem] shadow-xs", className)}>
+      <dt className="text-muted-foreground text-sm">
+        <span
+          aria-hidden
+          className="bg-sage-soft text-olive absolute top-4 left-4 flex size-10 items-center justify-center rounded-full"
+        >
+          <Icon className="size-5" />
+        </span>
+        {label}
+      </dt>
+      <dd className="mt-0.5">{children}</dd>
     </div>
   );
 }

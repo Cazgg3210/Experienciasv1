@@ -176,6 +176,7 @@ export const getEventHeader = cache(async (id: string) => {
       portalToken: true,
       inviteToken: true,
       honoreeName: true,
+      closedAt: true,
       customer: { select: { id: true, name: true, phone: true, whatsapp: true, email: true } },
       serviceArea: { select: { name: true } },
       experience: { select: { name: true } },

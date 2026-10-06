@@ -142,9 +142,10 @@ test.describe("Sitio público", { tag: ["@module:public"] }, () => {
   );
 
   test(
-    "[PUB-016] experiencia inexistente o inactiva → página «no disponible» con noindex (y no aparece en el catálogo)",
-    { tag: ["@P1", "@negative"] },
+    "[PUB-016] experiencia inexistente o inactiva → página «no disponible» con noindex, HTTP 404 real (y no aparece en el catálogo)",
+    { tag: ["@P1", "@negative", "@regression"] },
     async ({ page, db, guard, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-013" });
       evidence("anonimo", "Slug inexistente, con caracteres raros e inactivo");
       guard.allow(/404/); // si la ruta responde 404 real, el navegador lo registra en consola
       const inactive = await db.experience.create({
@@ -159,6 +160,12 @@ test.describe("Sitio público", { tag: ["@module:public"] }, () => {
         await expect(page.getByText(inactive.name)).toHaveCount(0);
       }
       test.info().annotations.push({ type: "http-status", description: JSON.stringify(statuses) });
+      // Sin soft-404: inexistente, inválido e inactivo responden 404 real (no 200 con contenido de error).
+      expect(statuses, "HTTP de /experiencias/<slug> no disponible").toEqual({
+        "no-existe-esta-mesa": 404,
+        "%3Cscript%3Ealert(1)%3C%2Fscript%3E": 404,
+        [inactive.slug]: 404,
+      });
       await page.goto("/experiencias");
       await expect(page.getByRole("link", { name: inactive.name })).toHaveCount(0);
     },

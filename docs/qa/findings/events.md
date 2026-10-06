@@ -277,7 +277,7 @@ Con el link general: si hay coincidencia por nombre con una invitada que ya resp
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-009 (commit `cf3e12d`). Verificado en carril 6: EVT-037, CAL-007 y MEM-019 PASS 3/3 (`--repeat-each=3 --retries=0`).
 **Type:** UX ISSUE (accesibilidad; requisito explícito de CLAUDE.md «contraste AA»)
 **Module:** events / calendar (admin) · memory (público)
 **Role:** Owner, Invitada
@@ -308,7 +308,7 @@ Oscurecer `--warning` (≈ `#7f5616`) o usar fondo más claro en insignias; `--b
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-010 (commit `7173e13`). `DetailCard` con estructura `<div><dt/><dd/></div>`. Verificado: GST-022 PASS 3/3.
 **Type:** UX ISSUE (accesibilidad, lectores de pantalla)
 **Module:** guests (micrositio)
 **Role:** Invitada

@@ -497,7 +497,7 @@ function TimelineContent({ data }: { data: PortalDashboard }) {
             <p className={cn("font-medium", !t.visibleToGuests && "text-muted-foreground")}>{t.title}</p>
             {t.description ? <p className="text-muted-foreground text-sm">{t.description}</p> : null}
             {!t.visibleToGuests ? (
-              <p className="text-taupe mt-0.5 text-xs font-medium">Preparativos del equipo</p>
+              <p className="text-taupe-deep mt-0.5 text-xs font-medium">Preparativos del equipo</p>
             ) : null}
           </div>
         </li>

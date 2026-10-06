@@ -131,7 +131,7 @@ Mostrar la confirmación a partir del resultado de `submitRsvpAction` (p. ej. `o
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-009 (commit `cf3e12d`, rama `worktree-wf_8b97ab93-ecc-9`). Tokens `--warning`/`--info`/`--success`/`--destructive` oscurecidos en la misma tonalidad (≥ 4.6:1 sobre tono/10), texto claro sobre olive sin opacidad y días fuera de mes con `text-muted-foreground`. Verificado en carril 6: A11Y-009/012/013/014/015/018 PASS 3/3 (`--repeat-each=3 --retries=0`) + barrido axe de 78 páginas a 1440 y 390 px sin `color-contrast`; prueba unitaria `tests/unit/design-tokens-contrast.test.ts`.
 **Type:** UX ISSUE (accesibilidad WCAG 1.4.3, axe `color-contrast` serious)
 **Module:** components/data (StatusBadge), admin-shell, portal
 **Role:** OWNER/SUPER_ADMIN (panel) y clienta (portal)
@@ -173,7 +173,7 @@ Oscurecer el texto de los tonos (p. ej. warning ≈ #7d5414, info ≈ #3d5363) o
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-009 (commit `cf3e12d`). Nuevo token `--brand-taupe-deep` (#776354, 5.1:1) → `text-taupe-deep` para texto (taupe de marca sólo decorativo); `MediaUploader` ya no atenúa la ayuda. Verificado: A11Y-008/011 PASS 3/3.
 **Type:** UX ISSUE (WCAG 1.4.3, axe `color-contrast` serious)
 **Module:** memory-capsule, payments (mock), marca
 **Role:** Invitada / clienta
@@ -207,7 +207,7 @@ Reservar `taupe` para decoración/íconos y usar `text-muted-foreground` (#645a5
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-010 (commit `7173e13`). `<div>` hijo del `<dl>` contiene sólo `<dt>`/`<dd>` (ícono dentro del `<dt>`); anticipo/saldo en su propio `<dl>`. Verificado: A11Y-007/010 PASS 3/3.
 **Type:** UX ISSUE (semántica para lectores de pantalla; axe `definition-list` + `dlitem` serious)
 **Module:** quotes (página pública), guests (micrositio)
 **Role:** Clienta / invitada
@@ -236,7 +236,7 @@ Hacer que el `div` hijo del `dl` contenga directamente `dt` y `dd` (mover el íc
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-012 (commit `f35fb04`). El diálogo recuerda el botón que lo abrió y le devuelve el foco en `onCloseAutoFocus`. Verificado: A11Y-028 PASS 3/3.
 **Type:** UX ISSUE (WCAG 2.4.3 orden del foco)
 **Module:** quotes (página pública)
 **Role:** Clienta

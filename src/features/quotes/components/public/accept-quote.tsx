@@ -43,6 +43,13 @@ export function AcceptQuoteCta({
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  // El diálogo es controlado y tiene dos disparadores (botón principal y barra fija en móvil), sin
+  // DialogTrigger: Radix no sabe a quién devolver el foco al cerrar. Se recuerda el botón que lo abrió.
+  const openerRef = React.useRef<HTMLElement | null>(null);
+  function openFrom(e: React.MouseEvent<HTMLButtonElement>) {
+    openerRef.current = e.currentTarget;
+    setOpen(true);
+  }
   const form = useForm<AcceptQuoteInput>({
     resolver: zodResolver(acceptQuoteSchema),
     defaultValues: { token, version, fullName: customerName, acceptTerms: false },
@@ -63,7 +70,7 @@ export function AcceptQuoteCta({
 
   return (
     <>
-      <Button size="xl" className="w-full sm:w-auto" onClick={() => setOpen(true)}>
+      <Button size="xl" className="w-full sm:w-auto" onClick={openFrom}>
         <Heart aria-hidden /> Aceptar propuesta
       </Button>
 
@@ -74,14 +81,25 @@ export function AcceptQuoteCta({
             <p className="text-muted-foreground text-xs">Total · anticipo {depositLabel}</p>
             <p className="tabular font-heading text-xl font-semibold">{totalLabel}</p>
           </div>
-          <Button size="lg" className="h-11 rounded-full px-5" onClick={() => setOpen(true)}>
+          <Button size="lg" className="h-11 rounded-full px-5" onClick={openFrom}>
             Aceptar
           </Button>
         </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="sm:max-w-md"
+          onCloseAutoFocus={(e) => {
+            // WCAG 2.4.3: al cerrar, el foco vuelve al botón que abrió el diálogo (si sigue en la página;
+            // tras aceptar, la página cambia y Radix aplica su comportamiento por defecto).
+            const opener = openerRef.current;
+            if (opener?.isConnected) {
+              e.preventDefault();
+              opener.focus();
+            }
+          }}
+        >
           <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-5">
             <DialogHeader>
               <DialogTitle className="font-heading text-2xl">Aceptar propuesta</DialogTitle>

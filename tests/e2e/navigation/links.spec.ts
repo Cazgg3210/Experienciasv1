@@ -4,7 +4,7 @@
  *    experiencias por token (anónimo) y enlaces de acción del buzón mock (NotificationLog.actionUrl).
  * Las rutas con ids se agrupan por patrón (hasta 3 URLs por patrón) para mantener el tiempo acotado.
  */
-import { TOKENS, expect, test, type E2ERole } from "../fixtures";
+import { ACCOUNTS, TOKENS, expect, test, type E2ERole } from "../fixtures";
 import { baseUrl, seedIds } from "../permissions/_helpers";
 import type { APIRequestContext, Page } from "@playwright/test";
 
@@ -127,15 +127,28 @@ test.describe("Enlaces internos sin 404/500", { tag: ["@module:navigation"] }, (
     expect(await check(await apiAs(null), links)).toEqual([]);
   });
 
-  test("[NAV-015] enlaces de acción del buzón (NotificationLog.actionUrl) apuntan a rutas existentes", { tag: ["@P3"] }, async ({ apiAs, db, evidence }) => {
+  test("[NAV-015] enlaces de acción del buzón (NotificationLog.actionUrl) apuntan a rutas existentes", { tag: ["@P3", "@regression"] }, async ({ apiAs, db, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-016" });
     evidence("owner", "actionUrl de notificaciones del seed y generadas por la app");
-    const rows = await db.notificationLog.findMany({ where: { actionUrl: { not: null } }, select: { type: true, actionUrl: true } });
+    const rows = await db.notificationLog.findMany({
+      where: { actionUrl: { not: null } },
+      select: { type: true, actionUrl: true, eventId: true },
+      orderBy: { createdAt: "asc" }, // determinista: primero los del seed
+    });
+    // Los enlaces del portal staff sólo se pueden abrir con la sesión de su destinataria: se revisan los de
+    // eventos asignados a la cuenta staff de la prueba (otras pruebas del carril asignan a otras personas,
+    // y para ellas «No encontramos este evento» es autorización, no un enlace roto).
+    const staffEvents = new Set(
+      (await db.staffAssignment.findMany({ where: { staffMember: { user: { email: ACCOUNTS.staff.email } } }, select: { eventId: true } })).map((a) => a.eventId),
+    );
     const byPattern = new Map<string, { type: string; path: string }>();
     for (const r of rows) {
       const u = new URL(r.actionUrl!, baseUrl());
+      if (u.pathname.startsWith("/staff/events/") && !(r.eventId && staffEvents.has(r.eventId))) continue;
       const p = `${r.type} ${pattern(u.pathname)}`;
       if (!byPattern.has(p)) byPattern.set(p, { type: r.type, path: u.pathname + u.search });
     }
+    expect([...byPattern.values()].some((v) => v.path.startsWith("/staff/events/")), "se revisa al menos un enlace del portal staff").toBe(true);
     const roleFor = (p: string): E2ERole | null => (p.startsWith("/admin") ? "owner" : p.startsWith("/staff") ? "staff" : null);
     const broken: string[] = [];
     for (const { type, path } of byPattern.values()) {
@@ -145,7 +158,6 @@ test.describe("Enlaces internos sin 404/500", { tag: ["@module:navigation"] }, (
       if (res.status() >= 400 || SOFT_404.test(body)) broken.push(`${type} → ${res.status()} ${path}`);
     }
     test.info().annotations.push({ type: "observado", description: `${byPattern.size} patrones de actionUrl revisados` });
-    if (broken.length) test.info().annotations.push({ type: "bug", description: "ACC-BUG-05" });
     expect(broken).toEqual([]);
   });
 });

@@ -82,7 +82,7 @@ export async function seedDemoActivity(
   const e5 = events.e5;
   const e6 = events.e6;
 
-  notify({ type: "QUOTE_ACCEPTED", channel: "EMAIL", to: OWNER_EMAIL, subject: `Cotización aceptada: ${e6.title}`, body: `${C.fernanda!.name} aceptó ${e6.quote.code}. Anticipo pendiente.`, actionUrl: `${appUrl}/admin/eventos/${e6.id}`, at: addMinutes(e6.quote.acceptedAt!, 1), quoteId: e6.quote.id, eventId: e6.id, entity: e6.quote.id });
+  notify({ type: "QUOTE_ACCEPTED", channel: "EMAIL", to: OWNER_EMAIL, subject: `Cotización aceptada: ${e6.title}`, body: `${C.fernanda!.name} aceptó ${e6.quote.code}. Anticipo pendiente.`, actionUrl: `${appUrl}/admin/events/${e6.id}`, at: addMinutes(e6.quote.acceptedAt!, 1), quoteId: e6.quote.id, eventId: e6.id, entity: e6.quote.id });
   notify({ type: "PORTAL_ACCESS", channel: "EMAIL", to: C.fernanda!.email!, subject: "Tu portal de evento", body: "Desde tu portal puedes pagar el anticipo, ver los detalles y administrar a tus invitadas.", actionUrl: `${appUrl}/mi-evento/${e6.portalToken}`, at: addMinutes(e6.quote.acceptedAt!, 2), eventId: e6.id, entity: e6.id });
 
   const e1Deposit = e1.paymentIds.find((p) => p.kind === "DEPOSIT")!;
@@ -99,7 +99,7 @@ export async function seedDemoActivity(
   if (daniPineda.email) {
     notify({ type: "RSVP_REMINDER", channel: "EMAIL", to: daniPineda.email, subject: "¿Vienes al cumpleaños de Sofía?", body: "Confirma tu asistencia y cuéntanos si tienes alguna restricción alimentaria.", actionUrl: `${appUrl}/e/${e1.slug}/${daniPineda.token}`, at: clock.hoursAgo(6), eventId: e1.id, entity: daniPineda.id });
   }
-  notify({ type: "STAFF_ASSIGNED", channel: "WHATSAPP", to: wa(DEMO_USERS.lupita.phone), body: `Lupita, quedaste asignada como coordinadora en "${e1.title}".`, actionUrl: `${appUrl}/staff/eventos/${e1.id}`, at: addDays(e1.quote.acceptedAt!, 1), eventId: e1.id, entity: `${e1.id}-lupita` });
+  notify({ type: "STAFF_ASSIGNED", channel: "WHATSAPP", to: wa(DEMO_USERS.lupita.phone), body: `Lupita, quedaste asignada como coordinadora en "${e1.title}".`, actionUrl: `${appUrl}/staff/events/${e1.id}`, at: addDays(e1.quote.acceptedAt!, 1), eventId: e1.id, entity: `${e1.id}-lupita` });
 
   notify({ type: "EVENT_7D", channel: "EMAIL", to: C.valeria!.email!, subject: "¡Falta una semana!", body: "Tu Perú x México está a 7 días. Revisa la lista de invitadas y restricciones en tu portal.", actionUrl: `${appUrl}/mi-evento/${e4.portalToken}`, at: addDays(e4.startsAt, -7), eventId: e4.id, entity: e4.id });
   notify({ type: "REVIEW_REQUEST", channel: "EMAIL", to: C.valeria!.email!, subject: "¿Cómo te fue?", body: "Nos encantaría saber qué te pareció tu experiencia. Toma menos de un minuto.", actionUrl: `${appUrl}/mi-evento/${e4.portalToken}`, at: addDays(e4.endsAt, 2), eventId: e4.id, entity: e4.id });
@@ -184,7 +184,7 @@ export async function seedDemoActivity(
       const quote = stage.type === "ACCEPT_QUOTE" || stage.type === "START_PAYMENT" || stage.type === "PAYMENT_SUCCESS" ? acceptedQuotes[i % acceptedQuotes.length] : undefined;
       const path =
         stage.type === "START_CONFIGURATOR" || stage.type === "COMPLETE_CONFIGURATOR" || stage.type === "SUBMIT_LEAD"
-          ? `/configurador?experiencia=${s.exp}`
+          ? `/crear-experiencia?experiencia=${s.exp}`
           : "/cotizacion/[token]";
       track(stage.type, s, stage.offset(), {
         path,
@@ -213,7 +213,7 @@ export async function seedDemoActivity(
   analytics.push({
     type: "AI_DESIGN_GENERATED",
     sessionId: "s_ai_demo",
-    path: "/disena-con-ia",
+    path: "/crear-experiencia/ai",
     leadId: isabel.id,
     metadata: json({ provider: "mock", usedFallback: true }),
     createdAt: clock.hoursAgo(20.5),

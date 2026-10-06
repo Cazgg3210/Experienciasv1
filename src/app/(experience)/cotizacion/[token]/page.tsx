@@ -70,26 +70,34 @@ function BrandHeader({ brandName, code, whatsappHref }: { brandName: string; cod
   );
 }
 
+/**
+ * Par etiqueta–valor de un <dl>: el <div> hijo directo del <dl> contiene SÓLO <dt> y <dd>
+ * (HTML válido para lectores de pantalla); el ícono decorativo vive dentro del <dt>.
+ */
 function DetailTile({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
   return (
-    <div className="bg-card/80 flex items-start gap-3 rounded-2xl border p-4">
-      <span className="bg-sage-soft text-olive flex size-9 shrink-0 items-center justify-center rounded-full">
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <dt className="text-muted-foreground text-xs">{label}</dt>
-        <dd className="font-medium">{value}</dd>
-      </div>
+    <div className="bg-card/80 relative min-w-0 rounded-2xl border p-4 pl-16">
+      <dt className="text-muted-foreground text-xs">
+        <span
+          aria-hidden
+          className="bg-sage-soft text-olive absolute top-4 left-4 flex size-9 items-center justify-center rounded-full"
+        >
+          <Icon className="size-4" />
+        </span>
+        {label}
+      </dt>
+      <dd className="font-medium">{value}</dd>
     </div>
   );
 }
 
-function ProposalBody({ quote, muted }: { quote: PublicQuoteRecord; muted?: boolean }) {
+/** Detalle de la propuesta. Sin atenuar con opacidad en aceptada/expirada: el texto debe conservar contraste AA. */
+function ProposalBody({ quote }: { quote: PublicQuoteRecord }) {
   const startTime = displayStartTime(quote);
   const balance = quote.totalCents - quote.depositCents;
   const taxIncluded = isTaxIncluded(quote);
   return (
-    <div className={cn("space-y-8", muted && "opacity-80")}>
+    <div className="space-y-8">
       <dl className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
         <DetailTile icon={CalendarDays} label="Fecha" value={quote.eventDate ? capitalizeFirst(formatLongDate(quote.eventDate)) : "Por definir"} />
         <DetailTile icon={Clock} label="Hora de inicio" value={startTime ? `${startTime} h` : "Por definir"} />
@@ -175,17 +183,18 @@ function ProposalBody({ quote, muted }: { quote: PublicQuoteRecord; muted?: bool
                 <dd className="tabular">{formatMXN(quote.taxCents)}</dd>
               </div>
             ) : null}
-            <div className="bg-sand-soft/70 mt-3 space-y-2 rounded-2xl p-3">
-              <div className="flex justify-between gap-3">
-                <dt>
-                  Anticipo para apartar tu fecha <span className="text-muted-foreground">({formatBps(quote.depositBps, 0)})</span>
-                </dt>
-                <dd className="tabular font-semibold">{formatMXN(quote.depositCents)}</dd>
-              </div>
-              <div className="text-muted-foreground flex justify-between gap-3">
-                <dt>Saldo antes del evento</dt>
-                <dd className="tabular">{formatMXN(balance)}</dd>
-              </div>
+          </dl>
+          {/* Anticipo/saldo en su propio <dl>: un <div> dentro de <dl> sólo puede agrupar <dt>/<dd>. */}
+          <dl className="bg-sand-soft/70 mt-3 space-y-2 rounded-2xl p-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt>
+                Anticipo para apartar tu fecha <span className="text-muted-foreground">({formatBps(quote.depositBps, 0)})</span>
+              </dt>
+              <dd className="tabular font-semibold">{formatMXN(quote.depositCents)}</dd>
+            </div>
+            <div className="text-muted-foreground flex justify-between gap-3">
+              <dt>Saldo antes del evento</dt>
+              <dd className="tabular">{formatMXN(balance)}</dd>
             </div>
           </dl>
         </aside>
@@ -305,7 +314,7 @@ export default async function PublicQuotePage({ params }: Props) {
                 </Button>
               )}
             </section>
-            <ProposalBody quote={quote} muted />
+            <ProposalBody quote={quote} />
             <Policy policy={business.cancellationPolicy} notes={quote.notesForCustomer} />
           </div>
         </main>
@@ -349,7 +358,7 @@ export default async function PublicQuotePage({ params }: Props) {
             {expired ? (
               <>
                 <p className="text-muted-foreground text-center text-sm">Referencia de la propuesta anterior (precios sujetos a cambio):</p>
-                <ProposalBody quote={quote} muted />
+                <ProposalBody quote={quote} />
               </>
             ) : null}
           </div>

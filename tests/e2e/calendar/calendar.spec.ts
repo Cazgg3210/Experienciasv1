@@ -142,9 +142,9 @@ test.describe("Calendario", { tag: ["@module:calendar"] }, () => {
     expect(await db.availabilityRule.findMany({ orderBy: { weekday: "asc" } })).toEqual(before);
   });
 
-  test("[CAL-007] accesibilidad (WCAG 2.1 AA) del calendario", { tag: ["@P2", "@a11y"] }, async ({ rolePage, evidence }, testInfo) => {
+  test("[CAL-007] accesibilidad (WCAG 2.1 AA) del calendario", { tag: ["@P2", "@a11y", "@regression"] }, async ({ rolePage, evidence }, testInfo) => {
     evidence("owner", "axe en /admin/calendar");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-04" });
+    test.info().annotations.push({ type: "regression", description: "BUG-009" });
     const page = await rolePage("owner");
     await page.goto("/admin/calendar");
     await expect(page.getByRole("heading", { level: 1, name: "Calendario" })).toBeVisible();

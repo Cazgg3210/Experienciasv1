@@ -176,9 +176,9 @@ test.describe("Finanzas · rentabilidad y cierre", { tag: ["@module:finance"] },
     expect(await db.eventCost.count({ where: { eventId: ev.id } })).toBe(before);
   });
 
-  test("[FIN-007] el encabezado del evento (todas las pestañas) indica que el evento está cerrado", { tag: ["@P3"] }, async ({ rolePage, db, evidence }) => {
+  test("[FIN-007] el encabezado del evento (todas las pestañas) indica que el evento está cerrado", { tag: ["@P3", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "Evento cerrado → pestaña Resumen / Operaciones: encabezado");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-03" });
+    test.info().annotations.push({ type: "regression", description: "BUG-015" });
     const ev = await createEvent(db, { dateKey: dayKey(-6), status: "COMPLETED", title: uniq("Encabezado post-cierre E2E"), closedAt: new Date() });
     const page = await rolePage("owner");
     await page.goto(`/admin/events/${ev.id}/operations`);

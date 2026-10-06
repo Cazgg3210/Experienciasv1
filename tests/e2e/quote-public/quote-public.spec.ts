@@ -383,9 +383,10 @@ test.describe("Cotización por token", { tag: ["@module:quotes"] }, () => {
 
   test(
     "[QPUB-014] accesibilidad (axe WCAG 2.1 AA) de la propuesta y del diálogo de aceptar",
-    { tag: ["@P2", "@a11y"] },
+    { tag: ["@P2", "@a11y", "@regression"] },
     async ({ page, db }, testInfo) => {
       test.info().annotations.push({ type: "rol", description: "clienta" });
+      test.info().annotations.push({ type: "regression", description: "BUG-010" });
       const { quote } = await createSentQuote(db);
       await page.goto(`/cotizacion/${quote.publicToken}`);
       // Espera transiciones finitas (los spinners infinitos no cuentan) para que axe no mida colores a medias.
@@ -396,16 +397,15 @@ test.describe("Cotización por token", { tag: ["@module:quotes"] }, () => {
       await expect(page.getByRole("dialog", { name: "Aceptar propuesta" })).toBeVisible();
       await settle();
       const b = await scanA11y(page, testInfo, { include: '[role="dialog"]' });
-      if (a.blocking.length + b.blocking.length) test.info().annotations.push({ type: "bug", description: "SAL-BUG-06" });
       expect([...a.blocking, ...b.blocking].map((v) => `${v.id}: ${v.help} [${v.nodes.map((n) => n.html).join(" | ").slice(0, 200)}]`)).toEqual([]);
     },
   );
 
   test(
     "[QPUB-015] teclado: el diálogo de aceptar se abre con Enter, enfoca el nombre y al cerrarse devuelve el foco al botón",
-    { tag: ["@P3", "@a11y"] },
+    { tag: ["@P3", "@a11y", "@regression"] },
     async ({ page, db, evidence }) => {
-      test.info().annotations.push({ type: "bug", description: "SAL-BUG-05" });
+      test.info().annotations.push({ type: "regression", description: "BUG-012" });
       evidence("clienta", "Navegación con teclado del CTA principal");
       const { quote } = await createSentQuote(db);
       await page.goto(`/cotizacion/${quote.publicToken}`);

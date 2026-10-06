@@ -367,9 +367,9 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
   });
 
-  test("[GST-022] invitación sembrada de Camila (sólo lectura) y accesibilidad del micrositio", { tag: ["@P2", "@a11y"] }, async ({ anonPage, evidence }, testInfo) => {
+  test("[GST-022] invitación sembrada de Camila (sólo lectura) y accesibilidad del micrositio", { tag: ["@P2", "@a11y", "@regression"] }, async ({ anonPage, evidence }, testInfo) => {
     evidence("invitada", `/e/${TOKENS.micrositeSofia}/${TOKENS.guestCamila} + axe`);
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-05" });
+    test.info().annotations.push({ type: "regression", description: "BUG-010" });
     const page = await anonPage();
     const res = await page.goto(`/e/${TOKENS.micrositeSofia}/${TOKENS.guestCamila}`);
     expect(res?.status()).toBe(200);

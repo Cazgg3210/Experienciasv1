@@ -57,7 +57,7 @@ export default async function CatalogBudgetsPage() {
       {ranges.length ? (
         <ol className="divide-y rounded-2xl border bg-card shadow-xs">
           {ranges.map((r) => (
-            <li key={r.id} className={cn("flex flex-col gap-3 p-4 sm:flex-row sm:items-center", !r.active && "opacity-80")}>
+            <li key={r.id} className={cn("flex flex-col gap-3 p-4 sm:flex-row sm:items-center", !r.active && "bg-muted/50")}>
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-medium">{r.label}</h2>

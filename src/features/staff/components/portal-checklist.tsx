@@ -109,6 +109,21 @@ function PortalItem({ item, viewerIsBackoffice }: { item: StaffChecklistItem; vi
   const [notes, setNotes] = React.useState(item.notes ?? "");
   React.useEffect(() => setNotes(item.notes ?? ""), [item.notes]);
   const notesId = `notas-${item.id}`;
+  // «Agregar nota» se reemplaza por el campo al abrirse (no es un disclosure con aria-controls, porque
+  // el botón desaparece): el foco pasa al campo y, al cerrar, vuelve al botón.
+  const notesButtonRef = React.useRef<HTMLButtonElement>(null);
+  const notesTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const notesFocusTarget = React.useRef<"textarea" | "button" | null>(null);
+  React.useEffect(() => {
+    const target = notesFocusTarget.current;
+    notesFocusTarget.current = null;
+    if (target === "textarea") notesTextareaRef.current?.focus();
+    else if (target === "button") notesButtonRef.current?.focus();
+  }, [notesOpen]);
+  function toggleNotes(open: boolean) {
+    notesFocusTarget.current = open ? "textarea" : "button";
+    setNotesOpen(open);
+  }
 
   function update(patch: Omit<Parameters<typeof staffUpdateChecklistItemAction>[0], "id">, success: string) {
     startTransition(async () => {
@@ -233,6 +248,7 @@ function PortalItem({ item, viewerIsBackoffice }: { item: StaffChecklistItem; vi
                 Nota para coordinación
               </label>
               <Textarea
+                ref={notesTextareaRef}
                 id={notesId}
                 value={notes}
                 maxLength={2000}
@@ -247,18 +263,18 @@ function PortalItem({ item, viewerIsBackoffice }: { item: StaffChecklistItem; vi
                   disabled={pending || notes === (item.notes ?? "")}
                   onClick={() => {
                     update({ notes }, "Nota guardada");
-                    setNotesOpen(false);
+                    toggleNotes(false);
                   }}
                 >
                   Guardar nota
                 </Button>
-                <Button type="button" variant="ghost" className="h-10 rounded-full" onClick={() => setNotesOpen(false)}>
+                <Button type="button" variant="ghost" className="h-10 rounded-full" onClick={() => toggleNotes(false)}>
                   Cancelar
                 </Button>
               </div>
             </div>
           ) : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setNotesOpen(true)} aria-controls={notesId}>
+            <Button ref={notesButtonRef} type="button" variant="ghost" size="sm" onClick={() => toggleNotes(true)}>
               <StickyNote className="size-4" aria-hidden />
               {item.notes ? "Editar nota" : "Agregar nota"}
             </Button>
