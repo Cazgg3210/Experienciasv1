@@ -7,6 +7,7 @@ Resultados **reales** de la corrida final del carril 4 (commit `f26b1a1`, build 
 - Total del paquete: **119 ejecuciones · 110 PASS · 7 FAIL · 2 FLAKY · 0 BLOCKED · 0 NOT TESTED** (113 escenarios únicos; 6 se repiten en 390×844).
 - EVX-BUG-02 es intermitente: en esta corrida hizo FLAKY a GST-011 (escritorio y móvil) y FAIL a CAL-002; EVT-038, GST-012 y GST-015 pasaron aquí pero fallaron en las corridas previas del carril (06:55–07:59 UTC, mismas pruebas, mismo build; ver `events.md`).
 - `FAIL (EVX-BUG-xx)` remite a `docs/qa/findings/events.md`. `FLAKY` = falló y pasó al reintentar (POTENTIAL FLAKY TEST, atribuido a EVX-BUG-02, intermitente por naturaleza).
+- Actualización tras corregir BUG-003 (EVX-BUG-03, commit `e8165ae`, carril 4): GST-014 → PASS (`@regression`); nuevas GST-023 (PASS) y GST-024 (PASS, suite `ratelimit`). Los totales de arriba son los de la corrida original.
 
 | ID | Módulo | Escenario | Rol | Priority | Automated | Result |
 |---|---|---|---|---|---|---|
@@ -76,7 +77,7 @@ Resultados **reales** de la corrida final del carril 4 (commit `f26b1a1`, build 
 | GST-012 | Invitadas/RSVP | declinar y luego cambiar la respuesta con «Editar mi respuesta» | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS (en esta corrida; EVX-BUG-02 es intermitente y la hizo fallar en corridas previas) |
 | GST-012 | Invitadas/RSVP | declinar y luego cambiar la respuesta con «Editar mi respuesta» · móvil 390×844 | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS (en esta corrida; EVX-BUG-02 es intermitente y la hizo fallar en corridas previas) |
 | GST-013 | Invitadas/RSVP | con el link general una invitada nueva se registra sola y recibe su link personal | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS |
-| GST-014 | Invitadas/RSVP | con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal | Invitada (token) | P0 | ✅ tests/e2e/guests/rsvp.spec.ts | FAIL (EVX-BUG-03) |
+| GST-014 | Invitadas/RSVP | con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal | Invitada (token) | P0 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS — @regression BUG-003 (EVX-BUG-03 corregido; 3/3 sin reintentos) |
 | GST-015 | Invitadas/RSVP | mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS (en esta corrida; EVX-BUG-02 es intermitente y la hizo fallar en corridas previas) |
 | GST-016 | Invitadas/RSVP | archivo .ics: con dirección sólo para quien confirmó; 404 para cancelado o token inválido | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS |
 | GST-017 | Invitadas/RSVP | tokens del micrositio: otro evento, slug equivocado, micrositio apagado o token inexistente → 404 | Anónimo | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS |
@@ -85,6 +86,8 @@ Resultados **reales** de la corrida final del carril 4 (commit `f26b1a1`, build 
 | GST-020 | Invitadas/RSVP | RSVP cerrado en eventos completados y cancelados (UI y backend) | Invitada (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS |
 | GST-021 | Invitadas/RSVP | el link general no admite más de 60 invitadas | Invitada (token) | P2 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS |
 | GST-022 | Invitadas/RSVP | invitación sembrada de Camila (sólo lectura) y accesibilidad del micrositio | Invitada (token) | P2 | ✅ tests/e2e/guests/rsvp.spec.ts | FAIL (EVX-BUG-05) |
+| GST-023 | Invitadas/RSVP | posible duplicado del link general (nombre o email de otra invitada): se marca para la anfitriona y el equipo sin tocar ni revelar a la original | Invitada (token) / Owner / Clienta (token) | P1 | ✅ tests/e2e/guests/rsvp.spec.ts | PASS — @regression BUG-003 (3/3 sin reintentos) |
+| GST-024 | Invitadas/RSVP | link general: 10 respuestas por IP en 10 min; la 11ª responde RATE_LIMITED y no crea invitada | Invitada (token) | P2 | ✅ tests/e2e/guests/rsvp.ratelimit.spec.ts (`E2E_SUITE=ratelimit`) | PASS |
 | MEM-001 | Memory Capsule | crear la cápsula de un evento la deja en preparación (enlace con aviso, sin fotos) | Owner | P1 | ✅ tests/e2e/memory/memory-admin.spec.ts | PASS |
 | MEM-002 | Memory Capsule | publicar la cápsula desde Ajustes la abre al público con su título y mensaje | Owner | P1 | ✅ tests/e2e/memory/memory-admin.spec.ts | PASS |
 | MEM-003 | Memory Capsule | cápsula duplicada, título corto o cápsula inexistente se rechazan en el backend | Owner | P2 | ✅ tests/e2e/memory/memory-admin.spec.ts | PASS |

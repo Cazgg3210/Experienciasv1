@@ -139,7 +139,7 @@ Interacción del router de Next 15.5 (navegación same-route / refresh) con resp
 
 **Severity:** CRITICAL (regla del gate: problema de seguridad que expone/corrompe datos de terceros)
 **Priority:** P0
-**Status:** Open
+**Status:** Fixed — Verified (consolidado como **BUG-003**; ver «Resolution» al final de esta sección)
 **Type:** POTENTIAL SECURITY ISSUE (integridad de datos de terceros + exposición de datos personales)
 **Module:** guests (RSVP público)
 **Role:** Invitada anónima con el link general (`Event.inviteToken`)
@@ -179,6 +179,22 @@ Diseño de «re-identificación por nombre» sin factor de posesión.
 
 ### Recommended Fix
 Con el link general: si hay coincidencia por nombre con una invitada que ya respondió o que tiene email/teléfono, **no** actualizarla ni devolver su token; crear una nueva invitada `SELF_RSVP` marcada como posible duplicado (o pedir el email registrado / enviar el link personal por correo/WhatsApp a la invitada). Sólo empatar por nombre invitadas `PENDING` sin contacto, y nunca exponer el token de otra.
+
+### Resolution (BUG-003)
+
+**Fixed** en la rama del carril 4 (commit `e8165ae`, sobre `8020b91`).
+
+- **Diseño**: el link general **nunca** re-identifica (ni por nombre ni por email; tampoco a invitadas `PENDING` sin contacto, porque eso también permitiría responder por otra y quedarse con su link). Cada respuesta con el link general crea una invitada nueva `SELF_RSVP` con token propio y sólo recibe **su** link personal. El token personal sigue actualizando únicamente a su invitada; la anfitriona (portal) y el admin no cambian.
+- **Posible duplicado**: si el nombre normalizado o el email coinciden con alguien registrado antes, la respuesta es idéntica para quien responde (sin enumerar la lista), y el registro nuevo aparece como «Posible duplicado» en el admin (aviso + insignia) y en el portal de la anfitriona («Si es la misma persona, escríbenos y dejamos un solo registro»). Queda auditoría `guest.possible_duplicate` (ids coincidentes + IP) y `possibleDuplicate` en analytics. La marca es derivada (`possibleDuplicateIds`), sin cambios de esquema.
+- **Amable**: el micrositio con link general pide a quien ya tiene link personal que responda desde ahí.
+- **Cupo y rate limit**: el cupo de 60 se aplica ahora a toda respuesta con el link general, dentro del `pg_advisory_xact_lock` del evento ([GST-021] PASS). El rate limit de `submitRsvpAction` (10 / 10 min por IP) se mantiene y quedó cubierto por [GST-024] (`tests/e2e/guests/rsvp.ratelimit.spec.ts`, suite `E2E_SUITE=ratelimit`): 10 respuestas OK, la 11ª `RATE_LIMITED` y sin invitada nueva. Observación (decisión de producto, no se cambió): las invitadas `SELF_RSVP` sólo las puede quitar el equipo; con CGNAT varias invitadas pueden compartir IP y la cubeta.
+- **Código**: `src/features/guests/domain/rsvp.ts` (`findPossibleDuplicates`, `possibleDuplicateIds`; se elimina `findMatchingGuest`), `src/features/guests/server/rsvp-service.ts`, `src/features/guests/server/actions.ts` (pasa la IP), `src/features/events/server/guest-admin-service.ts` + `components/guests-table.tsx` + página de invitadas, `src/features/portal/server/portal-service.ts` + `components/guest-list.tsx` / `portal-dashboard.tsx`, `src/features/guests/components/microsite-view.tsx`, etiqueta en `src/features/audit/domain/filters.ts`. `rsvp-panel.tsx` no se tocó.
+- **Pruebas**: unitarias nuevas en `rsvp.test.ts`; integración `tests/integration/portal-rsvp.test.ts` actualizada (las 3 pruebas que exigían la re-identificación ahora exigen lo contrario: la original queda intacta, se crea otra, auditoría y marca en el portal); [GST-014] pasa a `@regression` (anotación `regression: BUG-003`) con asserts adicionales (datos de la original intactos, una sola invitada nueva, aterriza en su propio link); nueva [GST-023] (nombre y email de otra invitada vía backend → original intacta, token no revelado, marca en admin y portal, aviso en el link general).
+
+**Verificación (TEST — build de producción :3204, base ivonne_rosa_e2e_l4):**
+- Antes de corregir: [GST-014] FAIL 3/3 (`--repeat-each=3 --retries=0`): RSVP original → `NOT_ATTENDING` y URL final = link personal de la víctima. Evidencia: `test-results/l4-evidence/BUG-003/before-fix/`.
+- Después: [GST-014] 3/3 PASS y [GST-023] 3/3 PASS (`--repeat-each=3 --retries=0`, `test-results/l4-evidence/BUG-003/after-fix/`); [GST-024] PASS (limitador encendido); `pnpm test` 740/740; `pnpm test:integration` 298/300 (portal-rsvp 21/21; las 2 fallas — `devops.test.ts` «salida standalone» y `memory-capsule.test.ts` CSRF del upload — fallan igual en la base `8020b91` y no tocan este módulo); typecheck y lint limpios.
+- Regresión `tests/e2e/guests`, `tests/e2e/portal`, `tests/e2e/critical/experience.spec.ts`, `tests/e2e/permissions/public-actions-idor.spec.ts`: todo PASS salvo fallas preexistentes ajenas a este cambio — confirmación visible tras guardar con el link personal ([GST-011]/[GST-012]/[GST-015]/[CRIT-004], EVX-BUG-02 → BUG-006; los datos sí se guardan) y `<dl>` del micrositio ([GST-022], EVX-BUG-05 → BUG-010). [PORT-020] (contraste en el portal sembrado) es intermitente también en la base `8020b91` (4/5 FAIL con `--repeat-each=5 --retries=0`; en esta rama 3/5), nodos `bg-warning/10`, `bg-info/10`, `text-ivory/80` (EVX-BUG-04 → BUG-009): no depende de este cambio.
 
 ---
 
