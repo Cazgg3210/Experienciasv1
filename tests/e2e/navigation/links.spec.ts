@@ -127,7 +127,8 @@ test.describe("Enlaces internos sin 404/500", { tag: ["@module:navigation"] }, (
     expect(await check(await apiAs(null), links)).toEqual([]);
   });
 
-  test("[NAV-015] enlaces de acción del buzón (NotificationLog.actionUrl) apuntan a rutas existentes", { tag: ["@P3"] }, async ({ apiAs, db, evidence }) => {
+  test("[NAV-015] enlaces de acción del buzón (NotificationLog.actionUrl) apuntan a rutas existentes", { tag: ["@P3", "@regression"] }, async ({ apiAs, db, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-016" });
     evidence("owner", "actionUrl de notificaciones del seed y generadas por la app");
     const rows = await db.notificationLog.findMany({ where: { actionUrl: { not: null } }, select: { type: true, actionUrl: true } });
     const byPattern = new Map<string, { type: string; path: string }>();
@@ -145,7 +146,6 @@ test.describe("Enlaces internos sin 404/500", { tag: ["@module:navigation"] }, (
       if (res.status() >= 400 || SOFT_404.test(body)) broken.push(`${type} → ${res.status()} ${path}`);
     }
     test.info().annotations.push({ type: "observado", description: `${byPattern.size} patrones de actionUrl revisados` });
-    if (broken.length) test.info().annotations.push({ type: "bug", description: "ACC-BUG-05" });
     expect(broken).toEqual([]);
   });
 });

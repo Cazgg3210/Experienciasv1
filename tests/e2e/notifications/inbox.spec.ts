@@ -56,9 +56,9 @@ test.describe("Notificaciones · bandeja", { tag: ["@module:notifications"] }, (
     await expect(page.getByText("Ningún mensaje coincide")).toBeVisible();
   });
 
-  test("[NOT-007] los avisos STAFF_ASSIGNED de la bandeja enlazan a una ruta real del portal (/staff/events/<id>)", { tag: ["@P3"] }, async ({ rolePage, db, evidence, guard }) => {
+  test("[NOT-007] los avisos STAFF_ASSIGNED de la bandeja enlazan a una ruta real del portal (/staff/events/<id>)", { tag: ["@P3", "@regression"] }, async ({ rolePage, db, evidence, guard }) => {
     evidence("staff", "Cada STAFF_ASSIGNED de la base → su actionUrl abierto por la persona asignada (Lupita)");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-04 (DATA ISSUE del seed DEMO)" });
+    test.info().annotations.push({ type: "regression", description: "BUG-016" }); // DATA ISSUE del seed DEMO
     guard.allow(/404/); // enlaces rotos esperados si el defecto existe: se reportan abajo
     // Sólo los avisos dirigidos a Lupita (correo o WhatsApp): así su sesión puede abrir cada enlace.
     const lupitaRows = await db.notificationLog.findMany({
