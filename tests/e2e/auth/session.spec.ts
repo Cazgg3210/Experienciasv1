@@ -1,0 +1,308 @@
+/**
+ * Autenticación — logout, sesión en varias pestañas y sesión invalidada en servidor.
+ * La sesión es JWT (12 h); getCurrentUser() revalida `active` y `role` contra la base en cada request
+ * (src/server/auth/session.ts). El middleware sólo mira el rol del JWT (src/middleware.ts).
+ */
+import { expect, test } from "../fixtures";
+import {
+  SESSION_COOKIE,
+  buildAction,
+  createTeamUser,
+  loginViaUi,
+  probe,
+  sessionCookie,
+  type TeamUser,
+} from "../permissions/_helpers";
+import { replayServerAction, wasAccepted, wasDenied } from "../fixtures";
+import type { Browser, BrowserContext } from "@playwright/test";
+
+async function loggedInContext(browser: Browser, user: TeamUser, home: string): Promise<BrowserContext> {
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const page = await ctx.newPage();
+  await loginViaUi(page, user.email, user.password);
+  await page.waitForURL((u) => u.pathname === home, { timeout: 30_000 });
+  return ctx;
+}
+
+test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
+  test("[AUTH-020] logout desde el panel elimina la cookie y vuelve a /login", { tag: ["@P0", "@critical"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", `cuenta propia ${user.email}: login → Cerrar sesión`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    await page.goto("/admin/leads");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    expect(await sessionCookie(page)).toBeTruthy();
+
+    // Sin requests en vuelo (la carrera con requests en vuelo se prueba aparte en AUTH-032).
+
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    await page.waitForURL(/\/login/);
+    expect(await sessionCookie(page), "cookie de sesión eliminada").toBeUndefined();
+
+    // URL privada directa tras logout → login con callbackUrl
+    await page.goto("/admin/leads");
+    await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fadmin%2Fleads/);
+    await expect(page.getByRole("heading", { name: "Bienvenida de vuelta" })).toBeVisible();
+    await ctx.close();
+  });
+
+  test("[AUTH-021] tras logout, 'Atrás' no muestra datos privados del panel", { tag: ["@P1"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", "login → /admin/customers → logout → back");
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    await page.goto("/admin/customers");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // Sin requests en vuelo (la carrera con requests en vuelo se prueba aparte en AUTH-032).
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    await page.waitForURL(/\/login/);
+    await page.goBack();
+    // El panel es force-dynamic + no-store: volver atrás re-solicita y el middleware redirige a login.
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toHaveCount(0);
+    await ctx.close();
+  });
+
+  test("[AUTH-022] respuestas del panel autenticado no se cachean (Cache-Control no-store)", { tag: ["@P2"] }, async ({ apiAs, evidence }) => {
+    evidence("owner", "GET /admin y /staff con sesión");
+    const owner = await apiAs("owner");
+    for (const path of ["/admin", "/admin/leads", "/staff"]) {
+      const res = await probe(owner, path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers["cache-control"], path).toMatch(/no-store/);
+      expect(res.headers["x-robots-tag"], path).toContain("noindex");
+    }
+  });
+
+  test("[AUTH-023] sin cookies (request directo / apiAs anónimo) las páginas privadas redirigen a login", { tag: ["@P0", "@critical"] }, async ({ apiAs, evidence }) => {
+    evidence("anonimo", "GET sin seguir redirects");
+    const anon = await apiAs(null);
+    for (const path of ["/admin", "/admin/settings/users", "/admin/finance", "/staff", "/staff/events/abc"]) {
+      const res = await probe(anon, path);
+      expect(res.status, path).toBe(307);
+      expect(res.location, path).toBe(`/login?callbackUrl=${encodeURIComponent(path)}`);
+    }
+  });
+
+  test("[AUTH-024] cookie de sesión manipulada o falsificada no autoriza", { tag: ["@P0", "@negative"] }, async ({ playwright, baseURL, apiAs, evidence }) => {
+    evidence("anonimo", "JWT alterado / inventado");
+    const owner = await apiAs("owner");
+    const state = await owner.storageState();
+    const real = state.cookies.find((c) => c.name === SESSION_COOKIE)!;
+    const tampered = real.value.slice(0, -6) + (real.value.endsWith("AAAAAA") ? "BBBBBB" : "AAAAAA");
+    for (const value of [tampered, "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiU1VQRVJfQURNSU4ifQ.", "x"]) {
+      const ctx = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${value}` } });
+      const res = await probe(ctx, "/admin");
+      expect(res.status).toBe(307);
+      expect(res.location).toContain("/login");
+      await ctx.dispose();
+    }
+  });
+
+  test("[AUTH-025] logout invalida la sesión en el servidor (la cookie anterior deja de servir)", { tag: ["@P1", "@negative"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", "copia la cookie antes del logout y la reutiliza después (ASVS 3.3.1)");
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const stolen = await sessionCookie(page);
+    expect(stolen).toBeTruthy();
+    // Sin requests en vuelo (la carrera con requests en vuelo se prueba aparte en AUTH-032).
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    await page.waitForURL(/\/login/);
+    expect(await sessionCookie(page)).toBeUndefined();
+
+    const replay = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${stolen}` } });
+    const res = await probe(replay, "/admin/customers");
+    test.info().annotations.push({ type: "observado", description: `GET /admin/customers con cookie previa al logout → ${res.status} ${res.location ?? ""}` });
+    test.info().annotations.push({ type: "bug", description: "ACC-BUG-02" });
+    expect(res.status, "la cookie emitida antes del logout no debe seguir autorizando").toBe(307);
+    expect(res.location).toContain("/login");
+    await replay.dispose();
+    await ctx.close();
+  });
+
+  test("[AUTH-026] dos pestañas: logout en una ⇒ la otra pierde acceso en el siguiente request", { tag: ["@P1"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", "misma sesión en 2 pestañas del mismo navegador");
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const tab1 = ctx.pages()[0]!;
+    const tab2 = await ctx.newPage();
+    guard.watch(tab1);
+    guard.watch(tab2);
+    await tab2.goto("/admin/events");
+    await expect(tab2.getByRole("heading", { level: 1 })).toBeVisible();
+    // Sin requests en vuelo (la carrera con requests en vuelo se prueba aparte en AUTH-032).
+    await tab1.waitForLoadState("networkidle");
+    await tab2.waitForLoadState("networkidle");
+    await tab1.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    await tab1.waitForURL(/\/login/);
+    // Pestaña 2: navegar a otra sección del panel (siguiente request) → login
+    await tab2.getByRole("complementary").getByRole("link", { name: "Leads" }).click();
+    await tab2.waitForURL(/\/login/);
+    await expect(tab2.getByRole("heading", { name: "Bienvenida de vuelta" })).toBeVisible();
+    await ctx.close();
+  });
+
+  test("[AUTH-027] desactivar a una usuaria con sesión abierta corta su acceso en el siguiente request (páginas y acciones)", { tag: ["@P0", "@critical"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", `sesión de ${user.email}; se desactiva en la base mientras navega`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    await page.goto("/admin/leads");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    await db.user.update({ where: { id: user.id }, data: { active: false } });
+    await page.goto("/admin/customers");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toHaveCount(0);
+
+    // Backend: una Server Action con esa cookie es rechazada (UNAUTHORIZED) y no escribe.
+    const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${cookie}` } });
+    const before = await db.notificationLog.count({ where: { readAt: null } });
+    const res = await replayServerAction(api, buildAction("markAllNotificationsReadAction", "/admin/notifications", undefined));
+    expect(wasDenied(res), `${res.outcome} ${res.status} ${res.text.slice(0, 200)}`).toBe(true);
+    expect(await db.notificationLog.count({ where: { readAt: null } })).toBe(before);
+    await api.dispose();
+    await ctx.close();
+  });
+
+  test("[AUTH-028] bajar de OWNER a STAFF con sesión abierta: el siguiente request ya no autoriza el panel ni sus acciones", { tag: ["@P0", "@critical"] }, async ({ browser, db, playwright, baseURL, apiAs, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER", withStaffMember: true });
+    evidence("owner", `sesión de ${user.email} (OWNER) → rol STAFF en la base`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    await db.user.update({ where: { id: user.id }, data: { role: "STAFF" } });
+
+    await page.goto("/admin/settings/users");
+    await expect(page).toHaveURL(/\/staff$/);
+    await expect(page.getByRole("navigation", { name: "Staff" })).toBeVisible();
+
+    // Acción de administración con la cookie (JWT aún dice OWNER) → FORBIDDEN por el rol real en base
+    const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${cookie}` } });
+    const victim = await createTeamUser(db, { role: "STAFF" });
+    const res = await replayServerAction(api, buildAction("setUserActiveAction", "/admin/settings/users", { userId: victim.id, active: false }));
+    expect(wasDenied(res), `${res.outcome} ${res.status} ${res.text.slice(0, 200)}`).toBe(true);
+    expect((await db.user.findUniqueOrThrow({ where: { id: victim.id } })).active).toBe(true);
+
+    // Control positivo: el mismo request con una OWNER real sí se ejecuta
+    const ownerApi = await apiAs("owner");
+    const ok = await replayServerAction(ownerApi, buildAction("setUserActiveAction", "/admin/settings/users", { userId: victim.id, active: false }));
+    expect(wasAccepted(ok), `${ok.outcome} ${ok.text.slice(0, 200)}`).toBe(true);
+    await expect.poll(async () => (await db.user.findUniqueOrThrow({ where: { id: victim.id } })).active).toBe(false);
+    await api.dispose();
+    await ctx.close();
+  });
+
+  test("[AUTH-029] subir de STAFF a OWNER aplica en el siguiente request (sin re-login)", { tag: ["@P2"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "STAFF" });
+    evidence("staff", `${user.email} promovida a OWNER con sesión abierta`);
+    const ctx = await loggedInContext(browser, user, "/staff");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    await db.user.update({ where: { id: user.id }, data: { role: "OWNER" } });
+    // El middleware usa el rol del JWT (STAFF) → /admin sigue redirigiendo a /staff hasta re-login.
+    await page.goto("/admin");
+    const landed = new URL(page.url()).pathname;
+    test.info().annotations.push({ type: "observado", description: `STAFF→OWNER con sesión abierta: /admin aterriza en ${landed}` });
+    expect(["/admin", "/staff"]).toContain(landed);
+    // Tras re-login obtiene el panel completo
+    await page.context().clearCookies();
+    await loginViaUi(page, user.email, user.password);
+    await page.waitForURL((u) => u.pathname === "/admin");
+    await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toBeVisible();
+    await ctx.close();
+  });
+
+  test("[AUTH-030] logout desde el portal staff", { tag: ["@P1"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "STAFF" });
+    evidence("staff", `cuenta propia ${user.email}`);
+    const ctx = await loggedInContext(browser, user, "/staff");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    // Sin requests en vuelo (la carrera con requests en vuelo se prueba aparte en AUTH-032).
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("banner").getByRole("button", { name: "Cerrar sesión" }).click();
+    await page.waitForURL(/\/login/);
+    expect(await sessionCookie(page)).toBeUndefined();
+    await page.goto("/staff");
+    await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fstaff/);
+    await ctx.close();
+  });
+
+  test("[AUTH-032] logout con otra pestaña del panel cargando: la sesión NO debe revivir", { tag: ["@P0", "@critical", "@negative"] }, async ({ browser, db, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence(
+      "owner",
+      "Pestaña 2 del panel con requests en curso (navegación/prefetch/polling) mientras en la pestaña 1 se pulsa 'Cerrar sesión'",
+    );
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const tab1 = ctx.pages()[0]!;
+    const tab2 = await ctx.newPage();
+    guard.watch(tab1);
+    guard.watch(tab2);
+    await tab2.goto("/admin/leads");
+    await tab1.waitForLoadState("networkidle");
+    await tab2.waitForLoadState("networkidle");
+
+    // Pestaña 2: requests RSC consecutivos del panel durante ~4 s (lo que hace el router al navegar/prefetch).
+    // Cada request sale con la cookie vigente en ese instante; el que esté en vuelo durante el signout responde después.
+    const traffic = tab2.evaluate(async () => {
+      const out: Array<{ status: number; t: number }> = [];
+      const until = Date.now() + 4000;
+      while (Date.now() < until) {
+        const r = await fetch("/admin/customers", { headers: { RSC: "1" }, redirect: "manual", cache: "no-store" });
+        out.push({ status: r.status, t: Date.now() });
+      }
+      return out;
+    });
+    const signout = tab1.waitForResponse((r) => r.url().includes("/api/auth/signout") && r.request().method() === "POST");
+    const _navigated = tab1.waitForEvent("load"); // el signOut navega a /login (o rebota a /admin si la sesión revivió)
+    await tab1.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    const signoutRes = await signout;
+    expect(
+      (await signoutRes.headersArray()).some((h) => h.name.toLowerCase() === "set-cookie" && /session-token=;/.test(h.value)),
+      "el signout ordena borrar la cookie",
+    ).toBe(true);
+    await tab1.waitForURL(/\/(login|admin)/);
+    const log = await traffic;
+    test.info().annotations.push({
+      type: "observado",
+      description: `pestaña 2: ${log.length} requests; estados tras el logout: ${[...new Set(log.slice(-5).map((l) => l.status))].join(",")}`,
+    });
+
+    // Esperado: sesión cerrada en todo el navegador.
+    test.info().annotations.push({ type: "bug", description: "ACC-BUG-01" });
+    const after = await sessionCookie(tab1);
+    test.info().annotations.push({ type: "observado", description: `cookie de sesión tras logout: ${after ? "PRESENTE (sesión revivida)" : "ausente"}` });
+    await tab1.goto("/admin/customers");
+    await expect(tab1, "tras 'Cerrar sesión' el panel no debe seguir accesible").toHaveURL(/\/login/);
+    expect(after, "la cookie de sesión no debe reaparecer").toBeUndefined();
+    await ctx.close();
+  });
+
+  test("[AUTH-031] /sin-acceso: página 403 clara, noindex y con salidas", { tag: ["@P3"] }, async ({ anonPage, evidence }) => {
+    evidence("anonimo");
+    const page = await anonPage();
+    const res = await page.goto("/sin-acceso");
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: "No tienes acceso a esta sección" })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+    await page.getByRole("link", { name: "Cambiar de cuenta" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goBack();
+    await page.getByRole("link", { name: "Ir al sitio" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+});

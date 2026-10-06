@@ -111,7 +111,13 @@ const installed = existsSync(browsersDir) ? readdirSync(browsersDir) : [];
 const has = (b) => installed.some((d) => d.startsWith(`${b}-`));
 (has("chromium") ? ok : blockers).push(has("chromium") ? "Chromium instalado" : "Chromium no instalado: pnpm exec playwright install chromium");
 for (const b of ["firefox", "webkit"]) {
-  if (has(b)) ok.push(`${b} instalado`);
+  if (b === "firefox" && env.E2E_FIREFOX_EXECUTABLE) {
+    (existsSync(env.E2E_FIREFOX_EXECUTABLE) ? ok : crossBrowser ? blockers : warnings).push(
+      existsSync(env.E2E_FIREFOX_EXECUTABLE)
+        ? `firefox alterno: ${env.E2E_FIREFOX_EXECUTABLE}`
+        : `E2E_FIREFOX_EXECUTABLE no existe: ${env.E2E_FIREFOX_EXECUTABLE}`,
+    );
+  } else if (has(b)) ok.push(`${b} instalado`);
   else (crossBrowser ? blockers : warnings).push(`${b} no instalado (cross-browser P0): pnpm exec playwright install ${b}`);
 }
 

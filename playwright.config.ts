@@ -21,6 +21,7 @@ config({ path: ".env" });
  *   E2E_LANE=N         carril aislado (1-9) para correr varias suites en paralelo sin pisarse:
  *                      puerto 3200+N, base <E2E_DATABASE_URL>_l<N>, sesiones .auth/l<N>/, resultados test-results/l<N>/.
  *                      Todos los carriles comparten el mismo build .next-e2e (sin código de app cambiando entre corridas).
+ *   E2E_FIREFOX_EXECUTABLE  ruta a un Firefox de Playwright alterno (p. ej. si no arranca desde %LOCALAPPDATA%)
  *   E2E_SUITE          suites especiales que NO corren junto con el resto (se ejecutan en una invocación aparte, 1 worker):
  *                        global    → *.global.spec.ts (cambian ajustes/flags/reglas globales; restauran al terminar)
  *                        ratelimit → *.ratelimit.spec.ts (servidor CON rate limit; carril 9 por defecto)
@@ -70,7 +71,16 @@ function regularProjects() {
     },
     ...(crossBrowser
       ? [
-          { name: "firefox", dependencies: ["setup"], testIgnore, grep: /@P0/, use: desktop("Desktop Firefox") },
+          {
+            name: "firefox",
+            dependencies: ["setup"],
+            testIgnore,
+            grep: /@P0/,
+            use: {
+              ...desktop("Desktop Firefox"),
+              ...(process.env.E2E_FIREFOX_EXECUTABLE ? { launchOptions: { executablePath: process.env.E2E_FIREFOX_EXECUTABLE } } : {}),
+            },
+          },
           { name: "webkit", dependencies: ["setup"], testIgnore, grep: /@P0/, use: desktop("Desktop Safari") },
         ]
       : []),

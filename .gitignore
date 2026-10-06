@@ -55,3 +55,6 @@ coverage/
 
 # E2E: sesiones guardadas por rol (contienen cookies de sesión)
 tests/e2e/.auth/
+
+# Worktrees de agentes (Claude Code)
+.claude/worktrees/

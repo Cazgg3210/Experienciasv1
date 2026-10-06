@@ -40,7 +40,7 @@ export async function captureServerAction(page: Page, trigger: () => Promise<unk
   };
 }
 
-export type ReplayOutcome = "accepted" | "denied" | "not-executed" | "server-error" | "unknown";
+export type ReplayOutcome = "accepted" | "denied" | "not-found" | "not-executed" | "server-error" | "unknown";
 
 export type ReplayResult = {
   status: number;
@@ -54,7 +54,9 @@ function classify(status: number, text: string, redirectedTo: string | null, hea
   if (redirectedTo !== null) return "denied"; // middleware / guard: login, sin-acceso, staff
   if ([401, 403].includes(status)) return "denied";
   if (/"ok":true/.test(text)) return "accepted";
-  if (/"ok":false/.test(text) && /(FORBIDDEN|UNAUTHORIZED|NOT_FOUND)/.test(text)) return "denied";
+  if (/"ok":false/.test(text) && /(FORBIDDEN|UNAUTHORIZED)/.test(text)) return "denied";
+  // Recurso ajeno o inexistente: la respuesta segura ante IDOR/tokens (no revela si existe). Distinto de "denied".
+  if (/"ok":false/.test(text) && /NOT_FOUND/.test(text)) return "not-found";
   if (status === 404 || headers["x-nextjs-action-not-found"] || text.trim() === "{}" || text.trim() === "")
     return "not-executed";
   return "unknown";
@@ -89,12 +91,18 @@ export async function replayServerAction(
  * ¿El servidor impidió el efecto? "denied" o "not-executed" impiden el efecto, pero sólo "denied"
  * demuestra que hubo una barrera de autorización. SIEMPRE combinar con una verificación en la base.
  */
+/** Rechazado por la barrera de acceso: sin sesión/permiso (denied) o recurso ajeno/inexistente (not-found, respuesta genérica). */
 export function wasDenied(r: ReplayResult): boolean {
+  return r.outcome === "denied" || r.outcome === "not-found";
+}
+
+/** Estrictamente un rechazo por permisos (401/403/redirect/FORBIDDEN/UNAUTHORIZED). */
+export function wasForbidden(r: ReplayResult): boolean {
   return r.outcome === "denied";
 }
 
 export function wasBlocked(r: ReplayResult): boolean {
-  return r.outcome === "denied" || r.outcome === "not-executed";
+  return wasDenied(r) || r.outcome === "not-executed";
 }
 
 export function wasAccepted(r: ReplayResult): boolean {

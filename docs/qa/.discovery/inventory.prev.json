@@ -1,0 +1,2414 @@
+{
+  "generatedAt": "2026-10-06T06:30:42.265Z",
+  "stack": {
+    "next": "15.5.27",
+    "react": "19.1.0",
+    "prisma": "6.19.3",
+    "nextAuth": "5.0.0-beta.32",
+    "playwright": "^1.63.0",
+    "axe": "^4.13.0",
+    "packageManager": "pnpm@9.15.9"
+  },
+  "counts": {
+    "pages": 83,
+    "pagesByGroup": {
+      "admin": 61,
+      "auth": 1,
+      "experience": 8,
+      "public": 10,
+      "staff": 2,
+      "root": 1
+    },
+    "apiRoutes": 13,
+    "serverActions": 169,
+    "protectedActions": 148,
+    "publicActions": 21,
+    "rawServerFunctions": 1,
+    "models": 50,
+    "enums": 43,
+    "unitTestFiles": 65,
+    "integrationTestFiles": 15,
+    "e2eSpecFiles": 1
+  },
+  "roles": {
+    "roles": [
+      "SUPER_ADMIN",
+      "OWNER",
+      "STAFF",
+      "CUSTOMER"
+    ],
+    "permissions": [
+      "dashboard:view",
+      "leads:read",
+      "leads:write",
+      "customers:read",
+      "customers:write",
+      "catalog:read",
+      "catalog:write",
+      "pricing:write",
+      "quotes:read",
+      "quotes:write",
+      "quotes:discount",
+      "quotes:send",
+      "bookings:read",
+      "payments:read",
+      "payments:manual",
+      "events:read_all",
+      "events:read_assigned",
+      "events:write",
+      "events:cancel",
+      "events:close",
+      "guests:read",
+      "guests:write",
+      "availability:write",
+      "operations:read",
+      "checklists:write",
+      "checklists:update_assigned",
+      "inventory:read",
+      "inventory:write",
+      "vendors:read",
+      "vendors:write",
+      "purchases:read",
+      "purchases:write",
+      "staff:read",
+      "staff:write",
+      "financials:read",
+      "costs:write",
+      "media:upload",
+      "media:moderate",
+      "memory:write",
+      "content:write",
+      "analytics:read",
+      "notifications:read",
+      "settings:read",
+      "settings:write",
+      "users:manage",
+      "roles:assign_super_admin",
+      "audit:read",
+      "ai:use"
+    ],
+    "staffPermissions": [
+      "events:read_assigned",
+      "checklists:update_assigned",
+      "media:upload",
+      "inventory:read"
+    ],
+    "ownerExcludes": "roles:assign_super_admin"
+  },
+  "pages": [
+    {
+      "route": "/admin/analytics",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/analytics/page.tsx",
+      "dynamic": false,
+      "permission": "analytics:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/calendar",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/calendar/page.tsx",
+      "dynamic": false,
+      "permission": "events:read_all",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/addons/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/addons/new/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/addons",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/addons/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/addons/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/addons/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/areas",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/areas/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/budgets",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/budgets/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/experiences/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/experiences/new/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/experiences/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/experiences/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/menus/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/menus/new/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/menus",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/menus/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/menus/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/menus/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/catalog/styles",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/catalog/styles/page.tsx",
+      "dynamic": false,
+      "permission": "catalog:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/content/faq",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/content/faq/page.tsx",
+      "dynamic": false,
+      "permission": "content:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/content/gallery",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/content/gallery/page.tsx",
+      "dynamic": false,
+      "permission": "content:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/content",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/content/page.tsx",
+      "dynamic": false,
+      "permission": "content:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/customers",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/customers/page.tsx",
+      "dynamic": false,
+      "permission": "customers:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/customers/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/customers/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "customers:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/new/page.tsx",
+      "dynamic": false,
+      "permission": "events:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/page.tsx",
+      "dynamic": false,
+      "permission": "events:read_all",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/[id]/financials",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/[id]/financials/page.tsx",
+      "dynamic": true,
+      "permission": "financials:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/[id]/guests",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/[id]/guests/page.tsx",
+      "dynamic": true,
+      "permission": "guests:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/[id]/memory",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/[id]/memory/page.tsx",
+      "dynamic": true,
+      "permission": "memory:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/[id]/operations",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/[id]/operations/page.tsx",
+      "dynamic": true,
+      "permission": "operations:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/events/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/events/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "events:read_all",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/finance",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/finance/page.tsx",
+      "dynamic": false,
+      "permission": "financials:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/inventory/conflicts",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/inventory/conflicts/page.tsx",
+      "dynamic": false,
+      "permission": "inventory:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/inventory/events",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/inventory/events/page.tsx",
+      "dynamic": false,
+      "permission": "inventory:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/inventory/events/[eventId]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/inventory/events/[eventId]/page.tsx",
+      "dynamic": true,
+      "permission": "inventory:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/inventory",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/inventory/page.tsx",
+      "dynamic": false,
+      "permission": "inventory:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/inventory/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/inventory/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "inventory:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/leads",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/leads/page.tsx",
+      "dynamic": false,
+      "permission": "leads:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/leads/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/leads/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "leads:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/notifications",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/notifications/page.tsx",
+      "dynamic": false,
+      "permission": "notifications:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/operations",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/operations/page.tsx",
+      "dynamic": false,
+      "permission": "operations:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/operations/templates",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/operations/templates/page.tsx",
+      "dynamic": false,
+      "permission": "operations:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/operations/templates/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/operations/templates/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "operations:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/page.tsx",
+      "dynamic": false,
+      "permission": "dashboard:view",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/purchases/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/purchases/new/page.tsx",
+      "dynamic": false,
+      "permission": "purchases:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/purchases",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/purchases/page.tsx",
+      "dynamic": false,
+      "permission": "purchases:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/purchases/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/purchases/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "purchases:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/quotes/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/quotes/new/page.tsx",
+      "dynamic": false,
+      "permission": "quotes:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/quotes",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/quotes/page.tsx",
+      "dynamic": false,
+      "permission": "quotes:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/quotes/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/quotes/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "quotes:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/quotes/[id]/print",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/quotes/[id]/print/page.tsx",
+      "dynamic": true,
+      "permission": "quotes:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/audit",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/audit/page.tsx",
+      "dynamic": false,
+      "permission": "audit:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/availability",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/availability/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/flags",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/flags/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/integrations",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/integrations/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/notifications",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/notifications/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/pricing",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/pricing/page.tsx",
+      "dynamic": false,
+      "permission": "settings:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/settings/users",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/settings/users/page.tsx",
+      "dynamic": false,
+      "permission": "users:manage",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/staff/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/staff/new/page.tsx",
+      "dynamic": false,
+      "permission": "staff:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/staff",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/staff/page.tsx",
+      "dynamic": false,
+      "permission": "staff:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/staff/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/staff/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "staff:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/vendors/new",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/vendors/new/page.tsx",
+      "dynamic": false,
+      "permission": "vendors:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/vendors",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/vendors/page.tsx",
+      "dynamic": false,
+      "permission": "vendors:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/vendors/[id]/edit",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/vendors/[id]/edit/page.tsx",
+      "dynamic": true,
+      "permission": "vendors:write",
+      "forceDynamic": true
+    },
+    {
+      "route": "/admin/vendors/[id]",
+      "group": "admin",
+      "file": "src/app/(admin)/admin/vendors/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "vendors:read",
+      "forceDynamic": true
+    },
+    {
+      "route": "/login",
+      "group": "auth",
+      "file": "src/app/(auth)/login/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": false
+    },
+    {
+      "route": "/cotizacion/[token]",
+      "group": "experience",
+      "file": "src/app/(experience)/cotizacion/[token]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/e/[slug]/[token]",
+      "group": "experience",
+      "file": "src/app/(experience)/e/[slug]/[token]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/memory/[token]",
+      "group": "experience",
+      "file": "src/app/(experience)/memory/[token]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/mi-evento",
+      "group": "experience",
+      "file": "src/app/(experience)/mi-evento/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/mi-evento/[token]",
+      "group": "experience",
+      "file": "src/app/(experience)/mi-evento/[token]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/mi-evento/[token]/resumen",
+      "group": "experience",
+      "file": "src/app/(experience)/mi-evento/[token]/resumen/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/pago/mock/[checkoutId]",
+      "group": "experience",
+      "file": "src/app/(experience)/pago/mock/[checkoutId]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/pago/resultado",
+      "group": "experience",
+      "file": "src/app/(experience)/pago/resultado/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/como-funciona",
+      "group": "public",
+      "file": "src/app/(public)/como-funciona/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/contacto",
+      "group": "public",
+      "file": "src/app/(public)/contacto/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/crear-experiencia/ai",
+      "group": "public",
+      "file": "src/app/(public)/crear-experiencia/ai/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/crear-experiencia",
+      "group": "public",
+      "file": "src/app/(public)/crear-experiencia/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/experiencias",
+      "group": "public",
+      "file": "src/app/(public)/experiencias/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/experiencias/[slug]",
+      "group": "public",
+      "file": "src/app/(public)/experiencias/[slug]/page.tsx",
+      "dynamic": true,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/nuestra-historia",
+      "group": "public",
+      "file": "src/app/(public)/nuestra-historia/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/",
+      "group": "public",
+      "file": "src/app/(public)/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/privacidad",
+      "group": "public",
+      "file": "src/app/(public)/privacidad/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/terminos",
+      "group": "public",
+      "file": "src/app/(public)/terminos/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": true
+    },
+    {
+      "route": "/staff/events/[id]",
+      "group": "staff",
+      "file": "src/app/(staff)/staff/events/[id]/page.tsx",
+      "dynamic": true,
+      "permission": "events:read_assigned",
+      "forceDynamic": true
+    },
+    {
+      "route": "/staff",
+      "group": "staff",
+      "file": "src/app/(staff)/staff/page.tsx",
+      "dynamic": false,
+      "permission": "events:read_assigned",
+      "forceDynamic": true
+    },
+    {
+      "route": "/sin-acceso",
+      "group": "root",
+      "file": "src/app/sin-acceso/page.tsx",
+      "dynamic": false,
+      "permission": null,
+      "forceDynamic": false
+    }
+  ],
+  "apis": [
+    {
+      "route": "/admin/finance/export",
+      "file": "src/app/(admin)/admin/finance/export/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": true,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/e/[slug]/[token]/calendar.ics",
+      "file": "src/app/(experience)/e/[slug]/[token]/calendar.ics/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/admin/leads-export",
+      "file": "src/app/api/admin/leads-export/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": true,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/analytics/track",
+      "file": "src/app/api/analytics/track/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "checksSession": false,
+      "checksOrigin": true,
+      "checksSignature": false,
+      "rateLimited": true
+    },
+    {
+      "route": "/api/auth/[...nextauth]",
+      "file": "src/app/api/auth/[...nextauth]/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/cron/notifications",
+      "file": "src/app/api/cron/notifications/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": true,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/events/[id]/guests.csv",
+      "file": "src/app/api/events/[id]/guests.csv/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": true,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/health/db",
+      "file": "src/app/api/health/db/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/health",
+      "file": "src/app/api/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/media/upload",
+      "file": "src/app/api/media/upload/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "checksSession": true,
+      "checksOrigin": true,
+      "checksSignature": false,
+      "rateLimited": true
+    },
+    {
+      "route": "/api/media/[id]",
+      "file": "src/app/api/media/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    },
+    {
+      "route": "/api/memory/[token]/upload",
+      "file": "src/app/api/memory/[token]/upload/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "checksSession": false,
+      "checksOrigin": true,
+      "checksSignature": false,
+      "rateLimited": true
+    },
+    {
+      "route": "/api/webhooks/payments/[provider]",
+      "file": "src/app/api/webhooks/payments/[provider]/route.ts",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "checksSession": false,
+      "checksOrigin": false,
+      "checksSignature": false,
+      "rateLimited": false
+    }
+  ],
+  "actions": [
+    {
+      "name": "generateDesignAction",
+      "kind": "public",
+      "action": "ai_designer.generate",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/ai-designer/server/actions.ts"
+    },
+    {
+      "name": "convertDesignToLeadAction",
+      "kind": "public",
+      "action": "ai_designer.convert",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/ai-designer/server/actions.ts"
+    },
+    {
+      "name": "loginAction",
+      "kind": "raw-function",
+      "action": null,
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/auth/server/actions.ts"
+    },
+    {
+      "name": "saveWeeklyRulesAction",
+      "kind": "protected",
+      "action": "availability.save_rules",
+      "permission": "availability:write",
+      "rateLimit": false,
+      "file": "src/features/bookings/server/actions.ts"
+    },
+    {
+      "name": "createAvailabilityExceptionAction",
+      "kind": "protected",
+      "action": "availability.create_exception",
+      "permission": "availability:write",
+      "rateLimit": false,
+      "file": "src/features/bookings/server/actions.ts"
+    },
+    {
+      "name": "deleteAvailabilityExceptionAction",
+      "kind": "protected",
+      "action": "availability.delete_exception",
+      "permission": "availability:write",
+      "rateLimit": false,
+      "file": "src/features/bookings/server/actions.ts"
+    },
+    {
+      "name": "checkSlugAction",
+      "kind": "protected",
+      "action": "catalog.checkSlug",
+      "permission": "catalog:read",
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "toggleCatalogActiveAction",
+      "kind": "protected",
+      "action": "catalog.toggleActive",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createExperienceAction",
+      "kind": "protected",
+      "action": "catalog.createExperience",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateExperienceAction",
+      "kind": "protected",
+      "action": "catalog.updateExperience",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteExperienceAction",
+      "kind": "protected",
+      "action": "catalog.deleteExperience",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "addExperienceImageAction",
+      "kind": "protected",
+      "action": "catalog.addExperienceImage",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "removeExperienceImageAction",
+      "kind": "protected",
+      "action": "catalog.removeExperienceImage",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "reorderExperienceImagesAction",
+      "kind": "protected",
+      "action": "catalog.reorderExperienceImages",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createMenuAction",
+      "kind": "protected",
+      "action": "catalog.createMenu",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateMenuAction",
+      "kind": "protected",
+      "action": "catalog.updateMenu",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteMenuAction",
+      "kind": "protected",
+      "action": "catalog.deleteMenu",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createMenuItemAction",
+      "kind": "protected",
+      "action": "catalog.createMenuItem",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateMenuItemAction",
+      "kind": "protected",
+      "action": "catalog.updateMenuItem",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteMenuItemAction",
+      "kind": "protected",
+      "action": "catalog.deleteMenuItem",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "reorderMenuItemsAction",
+      "kind": "protected",
+      "action": "catalog.reorderMenuItems",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createAddOnAction",
+      "kind": "protected",
+      "action": "catalog.createAddOn",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateAddOnAction",
+      "kind": "protected",
+      "action": "catalog.updateAddOn",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteAddOnAction",
+      "kind": "protected",
+      "action": "catalog.deleteAddOn",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createStyleAction",
+      "kind": "protected",
+      "action": "catalog.createStyle",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateStyleAction",
+      "kind": "protected",
+      "action": "catalog.updateStyle",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteStyleAction",
+      "kind": "protected",
+      "action": "catalog.deleteStyle",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createServiceAreaAction",
+      "kind": "protected",
+      "action": "catalog.createServiceArea",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateServiceAreaAction",
+      "kind": "protected",
+      "action": "catalog.updateServiceArea",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteServiceAreaAction",
+      "kind": "protected",
+      "action": "catalog.deleteServiceArea",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "createBudgetRangeAction",
+      "kind": "protected",
+      "action": "catalog.createBudgetRange",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "updateBudgetRangeAction",
+      "kind": "protected",
+      "action": "catalog.updateBudgetRange",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "deleteBudgetRangeAction",
+      "kind": "protected",
+      "action": "catalog.deleteBudgetRange",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/catalog/server/actions.ts"
+    },
+    {
+      "name": "getAvailabilityAction",
+      "kind": "public",
+      "action": "configurator.availability",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/configurator/server/actions.ts"
+    },
+    {
+      "name": "estimateAction",
+      "kind": "public",
+      "action": "configurator.estimate",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/configurator/server/actions.ts"
+    },
+    {
+      "name": "submitConfiguratorAction",
+      "kind": "public",
+      "action": "configurator.submit",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/configurator/server/actions.ts"
+    },
+    {
+      "name": "trackConfiguratorAction",
+      "kind": "public",
+      "action": "configurator.track",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/configurator/server/actions.ts"
+    },
+    {
+      "name": "saveTestimonialAction",
+      "kind": "protected",
+      "action": "content.saveTestimonial",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "setTestimonialActiveAction",
+      "kind": "protected",
+      "action": "content.testimonialActive",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "deleteTestimonialAction",
+      "kind": "protected",
+      "action": "content.deleteTestimonial",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "moveTestimonialAction",
+      "kind": "protected",
+      "action": "content.moveTestimonial",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "saveFaqAction",
+      "kind": "protected",
+      "action": "content.saveFaq",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "setFaqActiveAction",
+      "kind": "protected",
+      "action": "content.faqActive",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "deleteFaqAction",
+      "kind": "protected",
+      "action": "content.deleteFaq",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "moveFaqAction",
+      "kind": "protected",
+      "action": "content.moveFaq",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "finalizeGalleryUploadAction",
+      "kind": "protected",
+      "action": "content.galleryUploaded",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "updateGalleryAltAction",
+      "kind": "protected",
+      "action": "content.galleryAlt",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "setGalleryFeaturedAction",
+      "kind": "protected",
+      "action": "content.galleryFeatured",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "moveGalleryItemAction",
+      "kind": "protected",
+      "action": "content.galleryMove",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "deleteGalleryItemAction",
+      "kind": "protected",
+      "action": "content.galleryDelete",
+      "permission": null,
+      "rateLimit": false,
+      "file": "src/features/content/server/actions.ts"
+    },
+    {
+      "name": "updateCustomerAction",
+      "kind": "protected",
+      "action": "customers.update",
+      "permission": "customers:write",
+      "rateLimit": false,
+      "file": "src/features/customers/server/actions.ts"
+    },
+    {
+      "name": "deleteCustomerAction",
+      "kind": "protected",
+      "action": "customers.delete",
+      "permission": "customers:write",
+      "rateLimit": false,
+      "file": "src/features/customers/server/actions.ts"
+    },
+    {
+      "name": "createEventAction",
+      "kind": "protected",
+      "action": "events.create",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "searchCustomersAction",
+      "kind": "protected",
+      "action": "events.search_customers",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "checkEventAvailabilityAction",
+      "kind": "protected",
+      "action": "events.check_availability",
+      "permission": "events:read_all",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "updateEventAction",
+      "kind": "protected",
+      "action": "events.update",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "transitionEventAction",
+      "kind": "protected",
+      "action": "events.transition",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "cancelEventAction",
+      "kind": "protected",
+      "action": "events.cancel",
+      "permission": "events:cancel",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "rotateEventTokenAction",
+      "kind": "protected",
+      "action": "events.rotate_token",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "saveTimelineItemAction",
+      "kind": "protected",
+      "action": "events.timeline_save",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "deleteTimelineItemAction",
+      "kind": "protected",
+      "action": "events.timeline_delete",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "addAdminMessageAction",
+      "kind": "protected",
+      "action": "events.admin_message",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "saveGuestAction",
+      "kind": "protected",
+      "action": "guests.save",
+      "permission": "guests:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "deleteGuestAction",
+      "kind": "protected",
+      "action": "guests.delete",
+      "permission": "guests:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "sendRsvpRemindersAction",
+      "kind": "protected",
+      "action": "guests.rsvp_reminders",
+      "permission": "guests:write",
+      "rateLimit": true,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "moderateHonoreeMessageAction",
+      "kind": "protected",
+      "action": "guests.moderate_message",
+      "permission": "guests:write",
+      "rateLimit": false,
+      "file": "src/features/events/server/actions.ts"
+    },
+    {
+      "name": "createEventCostAction",
+      "kind": "protected",
+      "action": "financials.createCost",
+      "permission": "costs:write",
+      "rateLimit": false,
+      "file": "src/features/financials/server/actions.ts"
+    },
+    {
+      "name": "updateEventCostAction",
+      "kind": "protected",
+      "action": "financials.updateCost",
+      "permission": "costs:write",
+      "rateLimit": false,
+      "file": "src/features/financials/server/actions.ts"
+    },
+    {
+      "name": "deleteEventCostAction",
+      "kind": "protected",
+      "action": "financials.deleteCost",
+      "permission": "costs:write",
+      "rateLimit": false,
+      "file": "src/features/financials/server/actions.ts"
+    },
+    {
+      "name": "closeEventAction",
+      "kind": "protected",
+      "action": "financials.closeEvent",
+      "permission": "events:close",
+      "rateLimit": false,
+      "file": "src/features/financials/server/actions.ts"
+    },
+    {
+      "name": "submitRsvpAction",
+      "kind": "public",
+      "action": "guests.submit_rsvp",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/guests/server/actions.ts"
+    },
+    {
+      "name": "addHostGuestAction",
+      "kind": "public",
+      "action": "portal.add_guest",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/guests/server/actions.ts"
+    },
+    {
+      "name": "removeHostGuestAction",
+      "kind": "public",
+      "action": "portal.remove_guest",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/guests/server/actions.ts"
+    },
+    {
+      "name": "createInventoryItemAction",
+      "kind": "protected",
+      "action": "inventory.createItem",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "updateInventoryItemAction",
+      "kind": "protected",
+      "action": "inventory.updateItem",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "adjustStockAction",
+      "kind": "protected",
+      "action": "inventory.adjustStock",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "recalculateEventReservationsAction",
+      "kind": "protected",
+      "action": "inventory.recalculateEvent",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "releaseAllForEventAction",
+      "kind": "protected",
+      "action": "inventory.releaseAll",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "updateReservationQuantityAction",
+      "kind": "protected",
+      "action": "inventory.updateReservation",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "addReservationAction",
+      "kind": "protected",
+      "action": "inventory.addReservation",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "checkOutReservationAction",
+      "kind": "protected",
+      "action": "inventory.checkOut",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "checkOutAllAction",
+      "kind": "protected",
+      "action": "inventory.checkOutAll",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "returnReservationAction",
+      "kind": "protected",
+      "action": "inventory.return",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "cancelReservationAction",
+      "kind": "protected",
+      "action": "inventory.cancelReservation",
+      "permission": "inventory:write",
+      "rateLimit": false,
+      "file": "src/features/inventory/server/actions.ts"
+    },
+    {
+      "name": "createLeadAction",
+      "kind": "protected",
+      "action": "leads.create",
+      "permission": "leads:write",
+      "rateLimit": false,
+      "file": "src/features/leads/server/actions.ts"
+    },
+    {
+      "name": "changeLeadStatusAction",
+      "kind": "protected",
+      "action": "leads.change_status",
+      "permission": "leads:write",
+      "rateLimit": false,
+      "file": "src/features/leads/server/actions.ts"
+    },
+    {
+      "name": "assignLeadAction",
+      "kind": "protected",
+      "action": "leads.assign",
+      "permission": "leads:write",
+      "rateLimit": false,
+      "file": "src/features/leads/server/actions.ts"
+    },
+    {
+      "name": "logLeadActivityAction",
+      "kind": "protected",
+      "action": "leads.log_activity",
+      "permission": "leads:write",
+      "rateLimit": false,
+      "file": "src/features/leads/server/actions.ts"
+    },
+    {
+      "name": "updateLeadAction",
+      "kind": "protected",
+      "action": "leads.update",
+      "permission": "leads:write",
+      "rateLimit": false,
+      "file": "src/features/leads/server/actions.ts"
+    },
+    {
+      "name": "submitContactForm",
+      "kind": "public",
+      "action": "marketing.contact",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/marketing/server/actions.ts"
+    },
+    {
+      "name": "createCapsuleAction",
+      "kind": "protected",
+      "action": "memory.create",
+      "permission": "memory:write",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "updateCapsuleAction",
+      "kind": "protected",
+      "action": "memory.update",
+      "permission": "memory:write",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "rotateShareTokenAction",
+      "kind": "protected",
+      "action": "memory.rotate_token",
+      "permission": "memory:write",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "setCoverAction",
+      "kind": "protected",
+      "action": "memory.set_cover",
+      "permission": "memory:write",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "setMediaApprovalAction",
+      "kind": "protected",
+      "action": "memory.media_approval",
+      "permission": "media:moderate",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "deleteCapsuleMediaAction",
+      "kind": "protected",
+      "action": "memory.media_delete",
+      "permission": "media:moderate",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "setMessageHiddenAction",
+      "kind": "protected",
+      "action": "memory.message_hidden",
+      "permission": "media:moderate",
+      "rateLimit": false,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "submitGuestbookMessageAction",
+      "kind": "public",
+      "action": "memory.guestbook",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/memory-capsule/server/actions.ts"
+    },
+    {
+      "name": "markNotificationReadAction",
+      "kind": "protected",
+      "action": "notifications.markRead",
+      "permission": "notifications:read",
+      "rateLimit": false,
+      "file": "src/features/notifications/server/actions.ts"
+    },
+    {
+      "name": "markAllNotificationsReadAction",
+      "kind": "protected",
+      "action": "notifications.markAllRead",
+      "permission": "notifications:read",
+      "rateLimit": false,
+      "file": "src/features/notifications/server/actions.ts"
+    },
+    {
+      "name": "runRemindersNowAction",
+      "kind": "protected",
+      "action": "notifications.runScheduler",
+      "permission": "settings:write",
+      "rateLimit": true,
+      "file": "src/features/notifications/server/actions.ts"
+    },
+    {
+      "name": "instantiateChecklistAction",
+      "kind": "protected",
+      "action": "operations.instantiateChecklist",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateChecklistItemAction",
+      "kind": "protected",
+      "action": "operations.updateChecklistItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "createChecklistItemAction",
+      "kind": "protected",
+      "action": "operations.createChecklistItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "deleteChecklistItemAction",
+      "kind": "protected",
+      "action": "operations.deleteChecklistItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "createAssignmentAction",
+      "kind": "protected",
+      "action": "operations.createAssignment",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateAssignmentAction",
+      "kind": "protected",
+      "action": "operations.updateAssignment",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "setAssignmentFlagsAction",
+      "kind": "protected",
+      "action": "operations.setAssignmentFlags",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "deleteAssignmentAction",
+      "kind": "protected",
+      "action": "operations.deleteAssignment",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateLogisticsAction",
+      "kind": "protected",
+      "action": "operations.updateLogistics",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateAddOnNotesAction",
+      "kind": "protected",
+      "action": "operations.updateAddOnNotes",
+      "permission": "events:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "createTemplateAction",
+      "kind": "protected",
+      "action": "operations.createTemplate",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateTemplateAction",
+      "kind": "protected",
+      "action": "operations.updateTemplate",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "deleteTemplateAction",
+      "kind": "protected",
+      "action": "operations.deleteTemplate",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "createTemplateItemAction",
+      "kind": "protected",
+      "action": "operations.createTemplateItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "updateTemplateItemAction",
+      "kind": "protected",
+      "action": "operations.updateTemplateItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "deleteTemplateItemAction",
+      "kind": "protected",
+      "action": "operations.deleteTemplateItem",
+      "permission": "checklists:write",
+      "rateLimit": false,
+      "file": "src/features/operations/server/actions.ts"
+    },
+    {
+      "name": "recordManualPaymentAction",
+      "kind": "protected",
+      "action": "payments.record_manual",
+      "permission": "payments:manual",
+      "rateLimit": false,
+      "file": "src/features/payments/server/actions.ts"
+    },
+    {
+      "name": "refundPaymentAction",
+      "kind": "protected",
+      "action": "payments.refund",
+      "permission": "payments:manual",
+      "rateLimit": false,
+      "file": "src/features/payments/server/actions.ts"
+    },
+    {
+      "name": "startCheckoutAction",
+      "kind": "public",
+      "action": "payments.start_checkout",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/payments/server/checkout-actions.ts"
+    },
+    {
+      "name": "getPaymentStatusAction",
+      "kind": "public",
+      "action": "payments.status",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/payments/server/checkout-actions.ts"
+    },
+    {
+      "name": "mockCheckoutAction",
+      "kind": "public",
+      "action": "payments.mock_checkout",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/payments/server/mock-checkout-actions.ts"
+    },
+    {
+      "name": "requestPortalAccessAction",
+      "kind": "public",
+      "action": "portal.request_access",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/portal/server/actions.ts"
+    },
+    {
+      "name": "updatePreferencesAction",
+      "kind": "public",
+      "action": "portal.update_preferences",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/portal/server/actions.ts"
+    },
+    {
+      "name": "updateAddressAction",
+      "kind": "public",
+      "action": "portal.update_address",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/portal/server/actions.ts"
+    },
+    {
+      "name": "sendHostMessageAction",
+      "kind": "public",
+      "action": "portal.send_message",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/portal/server/actions.ts"
+    },
+    {
+      "name": "submitReviewAction",
+      "kind": "public",
+      "action": "portal.submit_review",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/portal/server/actions.ts"
+    },
+    {
+      "name": "createPurchaseAction",
+      "kind": "protected",
+      "action": "purchases.create",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "updatePurchaseAction",
+      "kind": "protected",
+      "action": "purchases.update",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "markPurchaseOrderedAction",
+      "kind": "protected",
+      "action": "purchases.markOrdered",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "reopenPurchaseAction",
+      "kind": "protected",
+      "action": "purchases.reopen",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "receivePurchaseAction",
+      "kind": "protected",
+      "action": "purchases.receive",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "cancelPurchaseAction",
+      "kind": "protected",
+      "action": "purchases.cancel",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "updateActualAmountAction",
+      "kind": "protected",
+      "action": "purchases.updateActual",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "attachReceiptAction",
+      "kind": "protected",
+      "action": "purchases.attachReceipt",
+      "permission": "purchases:write",
+      "rateLimit": false,
+      "file": "src/features/purchases/server/actions.ts"
+    },
+    {
+      "name": "previewQuoteAction",
+      "kind": "protected",
+      "action": "quotes.preview",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "searchCustomersAction",
+      "kind": "protected",
+      "action": "quotes.search_customers",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "createQuoteAction",
+      "kind": "protected",
+      "action": "quotes.create",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "updateQuoteDetailsAction",
+      "kind": "protected",
+      "action": "quotes.update_details",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "previewQuotePricingAction",
+      "kind": "protected",
+      "action": "quotes.preview_pricing",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "saveQuotePricingAction",
+      "kind": "protected",
+      "action": "quotes.save_pricing",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "buildCatalogLineAction",
+      "kind": "protected",
+      "action": "quotes.catalog_line",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "sendQuoteAction",
+      "kind": "protected",
+      "action": "quotes.send",
+      "permission": "quotes:send",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "markQuoteExpiredAction",
+      "kind": "protected",
+      "action": "quotes.mark_expired",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "duplicateQuoteAction",
+      "kind": "protected",
+      "action": "quotes.duplicate",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "createNewVersionAction",
+      "kind": "protected",
+      "action": "quotes.new_version",
+      "permission": "quotes:write",
+      "rateLimit": false,
+      "file": "src/features/quotes/server/actions.ts"
+    },
+    {
+      "name": "acceptQuoteAction",
+      "kind": "public",
+      "action": "quotes.accept",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/quotes/server/public-actions.ts"
+    },
+    {
+      "name": "rejectQuoteAction",
+      "kind": "public",
+      "action": "quotes.reject",
+      "permission": null,
+      "rateLimit": true,
+      "file": "src/features/quotes/server/public-actions.ts"
+    },
+    {
+      "name": "updateBusinessSettingsAction",
+      "kind": "protected",
+      "action": "settings.updateBusiness",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "updatePricingSettingsAction",
+      "kind": "protected",
+      "action": "settings.updatePricing",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "updateAvailabilitySettingsAction",
+      "kind": "protected",
+      "action": "settings.updateAvailability",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "updateNotificationSettingsAction",
+      "kind": "protected",
+      "action": "settings.updateNotifications",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "setFeatureFlagAction",
+      "kind": "protected",
+      "action": "settings.setFlag",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "resetFeatureFlagAction",
+      "kind": "protected",
+      "action": "settings.resetFlag",
+      "permission": "settings:write",
+      "rateLimit": false,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "sendTestEmailAction",
+      "kind": "protected",
+      "action": "settings.sendTestEmail",
+      "permission": "settings:write",
+      "rateLimit": true,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "sendTestWhatsAppAction",
+      "kind": "protected",
+      "action": "settings.sendTestWhatsApp",
+      "permission": "settings:write",
+      "rateLimit": true,
+      "file": "src/features/settings/server/actions.ts"
+    },
+    {
+      "name": "createStaffMemberAction",
+      "kind": "protected",
+      "action": "staff.create",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "updateStaffMemberAction",
+      "kind": "protected",
+      "action": "staff.update",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "deleteStaffMemberAction",
+      "kind": "protected",
+      "action": "staff.delete",
+      "permission": "staff:write",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "createStaffAccessAction",
+      "kind": "protected",
+      "action": "staff.createAccess",
+      "permission": "users:manage",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "resetStaffPasswordAction",
+      "kind": "protected",
+      "action": "staff.resetPassword",
+      "permission": "users:manage",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "setStaffAccessActiveAction",
+      "kind": "protected",
+      "action": "staff.setAccessActive",
+      "permission": "users:manage",
+      "rateLimit": false,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "staffUpdateChecklistItemAction",
+      "kind": "protected",
+      "action": "staff.updateChecklistItem",
+      "permission": "checklists:update_assigned",
+      "rateLimit": true,
+      "file": "src/features/staff/server/actions.ts"
+    },
+    {
+      "name": "createUserAction",
+      "kind": "protected",
+      "action": "users.create",
+      "permission": "users:manage",
+      "rateLimit": true,
+      "file": "src/features/users/server/actions.ts"
+    },
+    {
+      "name": "changeUserRoleAction",
+      "kind": "protected",
+      "action": "users.changeRole",
+      "permission": "users:manage",
+      "rateLimit": false,
+      "file": "src/features/users/server/actions.ts"
+    },
+    {
+      "name": "setUserActiveAction",
+      "kind": "protected",
+      "action": "users.setActive",
+      "permission": "users:manage",
+      "rateLimit": false,
+      "file": "src/features/users/server/actions.ts"
+    },
+    {
+      "name": "resetUserPasswordAction",
+      "kind": "protected",
+      "action": "users.resetPassword",
+      "permission": "users:manage",
+      "rateLimit": true,
+      "file": "src/features/users/server/actions.ts"
+    },
+    {
+      "name": "createVendorAction",
+      "kind": "protected",
+      "action": "vendors.create",
+      "permission": "vendors:write",
+      "rateLimit": false,
+      "file": "src/features/vendors/server/actions.ts"
+    },
+    {
+      "name": "updateVendorAction",
+      "kind": "protected",
+      "action": "vendors.update",
+      "permission": "vendors:write",
+      "rateLimit": false,
+      "file": "src/features/vendors/server/actions.ts"
+    },
+    {
+      "name": "deleteVendorAction",
+      "kind": "protected",
+      "action": "vendors.delete",
+      "permission": "vendors:write",
+      "rateLimit": false,
+      "file": "src/features/vendors/server/actions.ts"
+    }
+  ],
+  "models": [
+    "User",
+    "Customer",
+    "BudgetRange",
+    "Lead",
+    "LeadActivity",
+    "ConfigurationSnapshot",
+    "Style",
+    "ServiceArea",
+    "Experience",
+    "ExperienceCostComponent",
+    "ExperienceImage",
+    "ExperienceInventoryRequirement",
+    "Menu",
+    "MenuItem",
+    "AddOn",
+    "AddOnInventoryRequirement",
+    "AvailabilityRule",
+    "AvailabilityException",
+    "Quote",
+    "QuoteItem",
+    "Booking",
+    "Payment",
+    "WebhookEvent",
+    "Event",
+    "EventAddOn",
+    "EventGuest",
+    "EventMessage",
+    "EventTimelineItem",
+    "ChecklistTemplate",
+    "ChecklistTemplateItem",
+    "EventChecklistItem",
+    "StaffMember",
+    "StaffAssignment",
+    "InventoryItem",
+    "InventoryReservation",
+    "InventoryMovement",
+    "Vendor",
+    "Purchase",
+    "EventCost",
+    "MediaAsset",
+    "MemoryCapsule",
+    "Testimonial",
+    "Faq",
+    "Review",
+    "AiDesign",
+    "NotificationLog",
+    "AnalyticsEvent",
+    "AuditLog",
+    "Setting",
+    "RateLimitBucket"
+  ],
+  "middleware": {
+    "protectsAdmin": true,
+    "protectsStaff": true,
+    "tokenPrefixes": [
+      "/mi-evento",
+      "/e/",
+      "/memory",
+      "/cotizacion",
+      "/pago"
+    ]
+  },
+  "e2e": {
+    "specs": [
+      "tests/e2e/_infra/harness.spec.ts"
+    ],
+    "tags": {
+      "@infra": 2
+    }
+  },
+  "env": [
+    "NODE_ENV",
+    "APP_URL",
+    "APP_NAME",
+    "APP_TIMEZONE",
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "E2E_DATABASE_URL",
+    "AUTH_SECRET",
+    "AUTH_TRUST_HOST",
+    "AUTH_URL",
+    "STORAGE_DRIVER",
+    "STORAGE_ENDPOINT",
+    "STORAGE_REGION",
+    "STORAGE_BUCKET",
+    "STORAGE_ACCESS_KEY",
+    "STORAGE_SECRET_KEY",
+    "STORAGE_FORCE_PATH_STYLE",
+    "STORAGE_PUBLIC_URL",
+    "UPLOAD_MAX_MB",
+    "PAYMENT_PROVIDER",
+    "PAYMENT_SECRET_KEY",
+    "PAYMENT_PUBLIC_KEY",
+    "PAYMENT_WEBHOOK_SECRET",
+    "EMAIL_PROVIDER",
+    "EMAIL_API_KEY",
+    "EMAIL_FROM",
+    "WHATSAPP_PROVIDER",
+    "WHATSAPP_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_BUSINESS_NUMBER",
+    "AI_PROVIDER",
+    "AI_API_KEY",
+    "AI_MODEL",
+    "AI_DESIGNER_ENABLED",
+    "PAYMENTS_ENABLED",
+    "WHATSAPP_ENABLED",
+    "MEMORY_CAPSULE_ENABLED",
+    "CRON_SECRET",
+    "SENTRY_DSN",
+    "LOG_LEVEL"
+  ],
+  "scripts": {
+    "test": "vitest run --project unit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest --project unit",
+    "test:e2e": "playwright test",
+    "db:up": "docker compose up -d db storage",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:base": "tsx prisma/seed.ts --base",
+    "db:reset": "prisma migrate reset --force --skip-seed && tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "test:integration:prepare": "node scripts/prepare-test-db.mjs",
+    "e2e:infra": "playwright test --project=chromium --grep @infra",
+    "e2e:smoke": "playwright test --project=chromium --grep @smoke",
+    "e2e:critical": "playwright test --project=chromium --project=mobile-chrome --grep @P0",
+    "e2e:auth": "playwright test --project=chromium --grep @auth",
+    "e2e:permissions": "playwright test --project=chromium --grep @permissions",
+    "e2e:regression": "playwright test --project=chromium --project=mobile-chrome --grep \"@P0|@regression\"",
+    "e2e:report": "playwright show-report",
+    "qa:discover": "node .claude/skills/e2e-quality-gate/scripts/discover.mjs",
+    "qa:preflight": "node .claude/skills/e2e-quality-gate/scripts/preflight.mjs",
+    "qa:gate": "node .claude/skills/e2e-quality-gate/scripts/quality-gate.mjs"
+  },
+  "drift": null
+}

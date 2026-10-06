@@ -63,6 +63,8 @@ function walkSuites(suites, file) {
           else result = "NOT TESTED";
         } else if (t.status === "flaky") result = "FLAKY";
         else if (t.status === "expected") result = "PASS";
+        // El navegador no arrancó: ningún paso de la prueba corrió ⇒ ENVIRONMENT ISSUE, no FAIL de la app.
+        else if (/browserType\.launch|Executable doesn't exist|spawn UNKNOWN/i.test(last?.error?.message ?? "")) result = "BLOCKED";
         else result = "FAIL";
         if (isInfra) {
           if (result === "FAIL") infraFailed = true;

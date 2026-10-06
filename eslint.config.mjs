@@ -36,6 +36,8 @@ const eslintConfig = [
       ".uploads/**",
       "dist/**",
       "backups/**",
+      ".claude/worktrees/**",
+      "test-results/**",
       "test-results/**",
       "next-env.d.ts",
       "src/components/ui/**",

@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
+    // E2E (scripts/e2e-server.mjs): caché de datos sólo en memoria por proceso, para que cada carril y cada
+    // re-siembra de la base no lean datos cacheados en disco por otra base. En producción queda el default.
+    isrFlushToDisk: process.env.NEXT_ISR_FLUSH_TO_DISK !== "false",
   },
   images: {
     localPatterns: [{ pathname: "/api/media/**" }, { pathname: "/images/**" }, { pathname: "/opengraph-image**" }],

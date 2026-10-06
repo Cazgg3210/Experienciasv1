@@ -15,6 +15,10 @@ const BENIGN: RegExp[] = [
   /net::ERR_ABORTED/i, // prefetch/RSC cancelado al navegar
   /NS_BINDING_ABORTED/i, // equivalente en Firefox
   /Load request cancelled/i, // WebKit
+  // WebKit al cancelar prefetch/RSC por navegación (no son errores de la app; Chromium los reporta como ERR_ABORTED):
+  /due to access control checks/i,
+  /^(TypeError: )?Load failed$/i,
+  /Failed to fetch RSC payload .*Falling back to browser navigation/i,
   /Download the React DevTools/i,
 ];
 
@@ -27,7 +31,13 @@ export class ErrorGuard {
     if (this.pages.has(page)) return;
     this.pages.add(page);
     page.on("console", (msg) => {
-      if (msg.type() === "error") this.entries.push({ kind: "console", text: msg.text(), url: page.url() });
+      if (msg.type() !== "error") return;
+      const source = msg.location()?.url || "";
+      const text = source ? `${msg.text()} [${source}]` : msg.text();
+      // Chromium duplica cada respuesta 4xx como error de consola ("Failed to load resource … 4xx"): ya se
+      // registra como http4xx (observación, con su URL), así que aquí se clasifica igual y no como violación.
+      const is4xx = /Failed to load resource: the server responded with a status of 4\d\d/i.test(msg.text());
+      this.entries.push({ kind: is4xx ? "http4xx" : "console", text, url: source || page.url() });
     });
     page.on("pageerror", (err) => this.entries.push({ kind: "pageerror", text: `${err.name}: ${err.message}`, url: page.url() }));
     page.on("requestfailed", (req: Request) =>

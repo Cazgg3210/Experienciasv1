@@ -112,7 +112,14 @@ node .claude/skills/e2e-quality-gate/scripts/quality-gate.mjs --mode full [--res
 pnpm exec playwright show-trace test-results/<...>/trace.zip
 ```
 
-En Windows usa Git Bash o `pnpm.cmd` (la política de ejecución de PowerShell bloquea `pnpm.ps1`).
+Notas operativas (aprendidas en la primera corrida FULL):
+- En Windows usa Git Bash. `pnpm.cmd exec playwright … -g "A|B"` se rompe porque cmd.exe interpreta el `|`: usa `node node_modules/@playwright/test/cli.js test … -g "A|B"`.
+- No pases `--reporter` en la línea de comandos para corridas que alimentan el gate: reemplaza los reporters del config y no se escribe `results.json`.
+- Cada invocación sobrescribe `test-results/<carril>/artifacts`: copia la evidencia de un bug (trace/screenshot) a `test-results/<carril>-evidence/<BUG>/` antes de volver a correr.
+- El scratchpad es compartido entre agentes: usa una subcarpeta por carril (`scratchpad/l<n>/`) y carpetas nuevas por extracción; nunca `rm -rf` con rutas relativas o globs (dispara confirmaciones al usuario).
+- La caché de datos de Next en E2E es sólo en memoria (`NEXT_ISR_FLUSH_TO_DISK=false` en el servidor E2E) y `fetch-cache` se limpia al arrancar: los carriles no se contaminan entre sí.
+- Firefox: si no arranca desde `%LOCALAPPDATA%` (error "configuración en paralelo"/`spawn UNKNOWN`), copia `ms-playwright/firefox-<ver>/firefox` a otra unidad y define `E2E_FIREFOX_EXECUTABLE` en `.env`. Un navegador que no arranca cuenta como BLOCKED (entorno), no como FAIL.
+- Next 15.5 agrega un anunciador de rutas con `role="alert"`: acota `getByRole("alert")` a `page.getByRole("main")` o usa el texto.
 
 ## Checkpoints
 

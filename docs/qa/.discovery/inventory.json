@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T06:30:42.265Z",
+  "generatedAt": "2026-10-06T06:45:21.081Z",
   "stack": {
     "next": "15.5.27",
     "react": "19.1.0",
@@ -2401,7 +2401,7 @@
     "test:integration:prepare": "node scripts/prepare-test-db.mjs",
     "e2e:infra": "playwright test --project=chromium --grep @infra",
     "e2e:smoke": "playwright test --project=chromium --grep @smoke",
-    "e2e:critical": "playwright test --project=chromium --project=mobile-chrome --grep @P0",
+    "e2e:critical": "playwright test --grep @P0",
     "e2e:auth": "playwright test --project=chromium --grep @auth",
     "e2e:permissions": "playwright test --project=chromium --grep @permissions",
     "e2e:regression": "playwright test --project=chromium --project=mobile-chrome --grep \"@P0|@regression\"",
@@ -2410,5 +2410,23 @@
     "qa:preflight": "node .claude/skills/e2e-quality-gate/scripts/preflight.mjs",
     "qa:gate": "node .claude/skills/e2e-quality-gate/scripts/quality-gate.mjs"
   },
-  "drift": null
+  "drift": {
+    "since": "2026-10-06T06:30:42.265Z",
+    "pages": {
+      "added": [],
+      "removed": []
+    },
+    "apis": {
+      "added": [],
+      "removed": []
+    },
+    "actions": {
+      "added": [],
+      "removed": []
+    },
+    "models": {
+      "added": [],
+      "removed": []
+    }
+  }
 }

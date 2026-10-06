@@ -31,15 +31,17 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-phone/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-phone/types/**/*.ts"
+    ".next-e2e/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     ".next-*",
     "dist",
     "playwright-report",
-    "test-results"
+    "test-results",
+    ".claude/worktrees"
   ]
 }

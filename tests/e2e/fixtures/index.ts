@@ -111,7 +111,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 export { expect };
 export { storageStatePath, ACCOUNTS, TOKENS, PASSWORD } from "./accounts";
 export type { E2ERole } from "./accounts";
-export { captureServerAction, replayServerAction, wasDenied, wasBlocked, wasAccepted } from "./server-actions";
+export { captureServerAction, replayServerAction, wasDenied, wasForbidden, wasBlocked, wasAccepted } from "./server-actions";
 export type { CapturedAction, ReplayResult, ReplayOutcome } from "./server-actions";
 export { scanA11y } from "./a11y";
 export * from "./data";

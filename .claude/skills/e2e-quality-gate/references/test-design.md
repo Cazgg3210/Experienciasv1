@@ -55,7 +55,7 @@ Orden de preferencia: `getByRole` (con `name`) → `getByLabel` → `getByPlaceh
 - Factories disponibles: `createCustomer`, `createLead`, `createUnreadNotification`. Para el resto crea helpers en `tests/e2e/<área>/_helpers.ts` usando Prisma (`db`) y las utilidades del dominio (`generateToken`, `generateCode`, `dateOnly`) — importables desde `../../../src/lib/...` cuando no dependan de `server-only`.
 - Fechas futuras disponibles: calcula con la regla de disponibilidad real (lee `availability-service` / settings) o toma una fecha libre que el propio configurador ofrezca.
 - No hace falta limpieza: la base del carril se re-siembra por corrida. Sí evita colisiones dentro de la corrida (nombres únicos).
-- Estado global (flags, ajustes, reglas de disponibilidad, precios globales): sólo en `*.global.spec.ts`, `test.describe.configure({ mode: "serial" })` y restaurar en `finally`/`afterEach`.
+- Estado global (flags, ajustes, reglas de disponibilidad, precios globales): sólo en `*.global.spec.ts` (la suite `E2E_SUITE=global` corre con 1 worker, así que ya es secuencial; **no** uses `mode: "serial"`, que deja sin ejecutar el resto del archivo cuando una prueba falla) y restaura el valor en `finally`/`afterEach`.
 
 ## Persistencia
 
@@ -83,6 +83,7 @@ Prueba en **dos niveles**: UI (no se ve/redirige/404) **y** backend (aunque se f
    - Para el **permiso de la acción**, usa un rol que pase el middleware sin tener el permiso: OWNER intentando `roles:assign_super_admin` (crear usuario SUPER_ADMIN, promover a SUPER_ADMIN) desde `/admin/settings/users`.
    - Para **IDOR**: staff con `staffUpdateChecklistItemAction` sobre una tarea de un evento **no asignado** (captura sobre su evento y cambia el id en `body`), tokens de otro evento en acciones públicas del portal/RSVP/cápsula, IDs inexistentes.
    - `body` del replay: el request de una Server Action es JSON (`[args]`) o multipart; reemplaza IDs con cuidado y documenta la variante.
+   - Resultados: `wasDenied` = `denied` (sin sesión/permiso) **o** `not-found` (recurso ajeno/inexistente, respuesta genérica); `wasForbidden` = sólo `denied`; `wasBlocked` = `wasDenied` o `not-executed` (Next no ejecutó la acción en esa ruta).
 3. **APIs restringidas**: `apiAs(null)` y `apiAs("staff")` contra `/api/admin/leads-export`, `/api/events/<id>/guests.csv`, `/admin/finance/export`, `/api/media/upload` (sin sesión / origen ajeno), `/api/cron/notifications` (sin/con secreto incorrecto), webhooks sin firma.
 4. **Acciones ocultas**: si la UI esconde un botón para un rol, verifica además el backend con replay.
 5. **Tokens**: token inexistente, token con formato inválido, token de otro evento, token rotado (el viejo deja de funcionar) → 404 genérico sin filtrar datos.

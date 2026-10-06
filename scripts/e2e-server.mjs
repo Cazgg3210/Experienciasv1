@@ -56,6 +56,8 @@ const env = {
   AUTH_URL: `http://localhost:${port}`,
   INTERNAL_APP_URL: `http://127.0.0.1:${port}`,
   // La suite "ratelimit" (E2E_SUITE=ratelimit, carril propio) necesita el limitador encendido.
+  // Caché de datos (unstable_cache) sólo en memoria: los carriles comparten .next-e2e y cada corrida re-siembra.
+  NEXT_ISR_FLUSH_TO_DISK: "false",
   RATE_LIMIT_DISABLED: process.env.E2E_SUITE === "ratelimit" ? "false" : "true",
   PORT: port,
 };
@@ -94,6 +96,8 @@ if (isStale()) {
   console.log("[e2e] Build vigente: se reutiliza .next-e2e");
 }
 
+// Datos cacheados en disco por corridas anteriores (otra semilla u otro carril): nunca deben leerse.
+rmSync(".next-e2e/cache/fetch-cache", { recursive: true, force: true });
 console.log(`[e2e] Iniciando servidor en :${port}`);
 const child = spawn("npx", ["next", "start", "-p", port], { stdio: "inherit", env, shell: true });
 const stop = () => child.kill();
