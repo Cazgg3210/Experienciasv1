@@ -13,6 +13,9 @@
   cerrar las sesiones nuevas).
 - **Sin re-emisión de la cookie en cada respuesta**: el middleware sólo renueva el JWT en `GET` cuando tiene al menos
   `session.updateAge` (1 h); así una respuesta que estaba en vuelo al cerrar sesión no vuelve a escribir la cookie.
+- `callbackUrl` del login: sólo rutas internas normalizadas (`safeCallbackPath`, `src/features/auth/domain/callback-url.ts`):
+  se rechazan URLs absolutas, `//`, `\`, caracteres de control/espacios (TAB/CR/LF que el navegador elimina) y rutas que
+  al normalizarse cambian de origen. El callback `redirect` de Auth.js aplica la misma regla.
 - Login con rate limit por email (8 intentos / 15 min), comparación de tiempo constante (hash dummy para
   usuarios inexistentes) y mensajes genéricos (no enumeración).
 - **Clientas e invitadas** no tienen contraseña: acceso por **tokens opacos de 256 bits** (`generateToken`) en URL

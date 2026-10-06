@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
+import { safeCallbackPath } from "@/features/auth/domain/callback-url";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { getCurrentUser } from "@/server/auth/session";
 import { homePathForRole } from "@/server/auth/permissions";
@@ -14,9 +15,10 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
+  searchParams: Promise<{ callbackUrl?: string | string[]; error?: string }>;
 }) {
-  const { callbackUrl } = await searchParams;
+  // El formulario sólo arrastra una ruta interna válida (el servidor la vuelve a validar al iniciar sesión).
+  const callbackUrl = safeCallbackPath((await searchParams).callbackUrl) ?? undefined;
   const user = await getCurrentUser();
   if (user) redirect(homePathForRole(user.role));
 

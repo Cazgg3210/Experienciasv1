@@ -5,7 +5,7 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 
 **Total 256** — PASS 251 · FAIL 5
 
-> Actualización 2026-10-06 (corrección de BUG-001 / BUG-004, carril 1): AUTH-025 y AUTH-032 pasan como `@regression`; se agregaron AUTH-033…AUTH-038 (revocación de sesiones). Los totales de arriba son de la corrida de auditoría original.
+> Actualización 2026-10-06 (corrección de BUG-001 / BUG-004 / BUG-005, carril 1): AUTH-025, AUTH-032 y AUTH-049 pasan como `@regression`; se agregaron AUTH-033…AUTH-038 (revocación de sesiones). Los totales de arriba son de la corrida de auditoría original.
 
 | ID | Módulo | Escenario | Rol | Priority | Automated | Result |
 |---|---|---|---|---|---|---|
@@ -95,7 +95,7 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 | AUTH-046 | auth | callbackUrl malicioso "\\\\evil.example" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-047 | auth | callbackUrl malicioso "javascript:alert(document.domain)" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-048 | auth | callbackUrl malicioso "/%2F%2Fevil.example" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
-| AUTH-049 | auth | callbackUrl malicioso "/\t/evil.example" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | FAIL (ACC-BUG-03) |
+| AUTH-049 | auth | callbackUrl malicioso "/\t/evil.example" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS (@regression BUG-005) |
 | AUTH-050 | auth | callbackUrl malicioso "http://localhost@evil.example/" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-051 | auth | el middleware conserva ruta + query en callbackUrl y no acepta hosts | Anónimo | P2 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-060 | auth | 8 intentos fallidos permitidos; el 9º se bloquea y ni la contraseña correcta entra | Anónimo | P0 | ✅ tests/e2e/auth/login.ratelimit.spec.ts (chromium-ratelimit) | PASS |

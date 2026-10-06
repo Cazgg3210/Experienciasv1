@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import type { AppRole } from "@/server/auth/permissions";
+import { safeRedirectUrl } from "@/features/auth/domain/callback-url";
 
 /**
  * Configuración edge-safe de Auth.js (usada por middleware). Sin Prisma ni bcrypt aquí.
@@ -18,6 +19,10 @@ export const authConfig = {
     // La autorización por ruta vive en src/middleware.ts (redirige con callbackUrl correcto).
     authorized() {
       return true;
+    },
+    // Defensa en profundidad contra open redirect: sólo rutas internas normalizadas o el mismo origen.
+    redirect({ url, baseUrl }) {
+      return safeRedirectUrl(url, baseUrl);
     },
     jwt({ token, user }) {
       if (user) {

@@ -133,7 +133,7 @@ Revocación por `sessionVersion` (ver ACC-BUG-01). Se incrementa al cerrar sesi�
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — BUG-005 (verificado en carril 1; ver «Resolution»)
 **Type:** POTENTIAL SECURITY ISSUE (bypass del filtro anti open-redirect)
 **Module:** auth (login)
 **Role:** cualquier persona del equipo que abra un enlace de login manipulado
@@ -172,6 +172,9 @@ Validación por prefijo de cadena en lugar de normalizar la URL.
 
 ### Recommended fix
 En `safeCallback`: rechazar cualquier carácter de control o espacio (`/[\u0000-\u001F\u007F\s\\]/`), y validar con `const u = new URL(url, "http://x"); if (u.origin !== "http://x" || u.pathname.startsWith("//")) return null; return u.pathname + u.search;`. Agregar `callbacks.redirect` en `src/auth.config.ts` con la misma regla (defensa en profundidad).
+
+### Resolution (BUG-005)
+`safeCallback` se reemplazó por la función pura `safeCallbackPath` (`src/features/auth/domain/callback-url.ts`, con pruebas unitarias): rechaza caracteres de control, espacios y `\`, normaliza con `new URL(url, origen ficticio)`, exige el mismo origen, descarta rutas que normalizadas empiezan con `//` y devuelve `pathname + search + hash`. La usan `loginAction`, la página `/login` (el formulario sólo arrastra una ruta válida) y el callback `redirect` de Auth.js (`safeRedirectUrl`). Prueba: [AUTH-049] `@regression` (+ AUTH-043..050 en PASS).
 
 ---
 

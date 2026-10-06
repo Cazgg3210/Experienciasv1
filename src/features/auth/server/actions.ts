@@ -5,6 +5,7 @@ import { z } from "zod";
 import { signIn } from "@/auth";
 import { prisma } from "@/db";
 import { homePathForRole, type AppRole } from "@/server/auth/permissions";
+import { safeCallbackPath } from "../domain/callback-url";
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Correo inválido"),
@@ -13,13 +14,6 @@ const loginSchema = z.object({
 });
 
 export type LoginState = { error?: string } | undefined;
-
-function safeCallback(url: string | undefined): string | null {
-  if (!url) return null;
-  // Sólo rutas internas (evita open redirect)
-  if (!url.startsWith("/") || url.startsWith("//") || url.startsWith("/\\")) return null;
-  return url;
-}
 
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const parsed = loginSchema.safeParse({
@@ -34,7 +28,8 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     select: { role: true },
   });
   const home = homePathForRole((user?.role ?? "STAFF") as AppRole);
-  const requested = safeCallback(parsed.data.callbackUrl);
+  // Sólo rutas internas normalizadas (evita open redirect, también con TAB/CR/LF o `\`: BUG-005)
+  const requested = safeCallbackPath(parsed.data.callbackUrl);
   // STAFF no puede ir a /admin aunque lo pida
   const redirectTo = requested && !(user?.role === "STAFF" && requested.startsWith("/admin")) ? requested : home;
 
