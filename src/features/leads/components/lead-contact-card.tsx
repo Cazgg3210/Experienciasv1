@@ -42,26 +42,31 @@ export function LeadContactCard({
 
   return (
     <div className="space-y-4">
+      {/* Cada <div> del <dl> agrupa SÓLO <dt>/<dd>: el botón de copiar vive dentro del <dd>. */}
       <dl className="space-y-2 text-sm">
-        <div className="flex items-center justify-between gap-2">
+        <div>
           <dt className="sr-only">Teléfono</dt>
-          <dd className="inline-flex min-w-0 items-center gap-2">
-            <Phone className="text-muted-foreground size-4 shrink-0" aria-hidden />
-            {lead.phone ? <span className="truncate">{lead.phone}</span> : <span className="text-muted-foreground">Sin teléfono</span>}
+          <dd className="flex items-center justify-between gap-2">
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <Phone className="text-muted-foreground size-4 shrink-0" aria-hidden />
+              {lead.phone ? <span className="truncate">{lead.phone}</span> : <span className="text-muted-foreground">Sin teléfono</span>}
+            </span>
+            {lead.phone ? (
+              <CopyButton value={lead.phone} label="Copiar" size="xs" variant="ghost" toastMessage="Teléfono copiado" aria-label="Copiar teléfono" />
+            ) : null}
           </dd>
-          {lead.phone ? (
-            <CopyButton value={lead.phone} label="Copiar" size="xs" variant="ghost" toastMessage="Teléfono copiado" aria-label="Copiar teléfono" />
-          ) : null}
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div>
           <dt className="sr-only">Email</dt>
-          <dd className="inline-flex min-w-0 items-center gap-2">
-            <Mail className="text-muted-foreground size-4 shrink-0" aria-hidden />
-            {lead.email ? <span className="truncate">{lead.email}</span> : <span className="text-muted-foreground">Sin correo</span>}
+          <dd className="flex items-center justify-between gap-2">
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <Mail className="text-muted-foreground size-4 shrink-0" aria-hidden />
+              {lead.email ? <span className="truncate">{lead.email}</span> : <span className="text-muted-foreground">Sin correo</span>}
+            </span>
+            {lead.email ? (
+              <CopyButton value={lead.email} label="Copiar" size="xs" variant="ghost" toastMessage="Correo copiado" aria-label="Copiar correo" />
+            ) : null}
           </dd>
-          {lead.email ? (
-            <CopyButton value={lead.email} label="Copiar" size="xs" variant="ghost" toastMessage="Correo copiado" aria-label="Copiar correo" />
-          ) : null}
         </div>
       </dl>
 
