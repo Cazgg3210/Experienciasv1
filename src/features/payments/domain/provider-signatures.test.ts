@@ -171,6 +171,18 @@ describe("Stripe — llamadas HTTP (sin SDK)", () => {
     expect(form.get("payment_intent")).toBe("pi_1");
     expect(form.get("amount")).toBe("1000");
   });
+  it("expireCheckout expira la sesión con POST /v1/checkout/sessions/{id}/expire y lanza si Stripe la rechaza", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: "cs_test_abc", status: "expired" }));
+    const provider = new StripePaymentProvider({ secretKey: "sk_x", webhookSecret: "w", appUrl: "x", fetchImpl: fetchImpl as unknown as typeof fetch });
+    await provider.expireCheckout("cs_test_abc");
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.stripe.com/v1/checkout/sessions/cs_test_abc/expire");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sk_x");
+    const rejected = vi.fn(async () => jsonResponse({ error: { type: "invalid_request_error", message: "Only open sessions can be expired" } }, 400));
+    const p2 = new StripePaymentProvider({ secretKey: "sk", webhookSecret: "w", appUrl: "x", fetchImpl: rejected as unknown as typeof fetch });
+    await expect(p2.expireCheckout("cs_done")).rejects.toThrow(/Stripe .*expire 400/);
+  });
   it("verifyWebhook valida firma y normaliza", async () => {
     const provider = new StripePaymentProvider({ secretKey: "sk", webhookSecret: STRIPE_SECRET, appUrl: "x" });
     const raw = JSON.stringify({
@@ -361,6 +373,23 @@ describe("Mercado Pago — llamadas HTTP (sin SDK)", () => {
     expect(body.notification_url).toBe("https://ivonne.test/api/webhooks/payments/mercadopago");
     expect(body.back_urls.success).toBe("https://ivonne.test/pago/resultado?p=cmpay1&s=x");
     expect(body.auto_return).toBe("approved");
+  });
+  it("expireCheckout adelanta la expiración de la preferencia con PUT /checkout/preferences/{id}", async () => {
+    vi.useFakeTimers({ now: new Date("2026-10-06T15:00:00Z") });
+    try {
+      const fetchImpl = vi.fn(async () => jsonResponse({ id: "pref_1" }));
+      const provider = new MercadoPagoPaymentProvider({ accessToken: "APP_USR-1", webhookSecret: MP_SECRET, appUrl: "x", fetchImpl: fetchImpl as unknown as typeof fetch });
+      await provider.expireCheckout("pref_1");
+      const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe("https://api.mercadopago.com/checkout/preferences/pref_1");
+      expect(init.method).toBe("PUT");
+      expect(JSON.parse(init.body as string)).toEqual({ expires: true, expiration_date_to: "2026-10-06T15:00:00.000Z" });
+      const rejected = vi.fn(async () => jsonResponse({ error: "not_found", message: "preference not found" }, 404));
+      const p2 = new MercadoPagoPaymentProvider({ accessToken: "t", webhookSecret: "w", appUrl: "x", fetchImpl: rejected as unknown as typeof fetch });
+      await expect(p2.expireCheckout("pref_x")).rejects.toThrow(/MercadoPago PUT/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("refund usa /v1/payments/{id}/refunds con monto en pesos", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ id: 55, status: "approved" }));

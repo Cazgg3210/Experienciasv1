@@ -62,4 +62,9 @@ export interface PaymentProvider {
   /** Verifica firma y normaliza el evento. rawBody debe ser el cuerpo exacto recibido. */
   verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookVerification>;
   refund(input: RefundInput): Promise<RefundResult>;
+  /**
+   * Expira una sesión de checkout abierta para que ya no se pueda pagar (p. ej. al cancelar el evento).
+   * Lanza si el proveedor la rechaza (ya cobrada o ya expirada); quien la llama decide si es best-effort.
+   */
+  expireCheckout?(checkoutId: string): Promise<void>;
 }

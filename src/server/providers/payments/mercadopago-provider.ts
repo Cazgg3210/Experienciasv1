@@ -150,7 +150,7 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
-  private async call<T>(method: "GET" | "POST", path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+  private async call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
     const res = await this.fetchImpl(`${MP_API}${path}`, {
       method,
       headers: {
@@ -242,5 +242,13 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     const status: RefundResult["status"] =
       res.status === "approved" ? "succeeded" : res.status === "in_process" || res.status === "pending" ? "pending" : "failed";
     return { refundId: String(res.id), status };
+  }
+
+  /** PUT /checkout/preferences/{id}: adelanta la vigencia de la preferencia a "ahora" (ya no se puede pagar). */
+  async expireCheckout(checkoutId: string): Promise<void> {
+    await this.call<{ id: string }>("PUT", `/checkout/preferences/${encodeURIComponent(checkoutId)}`, {
+      expires: true,
+      expiration_date_to: new Date().toISOString(),
+    });
   }
 }

@@ -78,6 +78,15 @@ const PROVIDER_CHECKOUT_TIMEOUT_MS = 15_000;
  */
 const CHECKOUT_TX_TIMEOUT_MS = 2 * PROVIDER_CHECKOUT_TIMEOUT_MS + 10_000;
 
+/**
+ * Opciones de las demás transacciones que toman el candado de la reserva (cancelación del evento,
+ * webhooks, pagos manuales y reembolsos). Pueden esperar a un startCheckout que conserva el candado
+ * mientras la pasarela abre la sesión (hasta PROVIDER_CHECKOUT_TIMEOUT_MS): con el límite por defecto de
+ * Prisma (5 s) fallarían si la pasarela responde lento. El límite cubre esa espera más el trabajo propio.
+ * Cada checkout en curso retiene una conexión del pool; ver `connection_limit` en docs/DEPLOY_DOKPLOY.md.
+ */
+export const BOOKING_LOCK_TX_OPTIONS = { maxWait: 10_000, timeout: PROVIDER_CHECKOUT_TIMEOUT_MS + 15_000 } as const;
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -267,6 +276,38 @@ export async function voidOpenCheckoutsForCancelledBooking(tx: Tx, bookingId: st
   return ids;
 }
 
+/** Tiempo máximo por sesión para pedirle a la pasarela que la expire (best-effort, tras la cancelación). */
+const PROVIDER_EXPIRE_TIMEOUT_MS = 10_000;
+
+/**
+ * Tras confirmar la cancelación: pide a la pasarela que expire las sesiones de checkout anuladas para que
+ * la clienta ya no pueda pagarlas (Stripe/Mercado Pago las mantienen pagables hasta 1 h). Best-effort: si
+ * falla, el cobro tardío se registra como «Reembolso requerido» y se avisa al equipo
+ * (ver applyPaymentSucceeded). Nunca lanza.
+ */
+export async function expireVoidedCheckouts(paymentIds: string[]): Promise<void> {
+  if (!paymentIds.length) return;
+  try {
+    const payments = await prisma.payment.findMany({
+      where: { id: { in: paymentIds }, providerCheckoutId: { not: null } },
+      select: { id: true, provider: true, providerCheckoutId: true },
+    });
+    await Promise.all(
+      payments.map(async (p) => {
+        const provider = getPaymentProviderByName(p.provider);
+        if (!provider?.expireCheckout || !p.providerCheckoutId) return;
+        try {
+          await withTimeout(provider.expireCheckout(p.providerCheckoutId), PROVIDER_EXPIRE_TIMEOUT_MS, `${provider.name}.expireCheckout`);
+        } catch (error) {
+          logger.warn("payments.checkout_expire_failed", { error, paymentId: p.id, provider: p.provider });
+        }
+      }),
+    );
+  } catch (error) {
+    logger.error("payments.checkout_expire_lookup_failed", { error, paymentIds });
+  }
+}
+
 function withParam(url: string, key: string, value: string): string {
   try {
     const u = new URL(url);
@@ -337,6 +378,11 @@ export async function confirmEventIfDepositSatisfied(
 
 /** Nota de resultado: la pasarela cobró un pago de una reserva ya cancelada (requiere reembolso). */
 export const CANCELLED_BOOKING_PAYMENT_NOTE = "cancelled_booking";
+/**
+ * Nota de resultado: el pago cambió entre la lectura y la escritura y la transición NO se aplicó.
+ * El webhook la trata como reintentable (no marca el evento procesado y responde 500).
+ */
+export const CONCURRENT_UPDATE_NOTE = "concurrent_update";
 
 /**
  * Marca un pago como PAID (si su estado lo permite) y confirma el evento cuando el anticipo
@@ -348,20 +394,26 @@ export const CANCELLED_BOOKING_PAYMENT_NOTE = "cancelled_booking";
  * panel—, pero el evento NO se reconfirma, el pago queda con la nota «Reembolso requerido», se audita y se
  * devuelve note=CANCELLED_BOOKING_PAYMENT_NOTE para que el webhook avise al equipo en lugar de mandarle a
  * la clienta la confirmación normal de pago.
+ *
+ * El estado del pago se lee DESPUÉS de tomar el candado de la reserva: la cancelación del evento anula
+ * (PENDING → FAILED) los checkouts abiertos bajo ese mismo candado, y un webhook que hubiera leído el pago
+ * antes de esperar el candado vería un PENDING ya obsoleto y perdería el cobro.
  */
 export async function applyPaymentSucceeded(
   tx: Tx,
   input: { paymentId: string; providerPaymentId?: string | null; feeCents?: number | null; paidAt?: Date },
 ): Promise<PaymentApplyOutcome> {
-  const payment = await tx.payment.findUnique({
+  const located = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { bookingId: true, kind: true } });
+  if (!located) throw new NotFoundError("Pago no encontrado.");
+  const base = { paymentId: input.paymentId, bookingId: located.bookingId, eventId: null };
+  if (located.kind === "REFUND") return { ...base, applied: false, confirmed: false, note: "refund_row" };
+  // Serializa con la cancelación, los checkouts y los demás pagos de la misma reserva (así la suma para
+  // confirmar el anticipo ve todos los pagos) y después lee el estado vigente del pago.
+  await lockBooking(tx, located.bookingId);
+  const payment = await tx.payment.findUniqueOrThrow({
     where: { id: input.paymentId },
-    select: { id: true, status: true, kind: true, bookingId: true, amountCents: true, notes: true },
+    select: { id: true, status: true, bookingId: true, amountCents: true, notes: true },
   });
-  if (!payment) throw new NotFoundError("Pago no encontrado.");
-  const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null };
-  if (payment.kind === "REFUND") return { ...base, applied: false, confirmed: false, note: "refund_row" };
-  // Serializa pagos concurrentes de la misma reserva: así la suma para confirmar el anticipo ve ambos.
-  await lockBooking(tx, payment.bookingId);
   const from = payment.status as PaymentStatus;
   if (!paymentStatusMachine.can(from, "PAID")) {
     return { ...base, applied: false, confirmed: false, note: `already_${from.toLowerCase()}` };
@@ -386,7 +438,7 @@ export async function applyPaymentSucceeded(
       ...(cancelledBooking ? { notes: [refundNote, payment.notes].filter(Boolean).join(" · ").slice(0, 500) } : {}),
     },
   });
-  if (res.count === 0) return { ...base, applied: false, confirmed: false, note: "concurrent_update" };
+  if (res.count === 0) return { ...base, applied: false, confirmed: false, note: CONCURRENT_UPDATE_NOTE };
   if (cancelledBooking) {
     logger.error("payments.collected_after_cancellation", { paymentId: payment.id, eventId: booking.event.id });
     await audit(
@@ -410,11 +462,14 @@ export async function applyPaymentFailed(
   tx: Tx,
   input: { paymentId: string; failureReason?: string | null },
 ): Promise<PaymentApplyOutcome> {
-  const payment = await tx.payment.findUnique({
+  const located = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { bookingId: true } });
+  if (!located) throw new NotFoundError("Pago no encontrado.");
+  // Mismo candado que el cobro y la cancelación: las transiciones de un pago nunca se pisan entre sí.
+  await lockBooking(tx, located.bookingId);
+  const payment = await tx.payment.findUniqueOrThrow({
     where: { id: input.paymentId },
     select: { id: true, status: true, bookingId: true },
   });
-  if (!payment) throw new NotFoundError("Pago no encontrado.");
   const base = { paymentId: payment.id, bookingId: payment.bookingId, eventId: null, confirmed: false };
   // Nunca degradar un pago cobrado por un evento de fallo tardío.
   if (payment.status !== "PENDING") return { ...base, applied: false, note: `ignored_${payment.status.toLowerCase()}` };
@@ -470,7 +525,7 @@ export async function applyProviderRefund(
     where: { id: payment.id, refundedCents: payment.refundedCents },
     data: { refundedCents: plan.newRefundedCents, status: plan.nextStatus },
   });
-  if (res.count === 0) return { ...base, applied: false, note: "concurrent_update" };
+  if (res.count === 0) return { ...base, applied: false, note: CONCURRENT_UPDATE_NOTE };
   await tx.payment.create({
     data: {
       bookingId: payment.bookingId,
@@ -745,7 +800,7 @@ export async function recordManualPayment(
       tx,
     );
     return applied;
-  });
+  }, BOOKING_LOCK_TX_OPTIONS);
 
   await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
   return { paymentId: outcome.paymentId, eventId: booking.event.id, confirmed: outcome.confirmed };
@@ -928,7 +983,7 @@ export async function refundPayment(
       tx,
     );
     return { rowId: row.id, status: effective.nextStatus, refundedCents: effective.newRefundedCents };
-  });
+  }, BOOKING_LOCK_TX_OPTIONS);
 
   return {
     refundPaymentId: outcome.rowId,

@@ -159,9 +159,11 @@ export async function getPaymentResult(paymentId: string) {
       status: true,
       amountCents: true,
       failureReason: true,
+      notes: true,
       paidAt: true,
       booking: {
         select: {
+          cancelledAt: true,
           event: { select: { id: true, title: true, status: true, eventDate: true, portalToken: true } },
           customer: { select: { name: true } },
         },

@@ -105,6 +105,56 @@ export function isCollectedPaymentStatus(status: string): boolean {
   return status === "PAID" || status === "PARTIAL_REFUND" || status === "REFUNDED";
 }
 
+/**
+ * ¿La pasarela confirmó este cobro cuando la reserva ya estaba cancelada? Lo determina el propio pago
+ * (la nota «Reembolso requerido» que deja el webhook), no el estado actual del evento: un anticipo pagado
+ * normalmente y un evento cancelado después NO es un cobro tardío.
+ */
+export function wasCollectedAfterCancellation(payment: { status: string; notes?: string | null }): boolean {
+  return isCollectedPaymentStatus(payment.status) && !!payment.notes?.startsWith(REFUND_REQUIRED_NOTE_PREFIX);
+}
+
+/**
+ * ¿Un cobro quedó registrado después de la cancelación de su reserva? Sirve para revisar casos anteriores a
+ * la nota «Reembolso requerido» (ver scripts/report-cancelled-booking-payments.ts).
+ */
+export function isPaidAfterCancellation(
+  payment: { kind: string; status: string; paidAt: Date | null },
+  cancelledAt: Date | null,
+): boolean {
+  if (payment.kind === "REFUND" || !isCollectedPaymentStatus(payment.status)) return false;
+  if (!payment.paidAt || !cancelledAt) return false;
+  return payment.paidAt.getTime() > cancelledAt.getTime();
+}
+
+const CONFIRMED_EVENT_STATUSES: readonly string[] = ["CONFIRMED", "PLANNING", "READY", "IN_PROGRESS", "COMPLETED"];
+
+export type PaymentResultStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIAL_REFUND";
+
+/** Lo que ve la clienta en /pago/resultado (sin notas internas ni datos de otros pagos). */
+export type PaymentStatusView = {
+  status: PaymentResultStatus;
+  eventConfirmed: boolean;
+  /** La reserva/evento está cancelado: ya no se ofrece reintentar el pago. */
+  eventCancelled: boolean;
+  /** La pasarela cobró cuando el evento ya estaba cancelado: el equipo debe reembolsarlo. */
+  collectedAfterCancellation: boolean;
+  failureReason: string | null;
+};
+
+export function paymentStatusView(
+  payment: { status: PaymentResultStatus; failureReason: string | null; notes: string | null },
+  booking: BookingCancellation,
+): PaymentStatusView {
+  return {
+    status: payment.status,
+    eventConfirmed: CONFIRMED_EVENT_STATUSES.includes(booking.event.status),
+    eventCancelled: isBookingCancelled(booking),
+    collectedAfterCancellation: wasCollectedAfterCancellation(payment),
+    failureReason: payment.status === "FAILED" ? payment.failureReason : null,
+  };
+}
+
 export type CheckoutLinkState = "payable" | "processed" | "expired" | "stale" | "cancelled";
 
 /**

@@ -236,7 +236,13 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       const pb = (await startDepositCheckout(db, request, baseURL!, b.quote.publicToken)).payment;
       const route = `/cotizacion/${a.quote.publicToken}`;
       const ok = okData(await paymentStatusCall(request, baseURL!, route, pa.id, signResult(pa.id)));
-      expect(ok).toEqual({ status: "PENDING", eventConfirmed: false, failureReason: null });
+      expect(ok).toEqual({
+        status: "PENDING",
+        eventConfirmed: false,
+        eventCancelled: false,
+        collectedAfterCancellation: false,
+        failureReason: null,
+      });
       const tampered = failure(await paymentStatusCall(request, baseURL!, route, pa.id, signResult(pa.id).replace(/^./, (c) => (c === "A" ? "B" : "A"))));
       expect(tampered.code).toBe("NOT_FOUND");
       const crossed = failure(await paymentStatusCall(request, baseURL!, route, pb.id, signResult(pa.id)));
@@ -483,6 +489,13 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       expect(await db.notificationLog.count({ where: { eventId: event.id, type: "PAYMENT_RECEIVED" } })).toBe(0);
       const cancelAudit = await db.auditLog.findFirstOrThrow({ where: { action: "event.cancelled", entityId: event.id } });
       expect(cancelAudit.after).toMatchObject({ voidedPayments: [payment.id] });
+      // El enlace de resultado del pago anulado no ofrece reintentar ni asegura que no hubo cobro
+      // (con una pasarela real la clienta pudo alcanzar a pagar; ese cobro se reembolsa).
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "Este pago se anuló" })).toBeVisible();
+      await expect(page.getByText(/te lo reembolsaremos/)).toBeVisible();
+      await expect(page.getByText(/No se realizó ningún cobro/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Intentar de nuevo" })).toHaveCount(0);
     },
   );
 
@@ -543,6 +556,68 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       const admin = await rolePage("owner");
       await admin.goto(`/admin/events/${event.id}`);
       await expect(admin.getByRole("main").getByText("Reembolso requerido", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    },
+  );
+
+  test(
+    "[PAY-024] si el equipo cancela mientras la clienta espera la confirmación, el resultado no asegura «sin cobro» ni ofrece reintentar",
+    { tag: ["@P1", "@negative", "@regression"] },
+    async ({ page, db, apiAs, request, baseURL, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
+      evidence("clienta", "Clienta en /pago/resultado esperando la confirmación → la fundadora cancela el evento → la página se actualiza sola");
+      const { quote, event } = await createAcceptedQuote(db, request, baseURL!);
+      const { payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "Confirmando tu pago…" })).toBeVisible();
+
+      const owner = await apiAs("owner");
+      okData(
+        await callAction(owner, baseURL!, "cancelEventAction", { eventId: event.id, reason: "Cancelación mientras la clienta paga (E2E)", notifyCustomer: false }, `/admin/events/${event.id}`),
+      );
+      expect((await db.payment.findUniqueOrThrow({ where: { id: payment.id } })).failureReason).toBe("Evento cancelado.");
+
+      // El poller recibe el pago anulado y el evento cancelado (la página se abrió cuando aún se podía reintentar).
+      await expect(page.getByRole("heading", { level: 1, name: "Este pago se anuló" })).toBeVisible();
+      await expect(page.getByText(/Si alcanzaste a completar el cobro en la pasarela, te lo reembolsaremos/)).toBeVisible();
+      await expect(page.getByText(/No se realizó ningún cobro/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Intentar de nuevo" })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "Volver a mi evento" })).toBeVisible();
+      const status = okData(await paymentStatusCall(request, baseURL!, `/cotizacion/${quote.publicToken}`, payment.id, signResult(payment.id)));
+      expect(status).toEqual({
+        status: "FAILED",
+        eventConfirmed: false,
+        eventCancelled: true,
+        collectedAfterCancellation: false,
+        failureReason: "Evento cancelado.",
+      });
+    },
+  );
+
+  test(
+    "[PAY-025] un anticipo pagado antes de cancelar el evento no se presenta como cobro por reembolsar",
+    { tag: ["@P2", "@regression"] },
+    async ({ page, db, apiAs, request, baseURL, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-002" });
+      evidence("clienta", "Paga el anticipo → evento confirmado → la fundadora lo cancela después → la clienta reabre su enlace de resultado");
+      const { quote, event } = await createAcceptedQuote(db, request, baseURL!);
+      const { payment } = await startDepositCheckout(db, request, baseURL!, quote.publicToken);
+      const res = await postWebhook(request, mockEvent(payment));
+      expect(res.json).toMatchObject({ applied: true });
+      expect((await db.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CONFIRMED");
+      const owner = await apiAs("owner");
+      okData(
+        await callAction(owner, baseURL!, "cancelEventAction", { eventId: event.id, reason: "Cancelación con anticipo retenido (E2E)", notifyCustomer: false }, `/admin/events/${event.id}`),
+      );
+      const paid = await db.payment.findUniqueOrThrow({ where: { id: payment.id } });
+      expect(paid.status).toBe("PAID");
+      expect(paid.notes, "un pago previo a la cancelación no lleva la nota de reembolso").toBeNull();
+
+      await page.goto(resultPath(payment.id));
+      await expect(page.getByRole("heading", { level: 1, name: "¡Pago recibido!", exact: true })).toBeVisible();
+      await expect(page.getByText(/Tu celebración está cancelada/)).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Recibimos tu pago, pero tu evento está cancelado" })).toHaveCount(0);
+      await expect(page.getByText(/reembolsártelo/)).toHaveCount(0);
+      await expect(page.getByText(/invitar a tus amigas/)).toHaveCount(0);
     },
   );
 

@@ -19,10 +19,10 @@ import { whatsappLink } from "@/server/providers/whatsapp/links";
 import { signedMediaPath } from "@/features/media/server/media-url";
 import { getSettings } from "@/features/settings/server/settings-service";
 import {
-  REFUND_REQUIRED_NOTE_PREFIX,
   UNDERPAID_REVIEW_NOTE_PREFIX,
   checkoutLinkState,
   refundableCents,
+  wasCollectedAfterCancellation,
   type BookingAmounts,
   type BookingCancellation,
 } from "../domain/amounts";
@@ -54,7 +54,7 @@ function statusView(
     // La pasarela reportó un cobro distinto al esperado (ver nota): requiere acción del equipo.
     return { label: "Revisar cobro", tone: "danger" };
   }
-  if (p.status === "PAID" && p.notes?.startsWith(REFUND_REQUIRED_NOTE_PREFIX)) {
+  if (p.status === "PAID" && wasCollectedAfterCancellation(p)) {
     // La pasarela cobró cuando el evento ya estaba cancelado (ver nota): el equipo debe reembolsarlo.
     return { label: "Reembolso requerido", tone: "danger" };
   }

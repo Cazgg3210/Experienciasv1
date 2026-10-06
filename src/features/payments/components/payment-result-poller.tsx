@@ -5,7 +5,8 @@ import Link from "next/link";
 import { CheckCircle2, Clock, Loader2, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { handleActionResult } from "@/components/forms/action-result";
-import { getPaymentStatusAction, startCheckoutAction, type PaymentStatusView } from "../server/checkout-actions";
+import { CANCELLED_CHECKOUT_REASON, type PaymentStatusView } from "../domain/amounts";
+import { getPaymentStatusAction, startCheckoutAction } from "../server/checkout-actions";
 
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_MS = 40_000;
@@ -22,6 +23,8 @@ function phaseFor(view: PaymentStatusView, timedOut: boolean): Phase {
 /**
  * Resultado del pago: consulta el estado (confirmado por webhook) cada 2 s hasta ~40 s.
  * Nunca da por pagado algo sólo porque la clienta volvió de la pasarela.
+ * Los textos sobre cancelación salen del estado consultado (no del render inicial): el evento puede
+ * cancelarse, o el cobro tardío registrarse, mientras la clienta está en esta página.
  */
 export function PaymentResultPoller({
   p,
@@ -32,7 +35,6 @@ export function PaymentResultPoller({
   amountLabel,
   kindLabel,
   eventTitle,
-  eventCancelled = false,
 }: {
   p: string;
   s: string;
@@ -42,8 +44,6 @@ export function PaymentResultPoller({
   amountLabel: string;
   kindLabel: string;
   eventTitle: string;
-  /** El evento está cancelado: un cobro tardío no se confirma como un pago normal (el equipo lo reembolsa). */
-  eventCancelled?: boolean;
 }) {
   const [view, setView] = React.useState<PaymentStatusView>(initial);
   const [timedOut, setTimedOut] = React.useState(false);
@@ -51,6 +51,11 @@ export function PaymentResultPoller({
   const [retrying, setRetrying] = React.useState(false);
   const headingRef = React.useRef<HTMLHeadingElement>(null);
   const phase = phaseFor(view, timedOut);
+  // Un evento cancelado ya no acepta pagos: no se ofrece reintentar aunque la página se abrió antes.
+  const canRetry = !!retry && !view.eventCancelled;
+  // Checkout anulado al cancelar el evento: con una pasarela real la clienta pudo alcanzar a pagar, así que
+  // no se le asegura que no hubo cobro (un cobro tardío se registra y el equipo lo reembolsa).
+  const voidedByCancellation = view.status === "FAILED" && view.failureReason === CANCELLED_CHECKOUT_REASON;
 
   React.useEffect(() => {
     if (view.status !== "PENDING" || timedOut) return;
@@ -99,7 +104,7 @@ export function PaymentResultPoller({
   }, [phase]);
 
   async function onRetry() {
-    if (!retry) return;
+    if (!retry || !canRetry) return;
     setRetrying(true);
     try {
       const res = await startCheckoutAction({ token: retry.token, tokenType: "portal", kind: retry.kind });
@@ -146,16 +151,18 @@ export function PaymentResultPoller({
             <CheckCircle2 className="size-8" aria-hidden />
           </div>
           <h1 ref={headingRef} tabIndex={-1} className="font-heading mt-6 text-3xl font-semibold outline-none sm:text-4xl">
-            {eventCancelled
+            {view.collectedAfterCancellation
               ? "Recibimos tu pago, pero tu evento está cancelado"
               : view.eventConfirmed
                 ? "¡Pago recibido! Tu fecha está confirmada"
                 : "¡Pago recibido!"}
           </h1>
           <p className="text-muted-foreground mx-auto mt-3 max-w-md">
-            {eventCancelled
+            {view.collectedAfterCancellation
               ? "Tu celebración ya estaba cancelada cuando se completó el cobro. Ya avisamos al equipo para reembolsártelo y te contactaremos muy pronto por correo o WhatsApp."
-              : "Gracias por confiar en nosotras. Te enviamos el comprobante por correo y WhatsApp. Desde tu portal puedes invitar a tus amigas, revisar el menú y contarnos todos los detalles."}
+              : view.eventCancelled
+                ? "Este pago quedó registrado. Tu celebración está cancelada; si tienes dudas sobre tu pago, escríbenos por WhatsApp."
+                : "Gracias por confiar en nosotras. Te enviamos el comprobante por correo y WhatsApp. Desde tu portal puedes invitar a tus amigas, revisar el menú y contarnos todos los detalles."}
           </p>
           {view.status === "PARTIAL_REFUND" ? (
             <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm">Una parte de este pago ya fue reembolsada.</p>
@@ -173,17 +180,20 @@ export function PaymentResultPoller({
             <XCircle className="size-8" aria-hidden />
           </div>
           <h1 ref={headingRef} tabIndex={-1} className="font-heading mt-6 text-3xl font-semibold outline-none sm:text-4xl">
-            Tu pago no se completó
+            {voidedByCancellation ? "Este pago se anuló" : "Tu pago no se completó"}
           </h1>
           <p className="text-muted-foreground mx-auto mt-3 max-w-md">
-            {view.failureReason ?? "La pasarela no pudo procesar el cargo."} No se realizó ningún cobro.{" "}
-            {eventCancelled
-              ? "Si tienes dudas, escríbenos por WhatsApp."
-              : "Puedes intentarlo de nuevo con otra tarjeta o escribirnos por WhatsApp."}
+            {voidedByCancellation
+              ? "Tu celebración fue cancelada, así que anulamos este pago. Si alcanzaste a completar el cobro en la pasarela, te lo reembolsaremos y te contactaremos por correo o WhatsApp."
+              : `${view.failureReason ?? "La pasarela no pudo procesar el cargo."} No se realizó ningún cobro. ${
+                  canRetry
+                    ? "Puedes intentarlo de nuevo con otra tarjeta o escribirnos por WhatsApp."
+                    : "Si tienes dudas, escríbenos por WhatsApp."
+                }`}
           </p>
           {summary}
           <div className="mt-8 flex flex-col items-center gap-3">
-            {retry ? (
+            {canRetry ? (
               <Button size="xl" onClick={onRetry} disabled={retrying} aria-busy={retrying || undefined}>
                 {retrying ? (
                   <Loader2 className="size-5 motion-safe:animate-spin" aria-hidden />
