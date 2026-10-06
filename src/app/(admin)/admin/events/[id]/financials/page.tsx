@@ -86,11 +86,7 @@ export default async function EventFinancialsPage({ params }: { params: Promise<
             Los márgenes se calculan sobre el ingreso neto de IVA.
           </p>
         </div>
-        {event.closedAt ? (
-          <StatusBadge tone="neutral" dot={false}>
-            <Lock className="size-3" aria-hidden /> Cerrado
-          </StatusBadge>
-        ) : null}
+        {/* La insignia «Cerrado» vive en el encabezado del evento (visible en todas las pestañas). */}
       </div>
 
       {event.closedAt ? (

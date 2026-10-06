@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, ChevronLeft, MapPin, MessageCircle, UserRound, UsersRound } from "lucide-react";
+import { CalendarDays, ChevronLeft, Lock, MapPin, MessageCircle, UserRound, UsersRound } from "lucide-react";
 import { CopyButton } from "@/components/data/copy-button";
 import { StatusBadge } from "@/components/data/status-badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,11 @@ export function EventHeader({ event }: { event: EventHeaderData }) {
             <StatusBadge tone={EVENT_STATUS_TONES[event.status]}>
               {EVENT_STATUS_LABELS[event.status]}
             </StatusBadge>
+            {event.closedAt ? (
+              <StatusBadge tone="neutral" dot={false}>
+                <Lock className="size-3" aria-hidden /> Cerrado
+              </StatusBadge>
+            ) : null}
           </div>
           <h1 className="font-heading text-3xl leading-tight font-semibold text-balance sm:text-4xl">
             {event.title}
