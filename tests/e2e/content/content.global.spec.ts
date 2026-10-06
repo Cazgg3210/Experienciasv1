@@ -77,9 +77,9 @@ test.describe("Contenido · reflejo en el sitio y orden", { tag: ["@module:conte
     }
   });
 
-  test("[CNT-022] subir/bajar una pregunta frecuente intercambia su posición con la vecina", { tag: ["@P2"] }, async ({ rolePage, db, evidence }) => {
+  test("[CNT-022] subir/bajar una pregunta frecuente intercambia su posición con la vecina", { tag: ["@P2", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/content/faq › Subir / Bajar");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-02 (intermitente)" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const order = async () => (await db.faq.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true } })).map((f) => f.id);
     const before = await order();
     const target = await db.faq.findFirstOrThrow({ where: { id: before[2] } });
@@ -95,9 +95,9 @@ test.describe("Contenido · reflejo en el sitio y orden", { tag: ["@module:conte
     await expect(page.getByRole("button", { name: `Subir pregunta “${(await db.faq.findFirstOrThrow({ where: { id: before[0] } })).question}”` })).toBeDisabled();
   });
 
-  test("[CNT-023] reordenar testimonios persiste el orden y la lista se actualiza en pantalla", { tag: ["@P2"] }, async ({ rolePage, db, evidence }) => {
+  test("[CNT-023] reordenar testimonios persiste el orden y la lista se actualiza en pantalla", { tag: ["@P2", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/content › Bajar testimonio (1.º) → la UI se refresca → Subir");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-02 (intermitente)" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const tOrder = async () => db.testimonial.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, authorName: true, sortOrder: true } });
     const tBefore = await tOrder();
     const first = tBefore[0]!;
@@ -117,9 +117,9 @@ test.describe("Contenido · reflejo en el sitio y orden", { tag: ["@module:conte
     }
   });
 
-  test("[CNT-024] reordenar fotos de la galería persiste el orden y la tarjeta cambia de posición", { tag: ["@P2"] }, async ({ rolePage, db, evidence }) => {
+  test("[CNT-024] reordenar fotos de la galería persiste el orden y la tarjeta cambia de posición", { tag: ["@P2", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/content/gallery › Bajar imagen 1 → la tarjeta pasa a #2 → Subir");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-02 (intermitente)" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const gOrder = async () => db.mediaAsset.findMany({ where: { purpose: "GALLERY" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, sortOrder: true } });
     const gBefore = await gOrder();
     const first = gBefore[0]!.id;

@@ -244,7 +244,7 @@ test.describe("Inventario · artículos y stock", { tag: ["@module:inventory"] }
 
   test("[INV-025] los filtros del inventario (búsqueda y «Incluir inactivos») actualizan la URL y la lista sin recargar", { tag: ["@P1", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/inventory › escribir en Buscar y activar Incluir inactivos (navegación en el cliente)");
-    test.info().annotations.push({ type: "bug", description: "OPX-BUG-01 (relacionado con EVX-BUG-02 del carril 4)" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const item = await createInventoryItem(db, { name: uniq("Filtro UI E2E"), active: false });
     const page = await rolePage("owner");
     await page.goto("/admin/inventory");

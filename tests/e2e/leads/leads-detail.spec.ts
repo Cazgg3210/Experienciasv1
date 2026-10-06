@@ -360,14 +360,18 @@ test.describe("Leads · detalle y estados", { tag: ["@module:leads"] }, () => {
     const select = page.getByLabel("Responsable");
     await expect(select).toHaveValue("");
     await select.selectOption({ label: rosa.name });
-    await expect(page.getByText(`Asignado a ${rosa.name}`)).toBeVisible();
+    // Toast de confirmación y nueva entrada del timeline (la acción revalida la ruta). Antes de corregir
+    // BUG-006 el timeline no se repintaba y sólo había un texto; ahora se valida cada uno por separado.
+    await expect(page.getByText(`Asignado a ${rosa.name}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`Asignado a ${rosa.name}.`, { exact: true })).toBeVisible();
     await expect.poll(async () => (await db.lead.findUniqueOrThrow({ where: { id: lead.id } })).assignedToId).toBe(rosa.id);
     const act = await db.leadActivity.findFirstOrThrow({ where: { leadId: lead.id, type: "ASSIGNED" } });
     expect(act.message).toBe(`Asignado a ${rosa.name}.`);
     await page.reload();
     await expect(page.getByLabel("Responsable")).toHaveValue(rosa.id);
     await page.getByLabel("Responsable").selectOption("");
-    await expect(page.getByText("Lead sin asignar")).toBeVisible();
+    await expect(page.getByText("Lead sin asignar", { exact: true })).toBeVisible();
+    await expect(page.getByText(`Se quitó la asignación de ${rosa.name}.`, { exact: true })).toBeVisible();
     await expect.poll(async () => (await db.lead.findUniqueOrThrow({ where: { id: lead.id } })).assignedToId).toBeNull();
     const audits = await db.auditLog.findMany({ where: { entityId: lead.id, action: "lead.assigned" }, orderBy: { createdAt: "asc" } });
     expect(audits.map((a) => a.after)).toEqual([{ assignedToId: rosa.id }, { assignedToId: null }]);

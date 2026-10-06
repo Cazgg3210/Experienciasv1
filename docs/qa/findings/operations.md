@@ -14,7 +14,7 @@
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — consolidado como **BUG-006**; causa raíz y corrección en docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»)
 **Type:** APPLICATION BUG
 **Module:** inventory (componente compartido `ListFilters`, también usado por compras y proveedores)
 **Role:** OWNER (ivonne@ivonne-rosa.test)
@@ -64,7 +64,7 @@ Transición del App Router que queda suspendida al aplicar el payload RSC de la 
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como **BUG-006**; causa raíz y corrección en docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»)
 **Type:** APPLICATION BUG (intermitente; posible carrera)
 **Module:** content (testimonios, FAQ, galería) · también visto en notifications (NOT-002)
 **Role:** OWNER (ivonne@ivonne-rosa.test)

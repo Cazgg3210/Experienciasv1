@@ -88,7 +88,7 @@ Corregido junto con SAL-BUG-03 (mismo defecto). Detalle de la regla y evidencia 
 
 **Severity:** HIGH
 **Priority:** P0 (afecta de forma intermitente la confirmación visible del recorrido crítico de RSVP; los datos sí se guardan)
-**Status:** Open
+**Status:** Fixed — consolidado como **BUG-006** (mitigación en la app; causa raíz en React/Next, ver «Corrección (BUG-006)» al final de esta sección)
 **Type:** APPLICATION BUG
 **Module:** calendar / events / guests (RSVP) — probablemente transversal al App Router
 **Role:** OWNER (admin) e Invitada (micrositio)
@@ -135,6 +135,78 @@ Interacción del router de Next 15.5 (navegación same-route / refresh) con resp
 1. Confirmar en el contenedor Linux (Dokploy) y con la última 15.5.x; si persiste, reportar a Next/actualizar.
 2. Mitigación inmediata: en `rsvp-panel.tsx` llamar `onSaved()` **fuera** de la transición (y `router.refresh()` aparte); en calendario/filtros usar navegación completa (`<a href>`) o `router.push` con `{ scroll: false }` + fallback `window.location.assign` si no hay commit.
 3. Mantener CAL-002, EVT-038, GST-012 y GST-015 como `@regression`.
+
+### Corrección (BUG-006)
+
+Consolida EVX-BUG-02, COM-BUG-03 (commercial.md), OPX-BUG-01 y OPX-BUG-02 (operations.md) y TRV-BUG-01 (transversal.md). Investigado y corregido en el carril 5 (`:3205`, `ivonne_rosa_e2e_l5`) sobre `8020b91`.
+
+**Causa raíz (confirmada).** No es la red, ni el servidor, ni código de la app. Es un ping perdido en el reconciliador de React `19.2.0-canary-0bdb9206-20250818`, la versión que trae Next 15.5.27:
+1. Una transición del router renderiza un payload RSC que todavía llega por streaming. React se suspende en un *lazy* de Flight (`$L…`) cuya fila aún no llega. Pasa dentro de un Suspense **ya visible**: el de `loading.tsx`, cuya key es el segmento sin searchParams (`__PAGE__`). React cede el hilo (`SuspendedOnImmediate` → `SuspendedAndReadyToUnwind`).
+2. La fila llega en ese intervalo. El chunk pasa a `resolved_model`: el dato está recibido pero sin inicializar, porque el camino de *lazy* no adjunta listeners. `isThenableResolved()` no lo cuenta como resuelto.
+3. React desenrolla: `renderDidSuspendDelayIfPossible()` deja el estado en `RootSuspendedWithDelay`. Luego `attachPingListener` llama `chunk.then()`, que inicializa el chunk y ejecuta el ping **de forma síncrona en plena fase de render**. Con estado 4 y `RenderContext` activo, `pingSuspendedRoot` no reinicia el render ni registra `workInProgressRootPingedLanes`. El ping se pierde y la raíz queda suspendida sin nada que la reintente.
+
+Esto explica cada síntoma:
+- **Misma ruta.** El `<Link>` a `?month=…` (o `?page=2`) reutiliza, por alias de pathname, el prefetch sembrado con la página actual (sólo en producción). Eso dispara un *lazy fetch* durante la transición. Entre rutas distintas la frontera de `loading.tsx` es nueva: se muestra el fallback y el ping no se pierde.
+- **`router.refresh()` y Server Actions que revalidan.** Renderizan el árbol mientras llega el stream: es el mismo mecanismo (contenido, notificaciones, RSVP).
+- **«Funciona si la respuesta llega en bloque».** Con todas las filas presentes React nunca se suspende esperando red.
+
+**Evidencia** (scripts de diagnóstico de Playwright en el scratchpad del carril; no forman parte de la suite):
+- Sin instrumentación ni `page.route`, el clic en «Siguiente» del calendario navegó 0–2 veces de 5 en sesiones nuevas. La búsqueda de inventario, «Limpiar filtros» de eventos y `router.refresh()` se colgaron casi siempre.
+- El lector de React Flight recibe el cuerpo completo (64 735 bytes) y el fin del stream unos 25 ms después de pedirlo. Desde Node, la misma petición termina en 149 ms. `net::ERR_ABORTED` aparece *después* de recibir el cuerpo completo, incluso en prefetch que sí terminaron: es ruido de Chromium, no la causa.
+- Con el router instrumentado (chunk servido con logs, sólo para diagnóstico) se ve esta secuencia: `navigate` (alias) → *lazy fetch* con `refetch` → `server-patch` aplicado, sin descartes → React re-renderiza la página y no hace commit (`history.pushState` nunca ocurre).
+- En el estado colgado, la raíz de React tiene `pendingLanes = suspendedLanes = 0b111000000000000`, `pingedLanes = 0` y ningún callback programado. El último `attachPingListener` fue sobre un lazy de Flight (sección «Disponibilidad») que ya estaba en `resolved_model`.
+
+**Hipótesis del análisis:**
+
+| Hipótesis | Resultado |
+|---|---|
+| 1. `Set-Cookie` de `auth()` en cada respuesta RSC | **Descartada.** La cabecera sigue presente con la mitigación y ya no hay cuelgues. El stream llega completo a React. |
+| 2. `force-dynamic` + `loading.tsx` en streaming | **Es la condición, no la causa.** Pone el lazy dentro de una frontera ya visible. |
+| 3. Compresión / chunked de `next start` | **Descartada.** La respuesta termina y el navegador entrega todos los bytes y el fin del stream. |
+| 4. Componente cliente con `router.*` en efectos | **Descartada.** El calendario no tiene ninguno y `grep` no encontró nada que aborte la navegación. |
+| 5. Suspense / `useTransition` pendiente | **Es el síntoma.** La transición queda suspendida por el ping perdido. |
+| 6. Artefacto de Playwright | **Descartada.** Se reproduce sin `page.route` ni init scripts. Con `next dev` no se reproduce (24/24 OK): en desarrollo no se usa el alias del prefetch y los tiempos del build de React son otros. |
+
+**Mitigación aplicada** (nivel app, sin dependencias nuevas ni cambios de versión): `src/lib/rsc-response-buffer.ts` y `src/instrumentation-client.ts`, que Next carga antes de hidratar. Envuelven `window.fetch` en dos partes:
+- **A. Respuestas RSC completas.** Las respuestas `text/x-component` se entregan ya completas, conservando estado, cabeceras, `url` y `redirected`; el router usa estos dos últimos para detectar redirecciones (sesión vencida → `/login`). Con todo el payload disponible, Flight resuelve todas las filas antes de que React renderice y la carrera no puede ocurrir. Cubre navegaciones, prefetch, `router.refresh()` y Server Actions sin tocar cada componente.
+- **B. Lazy fetch obsoletos.** Next 15.5 aplica la respuesta del *lazy fetch* del layout-router como `SERVER_PATCH` sin comparar `previousTree`. Si mientras tanto empezó otra navegación a una ruta hermana, el parche reemplaza la ruta nueva por la vieja: URL nueva con contenido viejo. El defecto es de Next y ya existía, pero con (A) la ventana pasa de «primer byte» a «respuesta completa»; SET-001 lo hizo visible 3/3 tras la primera versión de la corrección. Con el traceo del router se confirmó que el parche de `/admin/settings` (clic en «Negocio») caía sobre `/admin/settings/pricing` («Precios y márgenes»).
+  - **Corrección:** el hook oficial `onRouterTransitionStart` de `instrumentation-client` registra cada navegación. Si un *lazy fetch* (GET RSC con `refetch` debajo de la raíz) termina después de que empezó otra navegación a otra URL, se entrega un payload RSC válido sin datos (`f: []`, mismo buildId). Next lo aplica sin cambios, igual que cuando la ruta del parche ya no coincide.
+  - **Límite:** si no reconoce el formato de la fila raíz, entrega la respuesta real (comportamiento original).
+- **Costo:** las navegaciones del cliente ya no pintan por partes. La carga inicial (HTML) sigue en streaming.
+- **Riesgo residual (de Next, no introducido):** un nodo cuyo lazy fetch quedó obsoleto conserva `lazyData` sin `rsc`. Volver a esa URL con atrás/adelante puede quedarse en el esqueleto de carga, igual que cuando Next descarta un parche por ruta distinta. Requiere dos navegaciones en menos que el tiempo de respuesta y luego «atrás».
+- **Pruebas unitarias:** `src/lib/rsc-response-buffer.test.ts` (18 casos).
+- **Validación previa de (A)** (misma función inyectada antes de compilarla en la app): con buffer, 32/32 OK (8 por escenario: calendario Siguiente→Anterior→Hoy, «Limpiar filtros» de eventos, búsqueda de inventario, `router.refresh()` + navegación). Sin buffer, 2/16.
+
+**Versión que lo arreglaría.** No verificada: no se actualizó (fuera de alcance sin aprobación). Hace falta un React canary posterior que no pierda pings síncronos durante el render (o que trate `resolved_model` como resuelto en el camino de *lazy*). Para retirar la mitigación, quitar la llamada en `src/instrumentation-client.ts` tras actualizar Next y comprobar que pasan CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022..024, NOT-002 y CRIT-004 con `--repeat-each=5 --retries=0`.
+
+**Verificación tras la corrección:** ver «Registro de verificación BUG-006» abajo.
+
+#### Registro de verificación BUG-006 (carril 5, build de producción `:3205`, base `ivonne_rosa_e2e_l5`)
+
+| Corrida | Resultado |
+|---|---|
+| Reproducción antes de corregir (`8020b91`, `--retries=0`) | CAL-002, EVT-038, LEAD-037, INV-025, GST-012, GST-015 **FAIL**. GST-011, NOT-002 y SET-001 pasaron en esa corrida (intermitentes). |
+| Diagnóstico sin instrumentación (scripts, sesiones nuevas) | Calendario «Siguiente»: 0–2/5 OK. `next dev`: 24/24 OK, no reproduce. |
+| Corrección v1 (sólo A), `--repeat-each=3` | 35/38. SET-001 **3/3 FAIL**: parche obsoleto (B), confirmado con el traceo del router. |
+| **Corrección final (A+B)**, `--repeat-each=5 --retries=0` | **70/70 PASS**: 5 de setup + CAL-002, EVT-038, LEAD-037, INV-025, GST-011, GST-012, GST-015, NOT-002, SET-001 y CRIT-004 en chromium, y GST-011, GST-012 y CRIT-004 en mobile-chrome. |
+| CNT-022/023/024 (`E2E_SUITE=global`), `--repeat-each=5 --retries=0` | **15/15 PASS** |
+| Cross-browser P0 (GST-011, CRIT-004), Firefox + WebKit, `--repeat-each=2` | **8/8 PASS** |
+| Regresión: calendar, leads, events, guests, inventory, content, notifications, settings, quotes y smoke (chromium + mobile-chrome, config por defecto) | 225 PASS, 9 FAIL, 0 flaky (detalle abajo). |
+| Regresión global (calendar, content, notifications, settings, quotes) | **25/25 PASS** |
+| Extra: navigation, auth, critical y portal (chromium + mobile-chrome) | 106 PASS, 8 FAIL (detalle abajo). |
+| Unitarias / typecheck / lint | 753/753 · OK · OK |
+
+**FAIL de la regresión de 10 carpetas:**
+- 7 son bugs abiertos ya reportados, ajenos a BUG-006: EVT-024 (EVX-BUG-01), GST-014 (EVX-BUG-03), CAL-007, EVT-037 y GST-022 (EVX-BUG-04/05), LEAD-036 (COM-BUG-01) y NOT-007 (OPX-BUG-04).
+- LEAD-021 es un **TEST BUG expuesto por la corrección**. El locator `getByText("Asignado a Rosa")` coincidía con el toast y, ahora que el timeline sí se repinta tras la Server Action, también con la entrada «Asignado a Rosa.» (strict mode). Antes pasaba porque el timeline no se actualizaba: es otra manifestación de BUG-006. Se separaron los asserts (toast y entrada del timeline, y lo mismo al desasignar): 3/3 PASS.
+- SMK-023 es una **dependencia de datos de la prueba**. En una sola corrida, la carpeta quotes crea unas 60 cotizaciones y la sembrada sale de la página 1 (20 por página). En una base recién sembrada: 3/3 PASS. No se modificó.
+
+**FAIL de la corrida extra:**
+- 5 son bugs abiertos ya reportados: AUTH-025 (ACC-BUG-02), AUTH-049 (ACC-BUG-03), NAV-002 (ACC-BUG-04), NAV-015 (ACC-BUG-05) y CRIT-014 (TRV-BUG-06).
+- AUTH-004/005 son un **TEST BUG expuesto por la corrección**. `getByText("Hola, Lupita")` coincidía con el saludo del encabezado y con el párrafo de la página «Hola, Lupita. Aquí ves…»; antes el contenido de la página llegaba por streaming después del encabezado. Se usa coincidencia exacta: 3/3 PASS.
+- CRIT-006 es una **dependencia de datos de la prueba**. Usa `findFirst({ role: "OWNER", email contains "ivonne" })`, que en la misma base también encuentra las fundadoras `…@e2e.ivonne-rosa.test` que crean las pruebas de auth. En una base recién sembrada: 3/3 PASS. No se modificó.
+
+Evidencia (no versionada): `test-results/l5-evidence/BUG-006/{before-fix,fix1,fix2,regression1,regression-extra}/`.
 
 ---
 

@@ -28,7 +28,9 @@ test.describe("Login del equipo", { tag: ["@module:auth", "@auth"] }, () => {
         await expect(page.getByRole("heading", { level: 1 })).toContainText("Hola");
         await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toBeVisible();
       } else {
-        await expect(page.getByText(`Hola, ${account.name.split(" ")[0]}`)).toBeVisible();
+        // Saludo del encabezado del portal (exacto: la página de inicio repite «Hola, <nombre>. Aquí ves…»
+        // y, desde la corrección de BUG-006, ambos llegan juntos en la misma respuesta RSC)
+        await expect(page.getByText(`Hola, ${account.name.split(" ")[0]}`, { exact: true })).toBeVisible();
         await expect(page.getByRole("navigation", { name: "Staff" })).toBeVisible();
       }
       // Cookie de sesión: httpOnly + SameSite=Lax (no accesible desde JS)

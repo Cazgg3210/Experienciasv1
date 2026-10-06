@@ -218,7 +218,7 @@ test.describe("Leads · listado y búsqueda", { tag: ["@module:leads"] }, () => 
 test.describe("Leads · navegación del cliente", { tag: ["@module:leads"] }, () => {
   test("[LEAD-037] 'Siguiente' y 'Limpiar filtros' navegan con un clic (misma ruta, otros searchParams)", { tag: ["@P2", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "Leads › clic en Siguiente (paginación) y en Limpiar filtros del estado vacío");
-    test.info().annotations.push({ type: "bug", description: "COM-BUG-03" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const prefix = uniq("LeadNav");
     await db.lead.createMany({
       data: Array.from({ length: 26 }, (_, i) => ({

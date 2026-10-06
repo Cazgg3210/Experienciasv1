@@ -43,9 +43,9 @@ function rsvpInput(slug: string, tk: string, patch: Record<string, unknown> = {}
 }
 
 test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
-  test("[GST-011] confirmar asistencia con el link personal (acompañante y restricción) se refleja en admin y portal", { tag: ["@P0", "@critical", "@mobile"] }, async ({ anonPage, rolePage, db, evidence }) => {
+  test("[GST-011] confirmar asistencia con el link personal (acompañante y restricción) se refleja en admin y portal", { tag: ["@P0", "@critical", "@mobile", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
     evidence("invitada", "Link personal › ¡Sí, ahí estaré! › acompañante › Vegetariana › Enviar mi respuesta");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-02" }); // confirmación tras guardar (router.refresh en transición)
+    test.info().annotations.push({ type: "regression", description: "BUG-006" }); // confirmación tras guardar (router.refresh en transición)
     const ev = await createEventFixture(db, { status: "CONFIRMED", addressLine: "Ámsterdam 210 depto 3" });
     const g = await createGuestFixture(db, ev, { name: `Daniela ${uniq("Rsvp")}`, email: uniqEmail("dani") });
     const page = await anonPage();
@@ -80,9 +80,9 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     await expect(host.getByRole("region", { name: "Invitadas" })).toContainText("1 confirmadas de 1 invitadas");
   });
 
-  test("[GST-012] declinar y luego cambiar la respuesta con «Editar mi respuesta»", { tag: ["@P1", "@mobile"] }, async ({ anonPage, db, evidence }) => {
+  test("[GST-012] declinar y luego cambiar la respuesta con «Editar mi respuesta»", { tag: ["@P1", "@mobile", "@regression"] }, async ({ anonPage, db, evidence }) => {
     evidence("invitada", "Link personal › No podré ir › Editar mi respuesta › Tal vez");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-02" }); // confirmación tras guardar (router.refresh en transición)
+    test.info().annotations.push({ type: "regression", description: "BUG-006" }); // confirmación tras guardar (router.refresh en transición)
     const ev = await createEventFixture(db, { status: "CONFIRMED" });
     const g = await createGuestFixture(db, ev, { name: `Sara ${uniq("Rsvp")}` });
     const page = await anonPage();
@@ -216,9 +216,9 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     await expect(list.getByRole("listitem").filter({ hasText: new RegExp(victim.name) })).not.toContainText("Posible duplicado");
   });
 
-  test("[GST-015] mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar", { tag: ["@P1"] }, async ({ anonPage, rolePage, db, evidence }) => {
+  test("[GST-015] mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar", { tag: ["@P1", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
     evidence("invitada", "Link personal › Mensaje para <homenajeada> › editar respuesta y mensaje");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-02" }); // confirmación tras guardar (router.refresh en transición)
+    test.info().annotations.push({ type: "regression", description: "BUG-006" }); // confirmación tras guardar (router.refresh en transición)
     const ev = await createEventFixture(db, { status: "CONFIRMED", honoreeName: "Regina" });
     const g = await createGuestFixture(db, ev, { name: `Itzel ${uniq("Msg")}` });
     const page = await anonPage();

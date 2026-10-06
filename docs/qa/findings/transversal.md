@@ -77,7 +77,7 @@ Revocación por `User.sessionVersion` + el middleware ya no re-emite la cookie d
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — consolidado como **BUG-006**; causa raíz y corrección en docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»)
 **Type:** APPLICATION BUG (UX ISSUE con carrera de estado en el cliente)
 **Module:** guests (micrositio / RSVP)
 **Role:** Invitada (link personal `/e/[slug]/[guestToken]`, sin sesión)

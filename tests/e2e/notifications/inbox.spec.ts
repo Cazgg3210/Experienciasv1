@@ -29,8 +29,9 @@ test.describe("Notificaciones · bandeja", { tag: ["@module:notifications"] }, (
     await expect(page.getByText("Ningún mensaje coincide")).toBeVisible();
   });
 
-  test("[NOT-002] abrir un mensaje lo marca como leído y se puede volver a marcar como no leído", { tag: ["@P1"] }, async ({ rolePage, db, evidence }) => {
+  test("[NOT-002] abrir un mensaje lo marca como leído y se puede volver a marcar como no leído", { tag: ["@P1", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/notifications?id=<id> → Marcar como no leído");
+    test.info().annotations.push({ type: "regression", description: "BUG-006" }); // router.refresh() de AutoMarkRead
     const n = await createUnreadNotification(db, { subject: uniq("Abrir aviso E2E") });
     const page = await rolePage("owner");
     await page.goto(`/admin/notifications?id=${n.id}&q=${encodeURIComponent(n.subject!)}`);
