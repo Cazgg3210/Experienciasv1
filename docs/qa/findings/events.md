@@ -80,7 +80,7 @@ La cancelación no forma parte del ciclo de vida de los pagos: ni se invalidan l
 4. Mantener [EVT-024] como prueba `@regression`.
 
 ### Fix (BUG-002)
-Corregido junto con SAL-BUG-03 (mismo defecto). Detalle de la regla y evidencia en `sales.md` → SAL-BUG-03 «Fix». Resumen: `cancelEvent` anula en su transacción (candado de la reserva) los checkouts `PENDING` → `FAILED` «Evento cancelado.»; el checkout simulado muestra «Esta reserva fue cancelada» y rechaza el cobro (`EVENT_CANCELLED`); un cobro que un proveedor real confirme después se registra para reembolso sin reconfirmar el evento ni avisar a la clienta. [EVT-024] queda `@regression` (anotación `regression: BUG-002`) y pasa 3/3 con `--repeat-each=3 --retries=0` en el carril 2.
+Corregido junto con SAL-BUG-03 (mismo defecto). Detalle de la regla y evidencia en `sales.md` → SAL-BUG-03 «Fix». Resumen: `cancelEvent` anula en su transacción (candado de la reserva) los checkouts `PENDING` → `FAILED` «Evento cancelado.»; el checkout simulado muestra «Esta reserva fue cancelada» y rechaza el cobro (`EVENT_CANCELLED`); un cobro que un proveedor real confirme después se registra para reembolso sin reconfirmar el evento ni avisar a la clienta. [EVT-024] queda `@regression` (anotación `regression: BUG-002`) y pasa 3/3 con `--repeat-each=3 --retries=0` en el carril 2. Tras la revisión: un webhook de cobro que compite con la cancelación lee el pago después del candado de la reserva (nunca queda `FAILED` un cobro real), la transacción de `cancelEvent` tolera esperar a un checkout en curso (30 s) y, al confirmar, pide a la pasarela expirar las sesiones anuladas (best-effort). Detalle en `sales.md` → SAL-BUG-03 «Fix (BUG-002) — cambios de la revisión».
 
 ---
 
