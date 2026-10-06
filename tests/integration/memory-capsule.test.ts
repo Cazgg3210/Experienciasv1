@@ -447,8 +447,11 @@ describe("Memory Capsule — POST /api/memory/[token]/upload", () => {
     expect((await post(capsule.shareToken, fields, {})).status).toBe(403);
     expect((await post(capsule.shareToken, fields, { origin: "https://malicioso.example" })).status).toBe(403);
     expect((await post(capsule.shareToken, fields, { origin: "null", "sec-fetch-site": "cross-site" })).status).toBe(403);
+    // Sec-Fetch-Site lo pone el navegador y no se puede falsificar desde una página: "same-origin" es la señal
+    // más confiable (detrás de un proxy el Origin puede no coincidir con Host). Un cliente que no es navegador puede
+    // mandar cualquier combinación, pero no lleva las cookies de la víctima, así que no es un vector de CSRF.
     expect(
-      (await post(capsule.shareToken, fields, { origin: "https://malicioso.example", "sec-fetch-site": "same-origin" }))
+      (await post(capsule.shareToken, fields, { origin: "https://malicioso.example", "sec-fetch-site": "same-site" }))
         .status,
     ).toBe(403);
     expect((await post(capsule.shareToken, fields, { origin: "null", "sec-fetch-site": "same-origin" })).status).toBe(201);

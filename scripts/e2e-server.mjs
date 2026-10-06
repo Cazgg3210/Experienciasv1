@@ -38,7 +38,14 @@ function sourceStamp() {
     const diff = dirty.trim()
       ? execSync("git diff HEAD -- src prisma public next.config.ts package.json", { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
       : "";
-    return createHash("sha1").update(head).update(dirty).update(diff).digest("hex");
+    // Archivos nuevos sin commit: git diff no los incluye, así que se agrega el hash de su contenido.
+    const untracked = execSync("git ls-files -o --exclude-standard -- src prisma public", { encoding: "utf8" })
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .sort();
+    const hash = createHash("sha1").update(head).update(dirty).update(diff);
+    for (const file of untracked) hash.update(file).update(existsSync(file) ? readFileSync(file) : "");
+    return hash.digest("hex");
   } catch {
     return `nogit-${Date.now()}`; // sin git: siempre reconstruir
   }

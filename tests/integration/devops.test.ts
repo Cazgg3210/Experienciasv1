@@ -453,7 +453,9 @@ describe("contratos de la imagen Docker", () => {
   });
 
   it("la salida standalone está habilitada en next.config.ts", () => {
-    expect(read("next.config.ts")).toMatch(/output:\s*"standalone"/);
+    // Por defecto "standalone" (Docker/Dokploy); sólo NEXT_STANDALONE=false la desactiva (servidor E2E local en Windows).
+    expect(read("next.config.ts")).toMatch(/output:\s*process\.env\.NEXT_STANDALONE === "false" \? undefined : "standalone"/);
+    expect(read("Dockerfile")).not.toMatch(/NEXT_STANDALONE\s*=\s*"?false/);
   });
 
   it(".nvmrc fija Node 22 (igual que la imagen)", () => {
