@@ -1,18 +1,14 @@
 import { z } from "zod";
+import { isValidPhone } from "@/lib/phone";
 
-const phoneDigits = (v: string) => v.replace(/\D/g, "");
-
+/** Acepta lo que `normalizePhone` puede llevar a la forma canónica (el servicio la guarda así). */
 const optionalPhone = (label: string) =>
   z
     .string()
     .trim()
     .max(30, `${label} demasiado largo`)
     .optional()
-    .refine((v) => {
-      if (!v) return true;
-      const d = phoneDigits(v);
-      return /^[+\d\s().-]+$/.test(v) && d.length >= 10 && d.length <= 15;
-    }, "Escribe un número de 10 dígitos (puedes incluir lada +52)");
+    .refine((v) => !v || isValidPhone(v), "Escribe un número de 10 dígitos (puedes incluir lada +52)");
 
 export const updateCustomerSchema = z.object({
   customerId: z.string().trim().min(1).max(64),

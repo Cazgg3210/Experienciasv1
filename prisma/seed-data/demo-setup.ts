@@ -490,20 +490,20 @@ export async function seedDemoSetup(prisma: PrismaClient, clock: Clock): Promise
     notes?: string;
     createdDaysAgo: number;
   }[] = [
-    { key: "valeria", name: "Valeria Campos", phone: "+52 55 5102 3304", instagram: "@valecampos", source: "CONFIGURATOR", marketingOptIn: true, notes: "Mamá limeña, papá tapatío. Clienta embajadora: ya nos refirió a una amiga.", createdDaysAgo: 62 },
-    { key: "paola", name: "Paola Lozano", phone: "+52 81 5102 3302", instagram: "@paolozano", source: "REFERRAL", notes: "Dama de honor de Mariana. Vive en Monterrey; coordina todo por WhatsApp.", createdDaysAgo: 41 },
-    { key: "anapaula", name: "Ana Paula Ríos", phone: "+52 55 5102 3305", source: "GOOGLE", marketingOptIn: true, createdDaysAgo: 36 },
-    { key: "ximena", name: "Ximena Aguilar", phone: "+52 55 5102 3309", source: "CONFIGURATOR", createdDaysAgo: 31 },
-    { key: "sofia", name: "Sofía Navarro", phone: "+52 55 5102 3301", instagram: "@sofinavarro", source: "CONFIGURATOR", marketingOptIn: true, notes: "Le encantan las flores en tonos blush. Celiaca una de sus mejores amigas.", createdDaysAgo: 28 },
-    { key: "daniela", name: "Daniela Ortiz", phone: "+52 55 5102 3303", instagram: "@dani.ortiz", source: "TIKTOK", createdDaysAgo: 22 },
-    { key: "renata", name: "Renata Castillo", phone: "+52 55 5102 3310", source: "GOOGLE", createdDaysAgo: 19 },
-    { key: "patricia", name: "Patricia Ibarra", phone: "+52 55 5102 3312", source: "CONTACT_FORM", notes: "Directora de RH en despacho de abogados de Polanco.", createdDaysAgo: 9 },
-    { key: "fernanda", name: "Fernanda Salinas", phone: "+52 55 5102 3306", source: "WHATSAPP", notes: "32 semanas de embarazo; baby brunch organizado por ella misma.", createdDaysAgo: 6 },
-    { key: "natalia", name: "Natalia Herrera", phone: "+52 55 5102 3311", instagram: "@nataherrera", source: "INSTAGRAM", createdDaysAgo: 5 },
-    { key: "monica", name: "Mónica Treviño", phone: "+52 55 5102 3308", instagram: "@monitrevino", source: "INSTAGRAM", createdDaysAgo: 4 },
-    { key: "lucia", name: "Lucía Ramírez", phone: "+52 55 5102 3307", source: "CONFIGURATOR", marketingOptIn: true, createdDaysAgo: 2 },
-    { key: "claudia", name: "Claudia Benítez", phone: "+52 55 5102 3313", source: "REFERRAL", notes: "Amiga de Valeria; pidió información para diciembre.", createdDaysAgo: 15 },
-    { key: "teresa", name: "Teresa Alarcón", phone: "+52 55 5102 3314", source: "MANUAL", notes: "Contacto de desayuno corporativo boutique (capturado en persona).", createdDaysAgo: 80 },
+    { key: "valeria", name: "Valeria Campos", phone: "+525551023304", instagram: "@valecampos", source: "CONFIGURATOR", marketingOptIn: true, notes: "Mamá limeña, papá tapatío. Clienta embajadora: ya nos refirió a una amiga.", createdDaysAgo: 62 },
+    { key: "paola", name: "Paola Lozano", phone: "+528151023302", instagram: "@paolozano", source: "REFERRAL", notes: "Dama de honor de Mariana. Vive en Monterrey; coordina todo por WhatsApp.", createdDaysAgo: 41 },
+    { key: "anapaula", name: "Ana Paula Ríos", phone: "+525551023305", source: "GOOGLE", marketingOptIn: true, createdDaysAgo: 36 },
+    { key: "ximena", name: "Ximena Aguilar", phone: "+525551023309", source: "CONFIGURATOR", createdDaysAgo: 31 },
+    { key: "sofia", name: "Sofía Navarro", phone: "+525551023301", instagram: "@sofinavarro", source: "CONFIGURATOR", marketingOptIn: true, notes: "Le encantan las flores en tonos blush. Celiaca una de sus mejores amigas.", createdDaysAgo: 28 },
+    { key: "daniela", name: "Daniela Ortiz", phone: "+525551023303", instagram: "@dani.ortiz", source: "TIKTOK", createdDaysAgo: 22 },
+    { key: "renata", name: "Renata Castillo", phone: "+525551023310", source: "GOOGLE", createdDaysAgo: 19 },
+    { key: "patricia", name: "Patricia Ibarra", phone: "+525551023312", source: "CONTACT_FORM", notes: "Directora de RH en despacho de abogados de Polanco.", createdDaysAgo: 9 },
+    { key: "fernanda", name: "Fernanda Salinas", phone: "+525551023306", source: "WHATSAPP", notes: "32 semanas de embarazo; baby brunch organizado por ella misma.", createdDaysAgo: 6 },
+    { key: "natalia", name: "Natalia Herrera", phone: "+525551023311", instagram: "@nataherrera", source: "INSTAGRAM", createdDaysAgo: 5 },
+    { key: "monica", name: "Mónica Treviño", phone: "+525551023308", instagram: "@monitrevino", source: "INSTAGRAM", createdDaysAgo: 4 },
+    { key: "lucia", name: "Lucía Ramírez", phone: "+525551023307", source: "CONFIGURATOR", marketingOptIn: true, createdDaysAgo: 2 },
+    { key: "claudia", name: "Claudia Benítez", phone: "+525551023313", source: "REFERRAL", notes: "Amiga de Valeria; pidió información para diciembre.", createdDaysAgo: 15 },
+    { key: "teresa", name: "Teresa Alarcón", phone: "+525551023314", source: "MANUAL", notes: "Contacto de desayuno corporativo boutique (capturado en persona).", createdDaysAgo: 80 },
   ];
   const usedReferral = new Set<string>();
   const customers: Record<string, CustomerRef> = {};

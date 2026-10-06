@@ -8,12 +8,14 @@ import { logger } from "@/lib/logger";
 import { track } from "@/server/analytics";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
+import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
 import type { SessionUser } from "@/server/auth/session";
 import { notifiesInboundLead, type LeadIntakeChannel } from "../domain/lead-workflow";
 
 /**
  * Captura única de leads (configurador, diseñador IA, formulario de contacto, captura manual).
  * Encuentra o crea a la clienta, crea el lead con su timeline y snapshot, notifica y mide.
+ * El teléfono se guarda en su forma canónica (`normalizePhone`: +52 + 10 dígitos).
  */
 export type InboundLeadInput = {
   name: string;
@@ -51,17 +53,11 @@ function normEmail(email?: string | null) {
   return e ? e : null;
 }
 
-function normPhone(phone?: string | null) {
-  const p = phone?.replace(/[^\d+]/g, "");
-  return p ? p : null;
-}
-
 async function findOrCreateCustomer(
   tx: Prisma.TransactionClient,
   input: { name: string; email: string | null; phone: string | null; source: LeadSource; marketingOptIn?: boolean },
 ) {
-  let customer = input.email ? await tx.customer.findUnique({ where: { email: input.email } }) : null;
-  if (!customer && input.phone) customer = await tx.customer.findFirst({ where: { phone: input.phone } });
+  const customer = await findCustomerByContact(tx, { email: input.email, phone: input.phone });
   if (customer) {
     return tx.customer.update({
       where: { id: customer.id },
@@ -96,7 +92,7 @@ export async function createInboundLead(
 ): Promise<InboundLeadResult> {
   const pricing = await getSettings("pricing");
   const email = normEmail(input.email);
-  const phone = normPhone(input.phone);
+  const phone = phoneForStorage(input.phone);
 
   let outOfArea = false;
   if (input.serviceAreaId) {

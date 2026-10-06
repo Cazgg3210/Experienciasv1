@@ -3,6 +3,7 @@ import type { Occasion, Prisma, QuoteStatus } from "@prisma/client";
 import { prisma } from "@/db";
 import { isPlausibleToken } from "@/lib/tokens";
 import { localTime, toDateKey } from "@/lib/dates";
+import { phoneSearchDigits } from "@/lib/phone";
 import { getSettings } from "@/features/settings/server/settings-service";
 import type { QuoteListFilters } from "../schemas";
 
@@ -321,7 +322,7 @@ export async function getLeadPrefill(leadId: string): Promise<LeadPrefill | null
 export async function searchCustomers(q: string) {
   const term = q.trim();
   if (term.length < 2) return [];
-  const digits = term.replace(/\D/g, "");
+  const digits = phoneSearchDigits(term);
   return prisma.customer.findMany({
     where: {
       OR: [

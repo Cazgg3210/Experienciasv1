@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { isValidDateKey } from "@/lib/dates";
+import { isValidPhone } from "@/lib/phone";
 import { TIME_RE } from "./domain/event-schedule";
 
 const OCCASIONS = [
@@ -65,6 +66,12 @@ const optionalPhone = z
   .trim()
   .max(30)
   .refine((v) => v === "" || v.replace(/\D/g, "").length >= 10, "Teléfono de al menos 10 dígitos");
+/** Teléfono de una clienta: lo que `normalizePhone` puede llevar a la forma canónica (así se guarda). */
+const customerPhone = z
+  .string()
+  .trim()
+  .max(30)
+  .refine((v) => v === "" || isValidPhone(v), "Teléfono de al menos 10 dígitos");
 const postalCode = z
   .string()
   .trim()
@@ -85,7 +92,7 @@ export const createEventSchema = z
     newCustomer: z.object({
       name: text(120),
       email: optionalEmail,
-      phone: optionalPhone,
+      phone: customerPhone,
     }),
     title: text(120).min(3, "Escribe un título (mín. 3 caracteres)"),
     occasion: z.enum(OCCASIONS),

@@ -136,15 +136,15 @@ test.describe("Clientas · ficha y edición", { tag: ["@module:customers"] }, ()
     expect(after).toMatchObject({
       name: newName,
       email: newEmail.toLowerCase(),
-      whatsapp: "+52 55 1111 2222",
+      whatsapp: "+525511112222", // forma canónica única del teléfono (BUG-008)
       instagram: "sofi.brunch",
       notes: "Alérgica a nueces.",
       marketingOptIn: true,
     });
     const audit = await db.auditLog.findFirstOrThrow({ where: { entityType: "Customer", entityId: c.id, action: "customer.updated" } });
     expect(audit.actorEmail).toBe(ACCOUNTS.owner.email);
-    expect(audit.before).toMatchObject({ name: c.name, email: c.email, instagram: null, marketingOptIn: false });
-    expect(audit.after).toMatchObject({ name: newName, instagram: "sofi.brunch", marketingOptIn: true });
+    expect(audit.before).toMatchObject({ name: c.name, email: c.email, whatsapp: null, instagram: null, marketingOptIn: false });
+    expect(audit.after).toMatchObject({ name: newName, whatsapp: "+525511112222", instagram: "sofi.brunch", marketingOptIn: true });
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: newName })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Instagram" })).toHaveValue("@sofi.brunch");
@@ -209,7 +209,8 @@ test.describe("Clientas · ficha y edición", { tag: ["@module:customers"] }, ()
   test("[CUST-009] dos clientas pueden compartir teléfono: no hay validación de unicidad (ambigüedad de requisito)", { tag: ["@P3"] }, async ({ apiAs, db, evidence }) => {
     evidence("owner", "updateCustomerAction con el teléfono de otra clienta");
     test.info().annotations.push({ type: "requirement-ambiguity", description: "Sólo el correo es único (schema + servicio). El teléfono no; ver findings." });
-    const a = await createCustomer(db, { name: uniq("Tel A") });
+    // Teléfono en la forma canónica con que la app guarda (BUG-008): b recibe el mismo número.
+    const a = await createCustomer(db, { name: uniq("Tel A"), phone: `+52${uniqPhone()}` });
     const b = await createCustomer(db, { name: uniq("Tel B") });
     const r = await callAction(await apiAs("owner"), "customers", "updateCustomerAction", {
       customerId: b.id, name: b.name, email: b.email!, phone: a.phone!, whatsapp: "", instagram: "", notes: "", marketingOptIn: false,
@@ -218,9 +219,9 @@ test.describe("Clientas · ficha y edición", { tag: ["@module:customers"] }, ()
     expect(await db.customer.count({ where: { phone: a.phone } })).toBe(2);
   });
 
-  test("[CUST-016] una clienta con teléfono guardado con formato se reutiliza al llegar un lead con ese número", { tag: ["@P2"] }, async ({ rolePage, apiAs, db, evidence }) => {
+  test("[CUST-016] una clienta con teléfono guardado con formato se reutiliza al llegar un lead con ese número", { tag: ["@P2", "@regression"] }, async ({ rolePage, apiAs, db, evidence }) => {
     evidence("owner", "Perfil: teléfono '55 1234 5678' → createLeadAction phone '5512345678'");
-    test.info().annotations.push({ type: "bug", description: "COM-BUG-02" });
+    test.info().annotations.push({ type: "regression", description: "BUG-008" });
     const c = await createCustomer(db, { name: uniq("Tel Formato"), phone: null as never });
     const phone = uniqPhone();
     const formatted = `${phone.slice(0, 2)} ${phone.slice(2, 6)} ${phone.slice(6)}`;

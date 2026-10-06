@@ -37,7 +37,7 @@ test.describe("Leads · captura manual", { tag: ["@module:leads"] }, () => {
     expect(lead!.occasion).toBe("FRIENDS_BRUNCH");
     expect(lead!.guestCount).toBe(8);
     expect(lead!.email).toBe(email.toLowerCase());
-    expect(lead!.phone).toBe(phone);
+    expect(lead!.phone).toBe(`+52${phone}`); // forma canónica única del teléfono (BUG-008)
     expect(lead!.code).toMatch(/^L-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
     const owner = await userByEmail(db, ACCOUNTS.owner.email);
     expect(lead!.assignedToId).toBe(owner.id);

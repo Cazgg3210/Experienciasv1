@@ -645,13 +645,13 @@ export async function seedDemoSales(prisma: PrismaClient, refs: DemoRefs, clock:
       assignedTo: "rosa", createdAt: at(-19, "16:30"), lostReason: "Decidió celebrar en un restaurante por presupuesto.",
     },
     {
-      key: "gabriela", name: "Gabriela Morales", phone: "+52 55 5102 3315", email: emailFor("Gabriela Morales"), occasion: "BIRTHDAY",
+      key: "gabriela", name: "Gabriela Morales", phone: "+525551023315", email: emailFor("Gabriela Morales"), occasion: "BIRTHDAY",
       eventDateKey: firstDateOnOrAfter(clock.dayKey(35), [6, 0]), guestCount: 6, budget: 1, status: "NEW", source: "CONFIGURATOR",
       areaSlug: "polanco", experienceSlug: "signature-brunch", styleSlug: "natural", menuSlug: "brunch-clasico", honoreeName: "Gaby",
       assignedTo: "ivonne", createdAt: clock.hoursAgo(3), configurator: { startTime: "11:00", addOns: [{ slug: "pastel-personalizado", quantity: 1 }] },
     },
     {
-      key: "isabel", name: "Isabel Domínguez", phone: "+52 55 5102 3316", email: emailFor("Isabel Domínguez"), occasion: "FRIENDS_BRUNCH",
+      key: "isabel", name: "Isabel Domínguez", phone: "+525551023316", email: emailFor("Isabel Domínguez"), occasion: "FRIENDS_BRUNCH",
       eventDateKey: firstDateOnOrAfter(clock.dayKey(45), [0]), guestCount: 8, budget: 2, status: "NEW", source: "AI_DESIGNER",
       areaSlug: "granada", experienceSlug: "signature-brunch", styleSlug: "natural", menuSlug: "brunch-garden",
       colors: ["#A3B18A", "#F7F3EC", "#FFFFFF"], inspiration: "Brunch tranquilo en terraza, muy verde, con flores silvestres.",
@@ -662,7 +662,7 @@ export async function seedDemoSales(prisma: PrismaClient, refs: DemoRefs, clock:
       areaSlug: "polanco", experienceSlug: "birthday-table", styleSlug: "divertido", honoreeName: "Natalia", assignedTo: "ivonne", createdAt: at(-5, "22:02"),
     },
     {
-      key: "carolina", name: "Carolina Vega", phone: "+52 55 5102 3317", email: emailFor("Carolina Vega"), occasion: "BABY_BRUNCH",
+      key: "carolina", name: "Carolina Vega", phone: "+525551023317", email: emailFor("Carolina Vega"), occasion: "BABY_BRUNCH",
       eventDateKey: firstDateOnOrAfter(clock.dayKey(28), [6]), guestCount: 8, budget: 2, status: "CONTACTED", source: "WHATSAPP",
       zoneText: "Coyoacán", outOfArea: true, experienceSlug: "signature-brunch", assignedTo: "rosa", createdAt: at(-3, "10:45"),
       notes: "Fuera de zona. Le ofrecimos cotizar con cargo de traslado especial o esperar a la fase 2.",
@@ -673,13 +673,13 @@ export async function seedDemoSales(prisma: PrismaClient, refs: DemoRefs, clock:
       notes: "Desayuno de equipo directivo (18 personas). Requiere propuesta especial en dos mesas y factura.", budgetNotes: "Presupuesto aprobado por dirección: hasta $60,000.",
     },
     {
-      key: "alejandra", name: "Alejandra Ruiz", phone: "+52 55 5102 3318", email: emailFor("Alejandra Ruiz"), occasion: "BIRTHDAY",
+      key: "alejandra", name: "Alejandra Ruiz", phone: "+525551023318", email: emailFor("Alejandra Ruiz"), occasion: "BIRTHDAY",
       eventDateKey: firstDateOnOrAfter(clock.dayKey(12), [6]), guestCount: 10, budget: 3, status: "LOST", source: "GOOGLE",
       zoneText: "Santa Fe", outOfArea: true, experienceSlug: "birthday-table", assignedTo: "rosa", createdAt: at(-14, "18:00"),
       lostReason: "Fuera de zona de cobertura (Santa Fe).",
     },
     {
-      key: "lorena", name: "Lorena Paredes", phone: "+52 55 5102 3319", email: emailFor("Lorena Paredes"), occasion: "OTHER", occasionOther: "Reencuentro de generación",
+      key: "lorena", name: "Lorena Paredes", phone: "+525551023319", email: emailFor("Lorena Paredes"), occasion: "OTHER", occasionOther: "Reencuentro de generación",
       guestCount: 6, status: "NEW", source: "MANUAL", areaSlug: "irrigacion", assignedTo: "ivonne", createdAt: clock.hoursAgo(30),
       referredByCode: C.sofia!.referralCode, notes: "Llamó por recomendación de Sofía Navarro. Aún sin fecha.",
     },

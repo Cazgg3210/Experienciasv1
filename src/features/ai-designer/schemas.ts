@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidPhone } from "@/lib/phone";
 import {
   DIETARY_VALUES,
   MAX_COLORS,
@@ -89,7 +90,8 @@ const phoneSchema = z
   .refine((v) => /^[\d\s()+-]+$/.test(v), "Usa sólo números.")
   .refine((v) => {
     const digits = v.replace(/\D/g, "");
-    return digits.length >= 10 && digits.length <= 13;
+    // Además, que `normalizePhone` pueda llevarlo a la forma canónica (la captura de leads la guarda así).
+    return digits.length >= 10 && digits.length <= 13 && isValidPhone(v);
   }, "Escribe tu WhatsApp a 10 dígitos.");
 
 export const convertDesignSchema = z.object({
