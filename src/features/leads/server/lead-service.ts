@@ -184,7 +184,10 @@ export type AssignableUser = Awaited<ReturnType<typeof listAssignableUsers>>[num
 // ESCRITURA
 // -----------------------------------------------------------------------------
 
-/** Captura manual desde el panel. Reutiliza la captura única (clienta, timeline, snapshot). */
+/**
+ * Captura manual desde el panel. Reutiliza la captura única (clienta, timeline, snapshot).
+ * Canal "team": no dispara avisos de lead entrante aunque el origen sea Instagram, WhatsApp, etc.
+ */
 export async function createManualLead(actor: SessionUser, input: CreateLeadInput): Promise<InboundLeadResult> {
   assertCan(actor, "leads:write");
   const serviceAreaId = clean(input.serviceAreaId);
@@ -205,7 +208,7 @@ export async function createManualLead(actor: SessionUser, input: CreateLeadInpu
       source: input.source ?? "MANUAL",
       assignedToId: actor.role === "OWNER" || actor.role === "SUPER_ADMIN" ? actor.id : null,
     },
-    { actor },
+    { actor, channel: "team" },
   );
 }
 

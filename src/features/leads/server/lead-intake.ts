@@ -9,6 +9,7 @@ import { track } from "@/server/analytics";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
 import type { SessionUser } from "@/server/auth/session";
+import { notifiesInboundLead, type LeadIntakeChannel } from "../domain/lead-workflow";
 
 /**
  * Captura única de leads (configurador, diseñador IA, formulario de contacto, captura manual).
@@ -85,9 +86,13 @@ async function findOrCreateCustomer(
   });
 }
 
+/**
+ * `channel` es el canal por el que entró: "public" (lo envió la clienta desde el sitio) o "team" (lo
+ * capturó el equipo en el panel). Decide los avisos de lead entrante; el origen comercial (`source`) no.
+ */
 export async function createInboundLead(
   input: InboundLeadInput,
-  ctx: { actor?: SessionUser | null } = {},
+  ctx: { actor?: SessionUser | null; channel: LeadIntakeChannel },
 ): Promise<InboundLeadResult> {
   const pricing = await getSettings("pricing");
   const email = normEmail(input.email);
@@ -187,9 +192,10 @@ export async function createInboundLead(
     metadata: { source: input.source, outOfArea, specialRequest },
   });
 
-  // Notificaciones (no bloquean el flujo)
+  // Notificaciones (no bloquean el flujo). Sólo en capturas públicas: si el equipo lo registró en el
+  // panel, ni la clienta espera un «recibimos tu solicitud» ni la fundadora un aviso de su propio registro.
   try {
-    if (input.source !== "MANUAL") {
+    if (notifiesInboundLead(ctx.channel)) {
       await notifyCustomer(
         { email, phone },
         {

@@ -172,8 +172,9 @@ test.describe("Leads · captura manual", { tag: ["@module:leads"] }, () => {
     expect(created.message).toContain("consulta especial (grupo grande)");
   });
 
-  test("[LEAD-035] captura desde el panel con origen 'Captura manual' no envía notificaciones", { tag: ["@P2"] }, async ({ apiAs, db, evidence }) => {
+  test("[LEAD-035] captura desde el panel con origen 'Captura manual' no envía notificaciones", { tag: ["@P2", "@regression"] }, async ({ apiAs, db, evidence }) => {
     evidence("owner", "createLeadAction source=MANUAL → notificationLog");
+    test.info().annotations.push({ type: "regression", description: "BUG-014" });
     const r = await callAction<{ leadId: string }>(await apiAs("owner"), LEAD_ACTION, "createLeadAction", {
       name: uniq("Sin Aviso"),
       email: uniqEmail("sinaviso"),
@@ -186,9 +187,9 @@ test.describe("Leads · captura manual", { tag: ["@module:leads"] }, () => {
     expect(await db.notificationLog.count({ where: { leadId } })).toBe(0);
   });
 
-  test("[LEAD-036] captura desde el panel con otro origen no avisa a la fundadora de su propio registro", { tag: ["@P3"] }, async ({ rolePage, db, evidence }) => {
+  test("[LEAD-036] captura desde el panel con otro origen no avisa a la fundadora de su propio registro", { tag: ["@P3", "@regression"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "Leads › Nuevo lead (Origen: Instagram) → notificationLog");
-    test.info().annotations.push({ type: "bug", description: "COM-BUG-01" });
+    test.info().annotations.push({ type: "regression", description: "BUG-014" });
     const name = uniq("Origen Insta");
     const email = uniqEmail("insta");
     const page = await rolePage("owner");

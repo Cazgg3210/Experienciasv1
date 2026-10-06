@@ -412,7 +412,7 @@ export async function submitConfigurator(
       snapshot: { data: snapshotData, estimate: result, pricingVersion: result.pricingVersion },
       sessionId: data.sessionId ?? null,
     },
-    { actor: ctx.actor ?? null },
+    { actor: ctx.actor ?? null, channel: "public" },
   );
 
   const name = firstName(data.name);

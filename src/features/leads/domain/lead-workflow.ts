@@ -38,6 +38,21 @@ export function requiresLostReason(to: LeadStatus): boolean {
   return to === "LOST";
 }
 
+/**
+ * Canal por el que entra un lead: "public" = la clienta lo envió desde el sitio (configurador, diseñador
+ * IA, contacto); "team" = el equipo lo capturó en el panel (con cualquier origen: Instagram, WhatsApp…).
+ */
+export const LEAD_INTAKE_CHANNELS = ["public", "team"] as const;
+export type LeadIntakeChannel = (typeof LEAD_INTAKE_CHANNELS)[number];
+
+/**
+ * Avisos de lead entrante (acuse «Recibimos tu solicitud» a la clienta + «Nuevo lead» al equipo):
+ * sólo cuando la clienta escribió por un canal público. Lo decide el canal, nunca el origen comercial.
+ */
+export function notifiesInboundLead(channel: LeadIntakeChannel): boolean {
+  return channel === "public";
+}
+
 export function firstName(name: string | null | undefined): string {
   const n = (name ?? "").trim().split(/\s+/)[0] ?? "";
   return n;

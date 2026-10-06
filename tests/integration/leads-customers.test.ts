@@ -28,9 +28,16 @@ import {
   listCustomers,
   updateCustomer,
 } from "@/features/customers/server/customer-service";
+import { submitContactRequest } from "@/features/marketing/server/contact-service";
+import { contactFormSchema } from "@/features/marketing/schemas";
 import { testOwner, testStaff, uid } from "./helpers";
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** Teléfono MX de 10 dígitos único. */
+function newPhone(): string {
+  return `55${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
+}
 
 async function makeCustomer(name = "Clienta Prueba") {
   return prisma.customer.create({
@@ -325,6 +332,31 @@ describe("createManualLead / updateLead", () => {
     // Segunda captura con el mismo correo reutiliza a la clienta
     const again = await createManualLead(owner, { name: "Mariana P.", email: email.toUpperCase(), occasion: "BIRTHDAY", source: "MANUAL" });
     expect(again.customerId).toBe(res.customerId);
+  });
+
+  it("BUG-014: la captura del equipo no envía avisos de lead entrante aunque el origen sea Instagram; la pública sí", async () => {
+    const owner = await testOwner();
+    const team = await createManualLead(owner, {
+      name: "Captura Equipo",
+      email: `${uid("equipo")}@example.test`,
+      phone: newPhone(),
+      occasion: "BIRTHDAY",
+      source: "INSTAGRAM",
+    });
+    expect(await prisma.notificationLog.count({ where: { leadId: team.leadId } })).toBe(0);
+
+    const pub = await submitContactRequest(
+      contactFormSchema.parse({
+        name: "Captura Pública",
+        phone: newPhone(),
+        email: `${uid("publica")}@example.test`,
+        occasion: "BIRTHDAY",
+        message: "Hola, queremos un brunch de cumpleaños.",
+        consent: true,
+      }),
+    );
+    const sent = await prisma.notificationLog.findMany({ where: { leadId: pub.leadId! }, select: { type: true } });
+    expect(sent.map((n) => n.type)).toEqual(expect.arrayContaining(["LEAD_RECEIVED", "GENERIC"]));
   });
 
   it("edita datos, recalcula banderas y deja actividad + auditoría", async () => {
