@@ -96,7 +96,7 @@ function ChangeRoleDialog({ user, roles }: { user: RowUser; roles: TeamRole[] })
   );
 }
 
-function ResetPasswordDialog({ user }: { user: RowUser }) {
+function ResetPasswordDialog({ user, isSelf }: { user: RowUser; isSelf: boolean }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const form = useForm<ResetPasswordValues>({
@@ -108,7 +108,15 @@ function ResetPasswordDialog({ user }: { user: RowUser }) {
   const onSubmit = form.handleSubmit((values) =>
     startTransition(async () => {
       const res = await resetUserPasswordAction(values);
-      if (handleActionResult(res, { form, success: "Contraseña restablecida. Compártela por un canal seguro." })) {
+      const success = isSelf
+        ? "Contraseña actualizada. Inicia sesión con la nueva."
+        : "Contraseña restablecida. Compártela por un canal seguro.";
+      if (handleActionResult(res, { form, success })) {
+        if (res.ok && res.data.signedOut) {
+          // Sus sesiones se cerraron (incluida ésta): navegación completa para no conservar datos del panel en memoria.
+          window.location.assign("/login");
+          return;
+        }
         setOpen(false);
         form.reset({ userId: user.id, password: "" });
       }
@@ -132,7 +140,9 @@ function ResetPasswordDialog({ user }: { user: RowUser }) {
         <DialogHeader>
           <DialogTitle className="text-xl">Restablecer contraseña</DialogTitle>
           <DialogDescription>
-            Define una contraseña temporal para {user.name}. La anterior deja de funcionar de inmediato.
+            {isSelf
+              ? "Define tu nueva contraseña. Se cerrarán todas tus sesiones, incluida ésta, y entrarás de nuevo con ella."
+              : `Define una contraseña temporal para ${user.name}. La anterior deja de funcionar y sus sesiones abiertas se cierran de inmediato.`}
           </DialogDescription>
         </DialogHeader>
         <form id={formId} onSubmit={onSubmit} noValidate>
@@ -177,7 +187,7 @@ export function UserRowActions({
   return (
     <div className="flex flex-wrap gap-2">
       {!isSelf ? <ChangeRoleDialog user={user} roles={roles} /> : null}
-      <ResetPasswordDialog user={user} />
+      <ResetPasswordDialog user={user} isSelf={isSelf} />
       {!isSelf ? (
         <ConfirmDialog
           trigger={

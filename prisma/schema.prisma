@@ -403,16 +403,19 @@ enum AnalyticsEventType {
 // -----------------------------------------------------------------------------
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String
-  phone        String?
-  passwordHash String?
-  role         Role      @default(STAFF)
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  phone          String?
+  passwordHash   String?
+  role           Role      @default(STAFF)
+  active         Boolean   @default(true)
+  lastLoginAt    DateTime?
+  /// Revocación de sesiones (JWT): se incrementa al cerrar sesión, restablecer la contraseña, desactivar o
+  /// cambiar el rol. Un JWT con otra versión deja de autorizar (ver src/features/auth/domain/session.ts).
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   staffMember        StaffMember?
   customer           Customer?

@@ -1,6 +1,6 @@
 /**
  * Autenticación — callbackUrl tras el login: se respeta sólo si es una ruta interna (sin open redirect)
- * y un STAFF nunca termina en /admin aunque lo pida. Fuente: safeCallback() en src/features/auth/server/actions.ts.
+ * y un STAFF nunca termina en /admin aunque lo pida. Fuente: safeCallbackPath() en src/features/auth/domain/callback-url.ts.
  */
 import { expect, test } from "../fixtures";
 import { baseUrl, createTeamUser, loginViaUi } from "../permissions/_helpers";
@@ -48,7 +48,8 @@ test.describe("callbackUrl", { tag: ["@module:auth", "@auth"] }, () => {
     ["AUTH-050", `${"http://localhost"}@evil.example/`],
   ];
   for (const [id, target] of evil) {
-    test(`[${id}] callbackUrl malicioso ${JSON.stringify(target)} no redirige fuera de la app`, { tag: ["@P0", "@negative"] }, async ({ anonPage, db, guard, evidence }) => {
+    const controlChars = /[\t\r\n]/.test(target);
+    test(`[${id}] callbackUrl malicioso ${JSON.stringify(target)} no redirige fuera de la app`, { tag: ["@P0", "@negative", ...(controlChars ? ["@regression"] : [])] }, async ({ anonPage, db, guard, evidence }) => {
       const user = await createTeamUser(db, { role: "OWNER" });
       // El destino neutralizado puede ser una ruta inexistente del MISMO origen (p. ej. /%2F%2Fevil.example): 404 esperado.
       guard.allow(/status of 404/);
@@ -61,7 +62,7 @@ test.describe("callbackUrl", { tag: ["@module:auth", "@auth"] }, () => {
       });
       // Nunca salir a la red (sólo hosts evil.example; una ruta /%2F%2Fevil.example del mismo origen sí se carga).
       await page.route((u) => u.hostname.endsWith("evil.example"), (route) => route.abort());
-      if (/[\t\r\n]/.test(target)) test.info().annotations.push({ type: "bug", description: "ACC-BUG-03" });
+      if (controlChars) test.info().annotations.push({ type: "regression", description: "BUG-005" });
       await loginViaUi(page, user.email, user.password, target);
       await page.waitForURL((u) => u.origin === new URL(baseUrl()).origin && u.pathname !== "/login", { timeout: 30_000 });
       expect(offsite, "navegación fuera del origen").toEqual([]);

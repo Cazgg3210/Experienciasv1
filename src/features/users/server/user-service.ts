@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Prisma, Role } from "@prisma/client";
 import { prisma } from "@/db";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { REVOKE_ALL_SESSIONS } from "@/features/auth/server/session-service";
 import { audit } from "@/server/audit";
 import type { SessionUser } from "@/server/auth/session";
 import {
@@ -143,7 +144,8 @@ export async function changeUserRole(
     enforce(checkRoleChange(actor, target, data.role, activeSuperAdmins));
     const updated = await tx.user.update({
       where: { id: target.id },
-      data: { role: data.role },
+      // Cambiar el rol cierra sus sesiones abiertas: vuelve a entrar con un JWT del rol nuevo.
+      data: { role: data.role, ...REVOKE_ALL_SESSIONS },
       select: { id: true, role: true },
     });
     await audit(
@@ -177,7 +179,8 @@ export async function setUserActive(
     enforce(checkActiveChange(actor, target, data.active, activeSuperAdmins));
     const updated = await tx.user.update({
       where: { id: target.id },
-      data: { active: data.active },
+      // Desactivar revoca sus sesiones: al reactivarla no revive ningún JWT anterior.
+      data: { active: data.active, ...(data.active ? {} : REVOKE_ALL_SESSIONS) },
       select: { id: true, active: true },
     });
     await audit(
@@ -209,7 +212,8 @@ export async function resetUserPassword(
   enforce(checkPasswordStrength(data.password, { email: target.email, name: target.name }));
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_COST);
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: target.id }, data: { passwordHash } });
+    // La contraseña nueva cierra todas las sesiones abiertas (incluida la propia si se restablece a sí misma).
+    await tx.user.update({ where: { id: target.id }, data: { passwordHash, ...REVOKE_ALL_SESSIONS } });
     // Nunca se audita la contraseña ni el hash
     await audit(
       {

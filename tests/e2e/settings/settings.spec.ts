@@ -212,7 +212,6 @@ test.describe("Ajustes · usuarios del equipo", { tag: ["@module:users", "@modul
 
   test("[SET-017] no se crean cuentas duplicadas ni con contraseñas que contienen el correo", { tag: ["@P2", "@negative"] }, async ({ rolePage, db, evidence }) => {
     evidence("superadmin", "Nueva usuaria con correo existente / contraseña con el correo");
-    const before = await db.user.count();
     const page = await rolePage("superadmin");
     await page.goto("/admin/settings/users");
     await (await ready(page.getByRole("button", { name: "Nueva usuaria" }))).click();
@@ -231,7 +230,10 @@ test.describe("Ajustes · usuarios del equipo", { tag: ["@module:users", "@modul
     await dialog.getByLabel("Contraseña temporal").fill("corta1");
     await dialog.getByRole("button", { name: "Crear cuenta" }).click();
     await expect(dialog.getByText("Mínimo 10 caracteres").first()).toBeVisible();
-    expect(await db.user.count()).toBe(before);
+    // Conteos acotados a los datos de ESTA prueba: otras pruebas en paralelo crean usuarias (un conteo global es frágil).
+    expect(await db.user.count({ where: { email: ACCOUNTS.owner2.email } }), "sin duplicado del correo existente").toBe(1);
+    expect(await db.user.count({ where: { name: "Duplicada E2E" } }), "no se creó la cuenta duplicada").toBe(0);
+    expect(await db.user.count({ where: { email } }), "no se creó la cuenta con contraseña inválida").toBe(0);
   });
 
   test("[SET-018] la propia cuenta no puede cambiar su rol ni desactivarse desde la lista", { tag: ["@P2"] }, async ({ rolePage, evidence }) => {

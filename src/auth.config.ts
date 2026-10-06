@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import type { AppRole } from "@/server/auth/permissions";
+import { safeRedirectUrl } from "@/features/auth/domain/callback-url";
 
 /**
  * Configuración edge-safe de Auth.js (usada por middleware). Sin Prisma ni bcrypt aquí.
@@ -9,7 +10,9 @@ export const authConfig = {
     signIn: "/login",
     error: "/login",
   },
-  session: { strategy: "jwt", maxAge: 60 * 60 * 12 }, // 12 h
+  // maxAge: inactividad máxima (12 h). updateAge: el middleware sólo re-emite la cookie de sesión cuando el JWT
+  // tiene al menos 1 h (src/middleware.ts); Auth.js no lo aplica a JWT por sí mismo.
+  session: { strategy: "jwt", maxAge: 60 * 60 * 12, updateAge: 60 * 60 },
   trustHost: true,
   providers: [],
   callbacks: {
@@ -17,12 +20,18 @@ export const authConfig = {
     authorized() {
       return true;
     },
+    // Defensa en profundidad contra open redirect: sólo rutas internas normalizadas o el mismo origen.
+    redirect({ url, baseUrl }) {
+      return safeRedirectUrl(url, baseUrl);
+    },
     jwt({ token, user }) {
       if (user) {
         token.uid = user.id as string;
         token.role = (user as { role?: AppRole }).role ?? "STAFF";
         token.name = user.name;
         token.email = user.email;
+        // Versión de sesión vigente al iniciar sesión (revocación: getCurrentUser la compara con la base).
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
       return token;
     },
@@ -30,6 +39,7 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.uid as string;
         session.user.role = token.role as AppRole;
+        session.user.sessionVersion = token.sessionVersion as number | undefined;
       }
       return session;
     },

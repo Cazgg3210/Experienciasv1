@@ -21,7 +21,7 @@ Además: **2 problemas de entorno** (no son bugs de la app): ENV-01 caché de da
 
 **Severity:** HIGH
 **Priority:** P0
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-001 (verificado en carril 1; ver access.md ACC-BUG-01 «Resolution»)
 **Type:** POTENTIAL SECURITY ISSUE (gestión de sesión / logout)
 **Module:** auth (middleware Auth.js v5, logout de admin y staff)
 **Role:** STAFF (reproducido); afecta a cualquier rol con sesión (mismo middleware y mismo `signOut`)
@@ -67,6 +67,9 @@ Revocación de sesión sólo del lado del cliente + re-emisión de la cookie en 
 1. Revocación en servidor: guardar `sessionVersion`/`loggedOutAt` por usuario (o un `jti` en lista de revocados) y validarlo en el callback `jwt`/`getCurrentUser` (que ya consulta la base en cada request); el logout lo incrementa. Una cookie revivida dejaría de autorizar.
 2. Evitar re-emitir la cookie en respuestas de prefetch/RSC (o aumentar `session.updateAge`) para reducir la ventana.
 3. Mantener [CRIT-014] como prueba `@regression`.
+
+### Resolution (BUG-001)
+Revocación por `User.sessionVersion` + el middleware ya no re-emite la cookie de sesión en cada respuesta (sólo renueva JWT con ≥ 1 h en `GET`). [CRIT-014] y [CRIT-012] quedan `@regression` con cuentas STAFF propias (cerrar sesión revoca todas las sesiones de la cuenta); detalle en `access.md` (ACC-BUG-01).
 
 ---
 

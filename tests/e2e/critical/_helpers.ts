@@ -417,6 +417,28 @@ export async function createStaffUser(db: PrismaClient) {
 }
 
 /**
+ * Cuenta propia de back-office (OWNER / SUPER_ADMIN) para recorridos que CIERRAN SESIÓN: cerrar sesión revoca
+ * todas las sesiones de la cuenta (User.sessionVersion, BUG-001), así que nunca se hace con las cuentas DEMO,
+ * cuya sesión guardada comparten las demás pruebas del carril.
+ */
+export async function createBackofficeUser(db: PrismaClient, role: "OWNER" | "SUPER_ADMIN") {
+  const tag = randomBytes(4).toString("hex");
+  const email = `e2e-${role === "OWNER" ? "owner" : "superadmin"}-${tag}@e2e.ivonne-rosa.test`;
+  // Contraseña de prueba generada al vuelo (sólo existe en la base E2E del carril).
+  const password = `E2e!${randomBytes(9).toString("base64url")}`;
+  const user = await db.user.create({
+    data: {
+      email,
+      name: `${role === "OWNER" ? "Fundadora" : "Superadmin"} E2E ${tag}`,
+      role,
+      active: true,
+      passwordHash: await bcrypt.hash(password, 10),
+    },
+  });
+  return { user, email, password };
+}
+
+/**
  * ENVIRONMENT ISSUE conocido (ver docs/qa/findings/transversal.md): el catálogo del configurador se
  * cachea con unstable_cache (60 s) en `.next-e2e/cache/fetch-cache`, carpeta COMPARTIDA por todos los
  * carriles (cada uno con su base re-sembrada = otros cuid). La página puede servir IDs de otra base y
