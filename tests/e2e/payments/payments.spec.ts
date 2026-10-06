@@ -184,9 +184,9 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
 
   test(
     "[PAY-019] dos solicitudes simultáneas de checkout (dos pestañas / reintento de red) no deben duplicar el pago pendiente",
-    { tag: ["@P2", "@negative"] },
+    { tag: ["@P2", "@negative", "@regression"] },
     async ({ db, request, baseURL, evidence }) => {
-      test.info().annotations.push({ type: "bug", description: "SAL-BUG-01" });
+      test.info().annotations.push({ type: "regression", description: "BUG-007" });
       evidence("clienta", "Dos startCheckoutAction DEPOSIT en paralelo para la misma reserva");
       const { quote, booking } = await createAcceptedQuote(db, request, baseURL!);
       const [a, b] = await Promise.all([
@@ -197,6 +197,8 @@ test.describe("Pagos (proveedor mock)", { tag: ["@module:payments"] }, () => {
       const pending = await db.payment.findMany({ where: { bookingId: booking.id, status: "PENDING" }, select: { id: true, amountCents: true } });
       expect(pending, `pagos pendientes: ${JSON.stringify(pending)} urls: ${urls.join(" ")}`).toHaveLength(1);
       expect(new Set(urls).size).toBe(1);
+      expect(await db.payment.count({ where: { bookingId: booking.id } }), "un solo registro de pago para la reserva").toBe(1);
+      expect(pending[0]!.amountCents).toBe(booking.depositRequiredCents);
     },
   );
 

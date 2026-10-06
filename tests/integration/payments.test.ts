@@ -236,6 +236,16 @@ describe("startCheckout", () => {
     await expect(startCheckout(booking.id, "BALANCE")).rejects.toThrow("No hay saldo pendiente");
   });
 
+  it("solicitudes simultáneas de la misma reserva comparten un solo pago pendiente (candado de la reserva)", async () => {
+    const { booking, event } = await makeFixture();
+    const results = await Promise.all([1, 2, 3].map(() => startCheckout(booking.id, "DEPOSIT", { source: "portal" })));
+    expect(new Set(results.map((r) => r.paymentId)).size).toBe(1);
+    expect(new Set(results.map((r) => r.url)).size).toBe(1);
+    expect(results.filter((r) => !r.reused)).toHaveLength(1);
+    expect(await prisma.payment.count({ where: { bookingId: booking.id } })).toBe(1);
+    expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(1);
+  });
+
   it("rechaza eventos cancelados y pagos deshabilitados", async () => {
     const cancelled = await makeFixture({ eventStatus: "CANCELLED" });
     await expect(startCheckout(cancelled.booking.id, "DEPOSIT")).rejects.toMatchObject({ code: "EVENT_CANCELLED" });
