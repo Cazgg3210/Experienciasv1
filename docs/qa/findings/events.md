@@ -21,7 +21,7 @@
 
 **Severity:** CRITICAL
 **Priority:** P0
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-002 (ver «Fix» al final de esta sección)
 **Type:** APPLICATION BUG (corrupción de datos financieros / cobro indebido)
 **Module:** events / payments
 **Role:** OWNER (ivonne@ivonne-rosa.test) + Clienta (token del portal)
@@ -78,6 +78,9 @@ La cancelación no forma parte del ciclo de vida de los pagos: ni se invalidan l
 2. `checkoutLinkState` / página mock / `mockCheckoutAction`: tratar reservas canceladas como no pagables (estado «cancelled»).
 3. `applyPaymentSucceeded`/`processPaymentEvent`: si la reserva está cancelada y llega un cobro capturado, registrar el pago pero **marcarlo para reembolso** (nota + `notifyTeamPaymentAnomaly`) y no enviar «Recibimos tu pago» genérico; idealmente reembolso automático.
 4. Mantener [EVT-024] como prueba `@regression`.
+
+### Fix (BUG-002)
+Corregido junto con SAL-BUG-03 (mismo defecto). Detalle de la regla y evidencia en `sales.md` → SAL-BUG-03 «Fix». Resumen: `cancelEvent` anula en su transacción (candado de la reserva) los checkouts `PENDING` → `FAILED` «Evento cancelado.»; el checkout simulado muestra «Esta reserva fue cancelada» y rechaza el cobro (`EVENT_CANCELLED`); un cobro que un proveedor real confirme después se registra para reembolso sin reconfirmar el evento ni avisar a la clienta. [EVT-024] queda `@regression` (anotación `regression: BUG-002`) y pasa 3/3 con `--repeat-each=3 --retries=0` en el carril 2.
 
 ---
 

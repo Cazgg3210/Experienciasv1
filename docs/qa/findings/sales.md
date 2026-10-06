@@ -21,7 +21,7 @@ Todos reproducidos al menos 2 veces (corridas `--repeat-each=2 --retries=0` y co
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-002 (ver «Fix» al final de esta sección)
 **Type:** APPLICATION BUG (integridad de cobros)
 **Module:** payments / events
 **Role:** Clienta (token) + OWNER (cancela)
@@ -66,13 +66,23 @@ La cancelación no tiene efecto sobre los cobros en curso y el flujo de checkout
 2. `checkoutLinkState`/`mockCheckoutAction`/página mock: estado `cancelled` si `booking.cancelledAt` o `event.status === "CANCELLED"`.
 3. Webhook `payment.succeeded` sobre reserva cancelada: registrar el cobro con nota «Reembolso requerido», notificar al equipo y NO enviar `PAYMENT_RECEIVED` a la clienta. Agregar prueba `@regression` (PAY-021).
 
+### Fix (BUG-002)
+Commit `fix(payments): cancelar un evento anula sus checkouts abiertos y nunca cobra una reserva cancelada (BUG-002)`.
+1. **Cancelación** — `cancelEvent` (`src/features/events/server/event-service.ts`) llama primero, en su misma transacción, a `voidOpenCheckoutsForCancelledBooking` (`payment-service.ts`): toma el candado de la reserva (mismo que `startCheckout`, webhooks y pagos manuales; orden reserva → evento) y pasa los pagos `DEPOSIT/BALANCE/FULL` `PENDING` a `FAILED` con `failureReason` «Evento cancelado.» (los `REFUND` pendientes no se tocan). La auditoría `event.cancelled` incluye `voidedPayments`.
+2. **Enlace no pagable** — `checkoutLinkState` (`domain/amounts.ts`) devuelve `"cancelled"` si la reserva o su evento están cancelados y el pago no se cobró (manda sobre `processed/expired/stale`). La página `/pago/mock/[checkoutId]` muestra «Esta reserva fue cancelada» sin botón de pago y `mockCheckoutAction` responde `EVENT_CANCELLED` sin emitir webhook. `startCheckout` y `recordManualPayment` revisan la cancelación dentro del candado.
+3. **Regla para un cobro tardío de un proveedor real** (sesión de Stripe/Mercado Pago abierta antes de cancelar; el proveedor no tiene API de expiración en el contrato actual): el dinero existe, así que `applyPaymentSucceeded` lo registra `PAID` (cuenta como cobrado y se puede reembolsar desde el panel) **sin reconfirmar el evento**, con la nota «Reembolso requerido: …», auditoría `payment.collected_after_cancellation` y `note: "cancelled_booking"` (queda en `WebhookEvent.error` para revisión). El webhook **no** ejecuta `runPaymentSuccessEffects` (ni `PAYMENT_RECEIVED`/`BOOKING_CONFIRMED` a la clienta, ni ciclo de vida, ni «Pago recibido» al equipo): sólo `runCancelledBookingPaymentEffects` → `notifyTeamPaymentAnomaly` («Revisar pago · …», dedupe `cancelled-booking-payment:<paymentId>`). `/pago/resultado` le explica a la clienta que el evento está cancelado y que el equipo le reembolsará; el panel de pagos etiqueta el pago «Reembolso requerido».
+
+**Verificación:** antes del cambio PAY-021 y EVT-024 fallaban 1/1 (`botón de pago visible=true; pago=PAID`); después pasan 3/3 con `--repeat-each=3 --retries=0` (carril 2, build de producción, base `ivonne_rosa_e2e_l2`), igual que la nueva [PAY-023] (webhook firmado tras cancelar → `PAID` + «Reembolso requerido», evento `CANCELLED`, 0 `PAYMENT_RECEIVED`, 1 aviso al equipo, duplicado idempotente, resultado y panel correctos). PAY-021 y EVT-024 llevan `@regression` y la anotación `regression: BUG-002`. Integración (`tests/integration/payments.test.ts`): anulación al cancelar, cancelación simultánea con checkout y con pago manual, y webhook tardío + reembolso. Unitarias: `isBookingCancelled`, `isCollectedPaymentStatus`, `checkoutLinkState` «cancelled».
+
+**Regresión (carril 2, tras ambos commits):** `tests/e2e/payments`, `events/event-payments`, `events/event-status`, `quote-public`, `portal` y `critical/sales.spec.ts` en chromium → 72/75 PASS, 0 flaky; las 3 FAIL son hallazgos previos ajenos a este cambio (PAY-022 contraste `text-taupe` = SAL-BUG-04/BUG-009, QPUB-014 = SAL-BUG-06/BUG-010, QPUB-015 = SAL-BUG-05/BUG-012). `@mobile` (mobile-chrome) 10/10 PASS; `payments-flag.global.spec.ts` 1/1 PASS. `pnpm typecheck`, `pnpm lint`, `pnpm test` (739) y `tests/integration/payments.test.ts` + `events-calendar.test.ts` en verde.
+
 ---
 
 ## SAL-BUG-01 — Dos solicitudes simultáneas de checkout crean dos pagos PENDING del mismo anticipo
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-007 (ver «Fix» al final de esta sección)
 **Type:** APPLICATION BUG (condición de carrera)
 **Module:** payments
 **Role:** Clienta (token de cotización/portal)
@@ -107,6 +117,11 @@ Check-then-insert sin serialización por reserva.
 
 ### Recommended Fix
 Envolver búsqueda + creación en una transacción con `lockBooking(tx, bookingId)` (ya existe en el mismo servicio) o un `pg_advisory_xact_lock` por reserva; opcionalmente índice único parcial `(bookingId, kind) WHERE status='PENDING'`.
+
+### Fix (BUG-007)
+Commit `fix(payments): serializar startCheckout por reserva para no duplicar el pago pendiente (BUG-007)`. `startCheckout` corre en una transacción con `lockBooking` (`SELECT … FOR UPDATE` de la reserva): lectura de pagos, regla de reutilización, creación del `Payment` y sesión del proveedor ocurren con la reserva bloqueada, así la segunda solicitud espera y reutiliza el `checkoutUrl` de la primera. La hora de la regla de reutilización se toma ya con el candado (tomada antes de esperar, el pago recién creado parecía «futuro» y no se reutilizaba: lo detectó la nueva prueba de integración con 3 solicitudes simultáneas). La sesión del proveedor tiene límite de 15 s (si falla, el intento queda `FAILED` como antes) y la transacción 40 s. Sin cambios de esquema (no se agregó el índice parcial: el candado basta y `schema.prisma` requiere coordinación).
+
+**Verificación:** antes, PAY-019 fallaba 1/1 (2 `Payment` `PENDING` de 1 032 500 centavos y 2 URLs); después pasa 3/3 con `--repeat-each=3 --retries=0` en el carril 2 (un solo `Payment` en la reserva, misma URL). PAY-019 lleva `@regression` y la anotación `regression: BUG-007`. Integración: 3 `startCheckout` simultáneos → 1 pago, 1 URL, 1 `START_PAYMENT` (estable en 4 corridas). Regresión del módulo: ver SAL-BUG-03 «Fix».
 
 ---
 
