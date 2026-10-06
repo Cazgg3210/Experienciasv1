@@ -198,7 +198,7 @@ export function GuestsTable({
                   )}
                 >
                   {f.label}
-                  <span className="tabular text-xs opacity-70">{counts[f.key]}</span>
+                  <span className="tabular text-xs">{counts[f.key]}</span>
                 </button>
               ))}
             </div>

@@ -109,7 +109,7 @@ export function GuestList({
             )}
           >
             {f.label}
-            <span className={cn("tabular text-xs", filter === f.value ? "text-ivory/80" : "text-muted-foreground")}>
+            <span className={cn("tabular text-xs", filter === f.value ? "text-ivory" : "text-muted-foreground")}>
               {counts[f.value]}
             </span>
           </button>

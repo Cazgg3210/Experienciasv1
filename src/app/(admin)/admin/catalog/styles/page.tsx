@@ -48,7 +48,7 @@ export default async function CatalogStylesPage() {
           {styles.map((s) => {
             const used = s.counts.experiences + s.counts.events + s.counts.leads;
             return (
-              <li key={s.id} className={cn("bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs", !s.active && "opacity-80")}>
+              <li key={s.id} className={cn("bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs", !s.active && "bg-muted/50")}>
                 <div className="relative aspect-[16/9]">
                   <CatalogImage src={s.imageUrl} alt={`Referencia del estilo ${s.name}`} />
                   {!s.active ? (

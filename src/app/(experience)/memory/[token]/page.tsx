@@ -82,7 +82,7 @@ export default async function MemoryCapsulePage({ params }: Props) {
           <h1 id="capsule-title" className="font-heading text-4xl leading-[1.05] font-semibold text-balance sm:text-5xl lg:text-6xl">
             {view.title}
           </h1>
-          <p className="text-taupe text-sm tracking-wide">
+          <p className="text-taupe-deep text-sm tracking-wide">
             <time dateTime={toDateKey(view.eventDate)}>{capitalizeFirst(formatLongDate(view.eventDate))}</time>
           </p>
           {view.message ? (

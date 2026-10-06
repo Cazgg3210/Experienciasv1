@@ -94,7 +94,7 @@ export function InventoryTable({ rows, canWrite }: { rows: InventoryRow[]; canWr
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.id} className={cn(!row.active && "opacity-60")}>
+              <TableRow key={row.id} className={cn(!row.active && "bg-muted/40")}>
                 <TableCell className="font-mono text-xs">{row.sku}</TableCell>
                 <TableCell className="max-w-72 min-w-48 whitespace-normal">
                   <Link href={`/admin/inventory/${row.id}`} className="font-medium hover:underline">
@@ -142,7 +142,7 @@ export function InventoryTable({ rows, canWrite }: { rows: InventoryRow[]; canWr
 
       <ul className="space-y-3 md:hidden" aria-label="Artículos de inventario">
         {rows.map((row) => (
-          <li key={row.id} className={cn("bg-card rounded-xl border p-4", !row.active && "opacity-70")}>
+          <li key={row.id} className={cn("bg-card rounded-xl border p-4", !row.active && "bg-muted/50")}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-muted-foreground font-mono text-xs">{row.sku}</p>

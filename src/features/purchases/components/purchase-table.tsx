@@ -60,7 +60,7 @@ export function PurchaseTable({
           </TableHeader>
           <TableBody>
             {rows.map((p) => (
-              <TableRow key={p.id} className={cn(p.status === "CANCELLED" && "opacity-60")}>
+              <TableRow key={p.id} className={cn(p.status === "CANCELLED" && "bg-muted/40")}>
                 <TableCell className="max-w-80 min-w-56 whitespace-normal">
                   <Link href={`/admin/purchases/${p.id}`} className="font-medium hover:underline">
                     {p.concept}
@@ -109,7 +109,7 @@ export function PurchaseTable({
 
       <ul className="space-y-3 md:hidden" aria-label="Compras">
         {rows.map((p) => (
-          <li key={p.id} className={cn("bg-card rounded-xl border p-4", p.status === "CANCELLED" && "opacity-70")}>
+          <li key={p.id} className={cn("bg-card rounded-xl border p-4", p.status === "CANCELLED" && "bg-muted/50")}>
             <div className="flex items-start justify-between gap-2">
               <Link href={`/admin/purchases/${p.id}`} className="min-w-0 font-medium hover:underline">
                 {p.concept}

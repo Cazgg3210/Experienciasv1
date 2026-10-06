@@ -43,7 +43,7 @@ export default async function CatalogAddOnsPage() {
           {addOns.map((a) => {
             const margin = a.unitMarginBps;
             return (
-              <li key={a.id} className={cn("bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs", !a.active && "opacity-80")}>
+              <li key={a.id} className={cn("bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs", !a.active && "bg-muted/50")}>
                 <div className="flex gap-3 p-4">
                   <div className="relative size-20 shrink-0 overflow-hidden rounded-xl border">
                     <CatalogImage src={a.imageUrl} alt="" sizes="80px" />

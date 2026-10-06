@@ -117,7 +117,7 @@ export function CalendarMonthView({
                           <span
                             className={cn(
                               "tabular inline-flex size-7 items-center justify-center rounded-full text-sm",
-                              !cell.inMonth && "text-muted-foreground/60",
+                              !cell.inMonth && "text-muted-foreground",
                               isToday && "bg-olive font-semibold text-white",
                             )}
                           >
@@ -216,7 +216,7 @@ export function CalendarMonthView({
                             <span className="min-w-0">
                               <span className="tabular font-semibold">{localTime(e.startsAt)}</span>{" "}
                               <span className="font-medium">{e.title}</span>
-                              <span className="block truncate text-xs opacity-80">
+                              <span className="block truncate text-xs">
                                 {e.customerName} · {e.guestCount} invitadas
                                 {e.zoneName ? ` · ${e.zoneName}` : ""}
                               </span>

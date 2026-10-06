@@ -17,6 +17,7 @@
   --color-sage: var(--brand-sage);
   --color-olive: var(--brand-olive);
   --color-taupe: var(--brand-taupe);
+  --color-taupe-deep: var(--brand-taupe-deep);
   --color-charcoal: var(--brand-charcoal);
   --color-blush: var(--brand-blush);
   --color-sage-soft: var(--brand-sage-soft);
@@ -80,7 +81,10 @@
   --brand-sand: #e8dcc8;
   --brand-sage: #a3b18a;
   --brand-olive: #5c6b4e;
+  /* taupe: decorativo (íconos, rellenos, gráficas; 2.8:1 sobre ivory, NO para texto).
+     Texto en taupe: text-taupe-deep (misma tonalidad, 5.1:1 sobre ivory · ≥ 4.6:1 sobre sand/muted/sage-soft). */
   --brand-taupe: #a48f7e;
+  --brand-taupe-deep: #776354;
   --brand-charcoal: #2f2c2a;
   --brand-blush: #e9c9be;
   --brand-sage-soft: #e5eadb;
@@ -101,13 +105,16 @@
   --muted-foreground: #645a52;
   --accent: var(--brand-sage-soft);
   --accent-foreground: #3d4734;
-  --destructive: #a6402c;
+  /* Tonos de estado: se usan como TEXTO sobre su propio fondo al 10 % (StatusBadge, avisos) y como
+     fondo sólido con *-foreground. Cada uno llega a ≥ 4.6:1 (WCAG AA) como texto sobre tono/10
+     compuesto en ivory, card, sidebar, sand-soft, muted y sage-soft (y ≥ 5.8:1 sobre ivory). */
+  --destructive: #a03e2b;
   --destructive-foreground: #fffdf9;
-  --success: #4f6b3c;
+  --success: #4c6639;
   --success-foreground: #f4f7ef;
-  --warning: #9a6a1f;
+  --warning: #7d5619;
   --warning-foreground: #fff8ec;
-  --info: #4b6577;
+  --info: #486173;
   --info-foreground: #f1f6f9;
   --border: #e2d7c5;
   --input: #d9ccb8;
@@ -145,6 +152,14 @@
   --accent: #3a4233;
   --accent-foreground: #f1ebe2;
   --destructive: #d9725c;
+  /* Tonos de estado claros para fondo oscuro (≥ 4.6:1 como texto sobre tono/10 en background, card y muted) */
+  --success: #abc698;
+  --success-foreground: #1f1d1b;
+  --warning: #e3b772;
+  --warning-foreground: #1f1d1b;
+  --info: #b0c1cd;
+  --info-foreground: #1f1d1b;
+  --brand-taupe-deep: #baa99d;
   --border: #3d3833;
   --input: #4a443e;
   --ring: var(--brand-sage);

@@ -66,12 +66,14 @@ export function MediaUploader({
     }
   }
 
+  // Inactivo (deshabilitado o subiendo): se atenúan el ícono y la acción, pero no la ayuda
+  // (formatos y tamaño), que debe seguir legible con contraste AA.
+  const inactive = disabled || busy;
   return (
     <div
       className={cn(
         "relative flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center transition-colors",
         dragOver ? "border-olive bg-sage-soft/50" : "border-input bg-card/50",
-        (disabled || busy) && "opacity-60",
         className,
       )}
       onDragOver={(e) => {
@@ -86,13 +88,16 @@ export function MediaUploader({
       }}
     >
       {busy ? (
-        <Loader2 className="text-olive size-6 animate-spin" aria-hidden />
+        <Loader2 className="text-olive size-6 animate-spin opacity-60" aria-hidden />
       ) : multiple ? (
-        <UploadCloud className="text-olive size-6" aria-hidden />
+        <UploadCloud className={cn("text-olive size-6", inactive && "opacity-60")} aria-hidden />
       ) : (
-        <ImagePlus className="text-olive size-6" aria-hidden />
+        <ImagePlus className={cn("text-olive size-6", inactive && "opacity-60")} aria-hidden />
       )}
-      <label htmlFor={inputId} className="cursor-pointer text-sm font-medium underline-offset-4 hover:underline">
+      <label
+        htmlFor={inputId}
+        className={cn("cursor-pointer text-sm font-medium underline-offset-4 hover:underline", inactive && "opacity-60")}
+      >
         {busy ? "Subiendo…" : label}
       </label>
       <p className="text-muted-foreground text-xs">{hint}</p>

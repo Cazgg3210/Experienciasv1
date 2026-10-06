@@ -114,7 +114,7 @@ export function BarChart({
                 >
                   <span className="block truncate">{main}</span>
                   {rest.length ? (
-                    <span className="block truncate text-[10px] opacity-80">{rest.join(" ")}</span>
+                    <span className="block truncate text-[10px]">{rest.join(" ")}</span>
                   ) : null}
                 </span>
               );

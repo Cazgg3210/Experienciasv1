@@ -35,39 +35,40 @@ async function axeCheck(page: Page, testInfo: TestInfo) {
         .map((n) => `${(n.failureSummary ?? "").split("\n").pop()!.trim().slice(0, 150)} @ ${n.html.slice(0, 110)}`)
         .join(" || "),
   );
-  // Bugs ya reproducidos (2/2) y documentados en docs/qa/findings/transversal.md
-  const bugs = new Set<string>();
+  // Clasificación de una posible regresión de bugs ya corregidos (BUG-009 contraste, BUG-010 <dl>).
+  const families = new Set<string>();
   for (const v of blocking) {
-    if (v.id === "definition-list" || v.id === "dlitem") bugs.add("TRV-BUG-04 estructura <dl> inválida");
-    else if (v.id === "color-contrast") {
-      for (const n of v.nodes) {
-        bugs.add(
-          /text-warning|text-info|bg-info|bg-warning|text-ivory\//.test(n.html)
-            ? "TRV-BUG-02 contraste de insignias de estado (warning/info)"
-            : "TRV-BUG-03 contraste de texto secundario (taupe/atenuado)",
-        );
-      }
-    } else bugs.add(`sin clasificar: ${v.id}`);
+    if (v.id === "definition-list" || v.id === "dlitem") families.add("BUG-010 estructura <dl> inválida");
+    else if (v.id === "color-contrast") families.add("BUG-009 contraste por debajo de WCAG AA");
+    else families.add(`sin clasificar: ${v.id}`);
   }
-  for (const b of bugs) testInfo.annotations.push({ type: "bug", description: b });
+  for (const f of families) testInfo.annotations.push({ type: "a11y-clasificación", description: f });
   expect(summary, `violaciones WCAG critical/serious en ${page.url()}`).toEqual([]);
 }
 
+/** Etiquetas y anotaciones de una prueba que protege bugs corregidos (BUG-009 contraste, BUG-010 <dl>). */
+const regressionOf = (bugs: string[] = []) => ({
+  tags: bugs.length ? ["@regression"] : [],
+  annotate: () => bugs.forEach((b) => test.info().annotations.push({ type: "regression", description: b })),
+});
+
 test.describe("Accesibilidad · axe WCAG 2.1 AA", { tag: ["@a11y"] }, () => {
-  const PUBLIC: Array<{ id: string; path: string; label: string; p: "@P1" | "@P2"; module: string }> = [
+  const PUBLIC: Array<{ id: string; path: string; label: string; p: "@P1" | "@P2"; module: string; bugs?: string[] }> = [
     { id: "A11Y-001", path: "/", label: "inicio", p: "@P2", module: "public" },
     { id: "A11Y-002", path: "/experiencias", label: "catálogo", p: "@P2", module: "public" },
     { id: "A11Y-004", path: "/crear-experiencia", label: "configurador (paso 1)", p: "@P2", module: "configurator" },
     { id: "A11Y-005", path: "/contacto", label: "contacto", p: "@P2", module: "public" },
     { id: "A11Y-006", path: "/login", label: "login", p: "@P2", module: "auth" },
-    { id: "A11Y-007", path: `/cotizacion/${TOKENS.quoteLucia}`, label: "cotización por token", p: "@P2", module: "quotes" },
-    { id: "A11Y-009", path: `/mi-evento/${TOKENS.portalSofia}`, label: "portal de la clienta", p: "@P2", module: "portal" },
-    { id: "A11Y-010", path: `/e/${TOKENS.micrositeSofia}/${TOKENS.guestCamila}`, label: "RSVP de invitada", p: "@P2", module: "guests" },
-    { id: "A11Y-011", path: `/memory/${TOKENS.memoryValeria}`, label: "Memory Capsule", p: "@P2", module: "memory" },
+    { id: "A11Y-007", path: `/cotizacion/${TOKENS.quoteLucia}`, label: "cotización por token", p: "@P2", module: "quotes", bugs: ["BUG-010"] },
+    { id: "A11Y-009", path: `/mi-evento/${TOKENS.portalSofia}`, label: "portal de la clienta", p: "@P2", module: "portal", bugs: ["BUG-009"] },
+    { id: "A11Y-010", path: `/e/${TOKENS.micrositeSofia}/${TOKENS.guestCamila}`, label: "RSVP de invitada", p: "@P2", module: "guests", bugs: ["BUG-010"] },
+    { id: "A11Y-011", path: `/memory/${TOKENS.memoryValeria}`, label: "Memory Capsule", p: "@P2", module: "memory", bugs: ["BUG-009"] },
     { id: "A11Y-017", path: "/como-funciona", label: "cómo funciona", p: "@P2", module: "public" },
   ];
   for (const pg of PUBLIC) {
-    test(`[${pg.id}] axe sin violaciones graves: ${pg.label}`, { tag: [pg.p, `@module:${pg.module}`] }, async ({ page, evidence }, testInfo) => {
+    const reg = regressionOf(pg.bugs);
+    test(`[${pg.id}] axe sin violaciones graves: ${pg.label}`, { tag: [pg.p, `@module:${pg.module}`, ...reg.tags] }, async ({ page, evidence }, testInfo) => {
+      reg.annotate();
       evidence("anonimo", `axe en ${pg.path}`);
       await page.goto(pg.path);
       await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
@@ -83,7 +84,8 @@ test.describe("Accesibilidad · axe WCAG 2.1 AA", { tag: ["@a11y"] }, () => {
     await axeCheck(page, testInfo);
   });
 
-  test("[A11Y-008] axe sin violaciones graves: pago simulado", { tag: ["@P2", "@module:payments"] }, async ({ page, db, evidence }, testInfo) => {
+  test("[A11Y-008] axe sin violaciones graves: pago simulado", { tag: ["@P2", "@module:payments", "@regression"] }, async ({ page, db, evidence }, testInfo) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-009" });
     evidence("clienta", "axe en /pago/mock/[checkoutId]");
     const { quote } = await createBookedEvent(db, { status: "PENDING_PAYMENT", depositPaid: false });
     await page.goto(`/cotizacion/${quote.publicToken}`);
@@ -93,16 +95,18 @@ test.describe("Accesibilidad · axe WCAG 2.1 AA", { tag: ["@a11y"] }, () => {
     await axeCheck(page, testInfo);
   });
 
-  const ADMIN: Array<{ id: string; path: string | ((ev: string) => string); label: string; role: "owner" | "staff"; module: string }> = [
-    { id: "A11Y-012", path: "/admin", label: "dashboard admin", role: "owner", module: "analytics" },
-    { id: "A11Y-013", path: "/admin/leads", label: "leads", role: "owner", module: "leads" },
-    { id: "A11Y-014", path: (ev) => `/admin/events/${ev}`, label: "detalle de evento", role: "owner", module: "events" },
-    { id: "A11Y-015", path: "/admin/calendar", label: "calendario", role: "owner", module: "calendar" },
+  const ADMIN: Array<{ id: string; path: string | ((ev: string) => string); label: string; role: "owner" | "staff"; module: string; bugs?: string[] }> = [
+    { id: "A11Y-012", path: "/admin", label: "dashboard admin", role: "owner", module: "analytics", bugs: ["BUG-009"] },
+    { id: "A11Y-013", path: "/admin/leads", label: "leads", role: "owner", module: "leads", bugs: ["BUG-009"] },
+    { id: "A11Y-014", path: (ev) => `/admin/events/${ev}`, label: "detalle de evento", role: "owner", module: "events", bugs: ["BUG-009"] },
+    { id: "A11Y-015", path: "/admin/calendar", label: "calendario", role: "owner", module: "calendar", bugs: ["BUG-009"] },
     { id: "A11Y-016", path: "/staff", label: "portal staff", role: "staff", module: "staff" },
-    { id: "A11Y-018", path: "/admin/finance", label: "finanzas", role: "owner", module: "finance" },
+    { id: "A11Y-018", path: "/admin/finance", label: "finanzas", role: "owner", module: "finance", bugs: ["BUG-009"] },
   ];
   for (const pg of ADMIN) {
-    test(`[${pg.id}] axe sin violaciones graves: ${pg.label}`, { tag: ["@P2", `@module:${pg.module}`] }, async ({ rolePage, db, evidence }, testInfo) => {
+    const reg = regressionOf(pg.bugs);
+    test(`[${pg.id}] axe sin violaciones graves: ${pg.label}`, { tag: ["@P2", `@module:${pg.module}`, ...reg.tags] }, async ({ rolePage, db, evidence }, testInfo) => {
+      reg.annotate();
       const ev = await db.event.findFirstOrThrow({ where: { portalToken: TOKENS.portalSofia } });
       const path = typeof pg.path === "function" ? pg.path(ev.id) : pg.path;
       evidence(pg.role, `axe en ${path}`);
@@ -283,7 +287,8 @@ test.describe("Accesibilidad · teclado, foco, semántica", { tag: ["@a11y"] }, 
     expect(normal, "control: sin reduce hay transiciones").toBeGreaterThan(1);
   });
 
-  test("[A11Y-028] diálogo de aceptar propuesta: foco dentro, Escape cierra y regresa el foco", { tag: ["@P2", "@module:quotes"] }, async ({ page, evidence }) => {
+  test("[A11Y-028] diálogo de aceptar propuesta: foco dentro, Escape cierra y regresa el foco", { tag: ["@P2", "@module:quotes", "@regression"] }, async ({ page, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-012" });
     evidence("clienta", "/cotizacion/[Lucía] → Aceptar propuesta → Escape (sin aceptar)");
     await page.goto(`/cotizacion/${TOKENS.quoteLucia}`);
     const trigger = page.getByRole("button", { name: "Aceptar propuesta" }).first();
@@ -304,9 +309,6 @@ test.describe("Accesibilidad · teclado, foco, semántica", { tag: ["@a11y"] }, 
       return el ? `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` : "null";
     });
     test.info().annotations.push({ type: "foco tras cerrar", description: active });
-    if (!active.includes("Aceptar propuesta")) {
-      test.info().annotations.push({ type: "bug", description: "TRV-BUG-05 el foco se pierde (body) al cerrar el diálogo de aceptar" });
-    }
     await expect(trigger, `el foco regresa al botón que abrió el diálogo (está en: ${active})`).toBeFocused();
   });
 });

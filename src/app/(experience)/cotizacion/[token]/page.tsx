@@ -91,12 +91,13 @@ function DetailTile({ icon: Icon, label, value }: { icon: React.ElementType; lab
   );
 }
 
-function ProposalBody({ quote, muted }: { quote: PublicQuoteRecord; muted?: boolean }) {
+/** Detalle de la propuesta. Sin atenuar con opacidad en aceptada/expirada: el texto debe conservar contraste AA. */
+function ProposalBody({ quote }: { quote: PublicQuoteRecord }) {
   const startTime = displayStartTime(quote);
   const balance = quote.totalCents - quote.depositCents;
   const taxIncluded = isTaxIncluded(quote);
   return (
-    <div className={cn("space-y-8", muted && "opacity-80")}>
+    <div className="space-y-8">
       <dl className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
         <DetailTile icon={CalendarDays} label="Fecha" value={quote.eventDate ? capitalizeFirst(formatLongDate(quote.eventDate)) : "Por definir"} />
         <DetailTile icon={Clock} label="Hora de inicio" value={startTime ? `${startTime} h` : "Por definir"} />
@@ -313,7 +314,7 @@ export default async function PublicQuotePage({ params }: Props) {
                 </Button>
               )}
             </section>
-            <ProposalBody quote={quote} muted />
+            <ProposalBody quote={quote} />
             <Policy policy={business.cancellationPolicy} notes={quote.notesForCustomer} />
           </div>
         </main>
@@ -357,7 +358,7 @@ export default async function PublicQuotePage({ params }: Props) {
             {expired ? (
               <>
                 <p className="text-muted-foreground text-center text-sm">Referencia de la propuesta anterior (precios sujetos a cambio):</p>
-                <ProposalBody quote={quote} muted />
+                <ProposalBody quote={quote} />
               </>
             ) : null}
           </div>

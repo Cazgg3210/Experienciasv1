@@ -8,7 +8,7 @@ export default function PagoLayout({ children }: { children: React.ReactNode }) 
       <header className="border-b border-black/5">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Logo href={null} subtitle="Pago seguro" />
-          <span className="text-taupe inline-flex items-center gap-1.5 text-xs">
+          <span className="text-taupe-deep inline-flex items-center gap-1.5 text-xs">
             <ShieldCheck className="size-4" aria-hidden />
             Conexión cifrada
           </span>

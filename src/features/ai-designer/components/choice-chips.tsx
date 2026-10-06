@@ -115,7 +115,7 @@ function Chip({
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block">{option.label}</span>
         {option.hint ? (
-          <span className={cn("mt-0.5 block text-xs", checked ? "text-ivory/85" : "text-muted-foreground")}>
+          <span className={cn("mt-0.5 block text-xs", checked ? "text-ivory" : "text-muted-foreground")}>
             {option.hint}
           </span>
         ) : null}

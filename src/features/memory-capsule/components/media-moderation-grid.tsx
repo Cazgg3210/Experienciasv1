@@ -66,7 +66,7 @@ export function MediaModerationGrid({ capsuleId, media }: { capsuleId: string; m
             onClick={() => setFilter(f.value)}
           >
             {f.label}
-            <span className="tabular opacity-80">({counts[f.value]})</span>
+            <span className="tabular">({counts[f.value]})</span>
           </Button>
         ))}
       </div>

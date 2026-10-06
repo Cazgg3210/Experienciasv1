@@ -88,14 +88,14 @@ export function MessageThread({
                       : "bg-card text-card-foreground rounded-bl-md border",
                   )}
                 >
-                  <p className={cn("mb-0.5 text-xs font-medium", m.authorType === "CUSTOMER" ? "text-ivory/80" : "text-olive")}>
+                  <p className={cn("mb-0.5 text-xs font-medium", m.authorType === "CUSTOMER" ? "text-ivory" : "text-olive")}>
                     {m.authorType === "CUSTOMER" ? "Tú" : m.authorName}
                   </p>
                   <p className="whitespace-pre-line break-words">{m.body}</p>
                   <p
                     className={cn(
                       "mt-1 text-right text-[11px]",
-                      m.authorType === "CUSTOMER" ? "text-ivory/70" : "text-muted-foreground",
+                      m.authorType === "CUSTOMER" ? "text-ivory" : "text-muted-foreground",
                     )}
                   >
                     {m.timeLabel}

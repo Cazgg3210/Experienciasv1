@@ -19,7 +19,7 @@ export function ExperienceCard({ item, canWrite, priority }: { item: ExperienceL
     <article
       className={cn(
         "bg-card group flex flex-col overflow-hidden rounded-2xl border shadow-xs transition-shadow hover:shadow-md",
-        !item.active && "opacity-80",
+        !item.active && "bg-muted/50",
       )}
       aria-labelledby={`exp-${item.id}`}
     >
