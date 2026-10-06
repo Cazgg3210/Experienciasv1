@@ -178,6 +178,33 @@ Esto explica cada síntoma:
 
 **Verificación tras la corrección:** ver «Registro de verificación BUG-006» abajo.
 
+#### Registro de verificación BUG-006 (carril 5, build de producción `:3205`, base `ivonne_rosa_e2e_l5`)
+
+| Corrida | Resultado |
+|---|---|
+| Reproducción antes de corregir (`8020b91`, `--retries=0`) | CAL-002, EVT-038, LEAD-037, INV-025, GST-012, GST-015 **FAIL**. GST-011, NOT-002 y SET-001 pasaron en esa corrida (intermitentes). |
+| Diagnóstico sin instrumentación (scripts, sesiones nuevas) | Calendario «Siguiente»: 0–2/5 OK. `next dev`: 24/24 OK, no reproduce. |
+| Corrección v1 (sólo A), `--repeat-each=3` | 35/38. SET-001 **3/3 FAIL**: parche obsoleto (B), confirmado con el traceo del router. |
+| **Corrección final (A+B)**, `--repeat-each=5 --retries=0` | **70/70 PASS**: 5 de setup + CAL-002, EVT-038, LEAD-037, INV-025, GST-011, GST-012, GST-015, NOT-002, SET-001 y CRIT-004 en chromium, y GST-011, GST-012 y CRIT-004 en mobile-chrome. |
+| CNT-022/023/024 (`E2E_SUITE=global`), `--repeat-each=5 --retries=0` | **15/15 PASS** |
+| Cross-browser P0 (GST-011, CRIT-004), Firefox + WebKit, `--repeat-each=2` | **8/8 PASS** |
+| Regresión: calendar, leads, events, guests, inventory, content, notifications, settings, quotes y smoke (chromium + mobile-chrome, config por defecto) | 225 PASS, 9 FAIL, 0 flaky (detalle abajo). |
+| Regresión global (calendar, content, notifications, settings, quotes) | **25/25 PASS** |
+| Extra: navigation, auth, critical y portal (chromium + mobile-chrome) | 106 PASS, 8 FAIL (detalle abajo). |
+| Unitarias / typecheck / lint | 753/753 · OK · OK |
+
+**FAIL de la regresión de 10 carpetas:**
+- 7 son bugs abiertos ya reportados, ajenos a BUG-006: EVT-024 (EVX-BUG-01), GST-014 (EVX-BUG-03), CAL-007, EVT-037 y GST-022 (EVX-BUG-04/05), LEAD-036 (COM-BUG-01) y NOT-007 (OPX-BUG-04).
+- LEAD-021 es un **TEST BUG expuesto por la corrección**. El locator `getByText("Asignado a Rosa")` coincidía con el toast y, ahora que el timeline sí se repinta tras la Server Action, también con la entrada «Asignado a Rosa.» (strict mode). Antes pasaba porque el timeline no se actualizaba: es otra manifestación de BUG-006. Se separaron los asserts (toast y entrada del timeline, y lo mismo al desasignar): 3/3 PASS.
+- SMK-023 es una **dependencia de datos de la prueba**. En una sola corrida, la carpeta quotes crea unas 60 cotizaciones y la sembrada sale de la página 1 (20 por página). En una base recién sembrada: 3/3 PASS. No se modificó.
+
+**FAIL de la corrida extra:**
+- 5 son bugs abiertos ya reportados: AUTH-025 (ACC-BUG-02), AUTH-049 (ACC-BUG-03), NAV-002 (ACC-BUG-04), NAV-015 (ACC-BUG-05) y CRIT-014 (TRV-BUG-06).
+- AUTH-004/005 son un **TEST BUG expuesto por la corrección**. `getByText("Hola, Lupita")` coincidía con el saludo del encabezado y con el párrafo de la página «Hola, Lupita. Aquí ves…»; antes el contenido de la página llegaba por streaming después del encabezado. Se usa coincidencia exacta: 3/3 PASS.
+- CRIT-006 es una **dependencia de datos de la prueba**. Usa `findFirst({ role: "OWNER", email contains "ivonne" })`, que en la misma base también encuentra las fundadoras `…@e2e.ivonne-rosa.test` que crean las pruebas de auth. En una base recién sembrada: 3/3 PASS. No se modificó.
+
+Evidencia (no versionada): `test-results/l5-evidence/BUG-006/{before-fix,fix1,fix2,regression1,regression-extra}/`.
+
 ---
 
 ## EVX-BUG-03 — Link general de invitación: escribir el nombre de otra invitada sobrescribe su RSVP y entrega su link personal
