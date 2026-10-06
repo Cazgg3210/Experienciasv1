@@ -3,11 +3,12 @@ import {
   canHostRemoveGuest,
   canSeeFullAddress,
   confirmationCopy,
-  findMatchingGuest,
+  findPossibleDuplicates,
   firstName,
   maskEmail,
   normalizeName,
   parseContact,
+  possibleDuplicateIds,
   rsvpStats,
   sortDietary,
 } from "./rsvp";
@@ -29,31 +30,75 @@ describe("firstName", () => {
   });
 });
 
-describe("findMatchingGuest", () => {
+describe("findPossibleDuplicates (sólo para marcar; nunca re-identifica — BUG-003)", () => {
   const guests = [
     { id: "1", name: "Camila Torres", email: null },
     { id: "2", name: "Andrea Solís", email: "andrea@example.com" },
     { id: "3", name: "Ana Paula", email: "ana@example.com" },
   ];
 
-  it("encuentra por nombre normalizado", () => {
-    expect(findMatchingGuest(guests, { name: "camila  TORRES" })?.id).toBe("1");
-    expect(findMatchingGuest(guests, { name: "Andrea Solis" })?.id).toBe("2");
+  it("coincide por nombre normalizado (acentos, mayúsculas, espacios)", () => {
+    expect(findPossibleDuplicates(guests, { name: "camila  TORRES" }).map((g) => g.id)).toEqual(["1"]);
+    expect(findPossibleDuplicates(guests, { name: "Andrea Solis" }).map((g) => g.id)).toEqual(["2"]);
   });
 
-  it("prioriza el email cuando se proporciona", () => {
-    expect(findMatchingGuest(guests, { name: "Otra Persona", email: "ANDREA@example.com" })?.id).toBe("2");
+  it("coincide por email aunque el nombre sea otro", () => {
+    expect(findPossibleDuplicates(guests, { name: "Otra Persona", email: " ANDREA@example.com " }).map((g) => g.id)).toEqual(["2"]);
   });
 
-  it("no empata por nombre si la invitada tiene otro email", () => {
-    expect(findMatchingGuest(guests, { name: "Ana Paula", email: "otra@example.com" })).toBeNull();
-    // sin email en la invitada sí empata
-    expect(findMatchingGuest(guests, { name: "Camila Torres", email: "camila@example.com" })?.id).toBe("1");
+  it("marca la coincidencia por nombre aunque la invitada tenga otro email", () => {
+    expect(findPossibleDuplicates(guests, { name: "Ana Paula", email: "otra@example.com" }).map((g) => g.id)).toEqual(["3"]);
   });
 
-  it("devuelve null si no hay coincidencia", () => {
-    expect(findMatchingGuest(guests, { name: "Regina" })).toBeNull();
-    expect(findMatchingGuest(guests, { name: "  " })).toBeNull();
+  it("devuelve todas las coincidencias (nombre de una, email de otra)", () => {
+    expect(findPossibleDuplicates(guests, { name: "Camila Torres", email: "ana@example.com" }).map((g) => g.id)).toEqual(["1", "3"]);
+  });
+
+  it("sin coincidencias, nombre vacío o email vacío → lista vacía", () => {
+    expect(findPossibleDuplicates(guests, { name: "Regina" })).toEqual([]);
+    expect(findPossibleDuplicates(guests, { name: "  ", email: "" })).toEqual([]);
+    expect(findPossibleDuplicates([{ id: "9", name: "!!", email: null }], { name: "??" })).toEqual([]);
+  });
+});
+
+describe("possibleDuplicateIds", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 1, 12, minute));
+
+  it("marca sólo los auto-registros posteriores que coinciden por nombre o email", () => {
+    const flagged = possibleDuplicateIds([
+      { id: "host", name: "Camila Ruiz", email: "camila@example.com", source: "HOST", createdAt: at(0) },
+      { id: "self-name", name: "camila ruiz", email: null, source: "SELF_RSVP", createdAt: at(5) },
+      { id: "self-email", name: "Otra", email: "CAMILA@example.com", source: "SELF_RSVP", createdAt: at(6) },
+      { id: "self-unique", name: "Fernanda", email: null, source: "SELF_RSVP", createdAt: at(7) },
+    ]);
+    expect([...flagged].sort()).toEqual(["self-email", "self-name"]);
+  });
+
+  it("la primera en registrarse y las agregadas por anfitriona o equipo nunca se marcan", () => {
+    const flagged = possibleDuplicateIds([
+      { id: "self-first", name: "Paula Mena", email: null, source: "SELF_RSVP", createdAt: at(0) },
+      { id: "admin-later", name: "Paula Mena", email: null, source: "ADMIN", createdAt: at(1) },
+      { id: "self-later", name: "Paula Mena", email: null, source: "SELF_RSVP", createdAt: at(2) },
+    ]);
+    expect([...flagged]).toEqual(["self-later"]);
+  });
+
+  it("ordena por fecha de alta aunque la lista llegue desordenada", () => {
+    const flagged = possibleDuplicateIds([
+      { id: "b", name: "Lu Díaz", email: null, source: "SELF_RSVP", createdAt: at(9) },
+      { id: "a", name: "Lu Diaz", email: null, source: "SELF_RSVP", createdAt: at(1) },
+    ]);
+    expect([...flagged]).toEqual(["b"]);
+  });
+
+  it("sin coincidencias no marca a nadie", () => {
+    expect(possibleDuplicateIds([]).size).toBe(0);
+    expect(
+      possibleDuplicateIds([
+        { id: "a", name: "Ana", email: null, source: "SELF_RSVP", createdAt: at(0) },
+        { id: "b", name: "Bea", email: null, source: "SELF_RSVP", createdAt: at(1) },
+      ]).size,
+    ).toBe(0);
   });
 });
 

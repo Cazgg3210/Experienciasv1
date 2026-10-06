@@ -1,7 +1,7 @@
 /**
  * Lógica pura de RSVP e invitadas (sin I/O). Compartida por micrositio, portal y pruebas.
  */
-import type { DietaryRestriction, RsvpStatus } from "@prisma/client";
+import type { DietaryRestriction, GuestSource, RsvpStatus } from "@prisma/client";
 
 /** Límite defensivo de invitadas por evento (anti-abuso de acciones públicas). */
 export const MAX_GUESTS_PER_EVENT = 60;
@@ -24,8 +24,7 @@ export function normalizeEmail(email: string | null | undefined): string | null 
 
 /**
  * Email enmascarado para mostrar en el micrositio ("ca•••@gmail.com"). El email completo nunca
- * se envía al navegador: con el link genérico cualquiera que escriba un nombre recibe el link
- * personal de esa invitada, así que su email no debe quedar expuesto.
+ * se envía al navegador (defensa en profundidad: un link personal reenviado no debe exponerlo).
  */
 export function maskEmail(email: string | null | undefined): string | null {
   const v = normalizeEmail(email);
@@ -45,31 +44,41 @@ export function firstName(name: string | null | undefined): string {
   return clean.split(" ")[0]!;
 }
 
-export type MatchableGuest = { id: string; name: string; email: string | null };
+export type DuplicateCandidate = { id: string; name: string; email: string | null };
 
 /**
- * Busca a la invitada existente que corresponde a una respuesta hecha con el link genérico:
- *  1. si dio email y alguna invitada tiene ese email → esa invitada;
- *  2. si no, por nombre normalizado (siempre que la invitada no tenga OTRO email distinto).
+ * Invitadas ya registradas que podrían ser la misma persona que una respuesta hecha con el link
+ * general (mismo nombre normalizado o mismo email). SÓLO sirve para marcar un posible duplicado que
+ * la anfitriona o el equipo revisan: el link general nunca re-identifica, modifica ni entrega el
+ * link personal de una invitada existente, porque escribir un nombre o un email no prueba que sea
+ * ella (BUG-003). Quien ya tiene su link personal responde desde ese enlace.
  */
-export function findMatchingGuest<G extends MatchableGuest>(
+export function findPossibleDuplicates<G extends DuplicateCandidate>(
   guests: G[],
   input: { name: string; email?: string | null },
-): G | null {
+): G[] {
+  const name = normalizeName(input.name);
   const email = normalizeEmail(input.email);
-  if (email) {
-    const byEmail = guests.find((g) => normalizeEmail(g.email) === email);
-    if (byEmail) return byEmail;
-  }
-  const target = normalizeName(input.name);
-  if (!target) return null;
-  return (
-    guests.find((g) => {
-      if (normalizeName(g.name) !== target) return false;
-      const gEmail = normalizeEmail(g.email);
-      return !email || !gEmail || gEmail === email;
-    }) ?? null
+  return guests.filter(
+    (g) => (name !== "" && normalizeName(g.name) === name) || (email !== null && normalizeEmail(g.email) === email),
   );
+}
+
+export type DuplicateFlagGuest = DuplicateCandidate & { source: GuestSource; createdAt: Date };
+
+/**
+ * Ids de las invitadas que se registraron solas con el link general (SELF_RSVP) y coinciden por
+ * nombre o email con otra invitada registrada ANTES. El portal y el admin las muestran como
+ * «Posible duplicado»; la primera en registrarse y las que agregó la anfitriona o el equipo nunca se marcan.
+ */
+export function possibleDuplicateIds(guests: DuplicateFlagGuest[]): Set<string> {
+  const ordered = [...guests].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const flagged = new Set<string>();
+  ordered.forEach((g, i) => {
+    if (g.source !== "SELF_RSVP" || i === 0) return;
+    if (findPossibleDuplicates(ordered.slice(0, i), g).length > 0) flagged.add(g.id);
+  });
+  return flagged;
 }
 
 export type RsvpStats = {

@@ -28,6 +28,8 @@ export type GuestRow = {
   inviteUrl: string;
   whatsappUrl: string;
   canRemove: boolean;
+  /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
+  possibleDuplicate: boolean;
 };
 
 /** Botón que abre el diálogo "Agregar invitada" (estado compartido con la barra inferior). */
@@ -155,7 +157,13 @@ function GuestItem({
           <p className="font-medium break-words">{guest.name}</p>
           <StatusBadge tone={RSVP_STATUS_TONES[guest.rsvpStatus]}>{RSVP_STATUS_LABELS[guest.rsvpStatus]}</StatusBadge>
           {guest.sourceLabel ? <span className="text-muted-foreground text-xs">{guest.sourceLabel}</span> : null}
+          {guest.possibleDuplicate ? <StatusBadge tone="neutral">Posible duplicado</StatusBadge> : null}
         </div>
+        {guest.possibleDuplicate ? (
+          <p className="text-sm">
+            Coincide con otra invitada de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.
+          </p>
+        ) : null}
         {details.length ? <p className="text-muted-foreground text-sm">{details.join(" · ")}</p> : null}
         {guest.dietaryNotes ? <p className="text-muted-foreground text-sm">Nota: {guest.dietaryNotes}</p> : null}
         {guest.comment ? <p className="text-sm italic">“{guest.comment}”</p> : null}

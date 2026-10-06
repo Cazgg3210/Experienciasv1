@@ -8,6 +8,7 @@ import { generateToken } from "@/lib/tokens";
 import { audit } from "@/server/audit";
 import type { SessionUser } from "@/server/auth/session";
 import { notify } from "@/features/notifications/server/notification-service";
+import { possibleDuplicateIds } from "@/features/guests/domain/rsvp";
 import { blankToNull } from "../domain/event-changes";
 import {
   GUEST_CSV_HEADERS,
@@ -52,6 +53,7 @@ export async function getGuestsOverview(eventId: string) {
           source: true,
           respondedAt: true,
           invitedAt: true,
+          createdAt: true,
         },
       },
       messages: {
@@ -73,6 +75,8 @@ export async function getGuestsOverview(eventId: string) {
     event,
     summary: summarizeRsvp(event.guests),
     dietary: aggregateDietary(event.guests),
+    /** Auto-registros del link general que coinciden con otra invitada (revisión del equipo) */
+    possibleDuplicates: possibleDuplicateIds(event.guests),
   };
 }
 export type GuestsOverview = NonNullable<Awaited<ReturnType<typeof getGuestsOverview>>>;

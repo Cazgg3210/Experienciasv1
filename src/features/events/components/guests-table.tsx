@@ -31,6 +31,8 @@ export type GuestRow = {
   dietaryNotes: string | null;
   comment: string | null;
   source: GuestSource;
+  /** Auto-registro con el link general que coincide (nombre o email) con otra invitada */
+  possibleDuplicate: boolean;
   respondedAtLabel: string | null;
   rsvpUrl: string;
   whatsappUrl: string | null;
@@ -44,6 +46,14 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "MAYBE", label: "Tal vez" },
   { key: "NOT_ATTENDING", label: "No asisten" },
 ];
+
+function DuplicateBadge({ className }: { className?: string }) {
+  return (
+    <StatusBadge tone="neutral" className={className}>
+      Posible duplicado
+    </StatusBadge>
+  );
+}
 
 function toFormValues(g: GuestRow): GuestFormValues & { guestId: string } {
   return {
@@ -84,6 +94,8 @@ export function GuestsTable({
     for (const g of guests) c[g.rsvpStatus] += 1;
     return c;
   }, [guests]);
+
+  const duplicates = guests.filter((g) => g.possibleDuplicate).length;
 
   const visible = guests.filter((g) => {
     if (filter !== "ALL" && g.rsvpStatus !== filter) return false;
@@ -182,6 +194,14 @@ export function GuestsTable({
         />
       ) : (
         <>
+          {duplicates > 0 ? (
+            <p className="bg-sand-soft/60 rounded-lg border px-4 py-3 text-sm">
+              {duplicates === 1
+                ? "1 invitada que se registró con el link general coincide con otra de la lista (mismo nombre o email) y está marcada"
+                : `${duplicates} invitadas que se registraron con el link general coinciden con otras de la lista (mismo nombre o email) y están marcadas`}{" "}
+              como «Posible duplicado». Revisa si es la misma persona y quita el registro que sobre.
+            </p>
+          ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div role="group" aria-label="Filtrar por asistencia" className="flex flex-wrap gap-1.5">
               {FILTERS.map((f) => (
@@ -248,7 +268,10 @@ export function GuestsTable({
                   <TableBody>
                     {visible.map((g) => (
                       <TableRow key={g.id} className="align-top">
-                        <TableCell className="font-medium whitespace-normal">{g.name}</TableCell>
+                        <TableCell className="font-medium whitespace-normal">
+                          {g.name}
+                          {g.possibleDuplicate ? <DuplicateBadge className="mt-1 flex w-fit" /> : null}
+                        </TableCell>
                         <TableCell className="text-muted-foreground text-xs whitespace-normal">
                           {g.phone ? <div>{g.phone}</div> : null}
                           {g.email ? <div className="max-w-44 truncate">{g.email}</div> : null}
@@ -292,6 +315,7 @@ export function GuestsTable({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{g.name}</p>
+                        {g.possibleDuplicate ? <DuplicateBadge className="my-1 flex w-fit" /> : null}
                         <p className="text-muted-foreground truncate text-xs">
                           {[g.phone, g.email].filter(Boolean).join(" · ") || "Sin contacto"}
                         </p>

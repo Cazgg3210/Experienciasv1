@@ -65,6 +65,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "faq.created": "Pregunta frecuente creada",
   "faq.updated": "Pregunta frecuente actualizada",
   "faq.deleted": "Pregunta frecuente eliminada",
+  "guest.possible_duplicate": "Posible invitada duplicada (link general)",
   "quote.expired": "Cotización expirada (automático)",
   "quote.discount_applied": "Descuento aplicado",
   "notifications.scheduler_run": "Recordatorios ejecutados manualmente",

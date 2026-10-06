@@ -245,6 +245,13 @@ export function MicrositeView({ view }: { view: InviteView }) {
                   </p>
                 </div>
               )}
+              {event.rsvpOpen && view.via === "invite" ? (
+                // El link general siempre registra a una invitada nueva (nunca toma a otra por su nombre).
+                <p className="text-muted-foreground mt-6 border-t pt-4 text-center text-sm">
+                  ¿{view.hostFirstName ? `${view.hostFirstName} ya te mandó` : "Ya te llegó"} tu link personal? Responde
+                  desde ese enlace para no duplicar tu lugar en la lista.
+                </p>
+              ) : null}
             </section>
           </>
         )}

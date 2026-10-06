@@ -4,9 +4,10 @@ import { prisma } from "@/db";
 import { generateToken } from "@/lib/tokens";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { track } from "@/server/analytics";
+import { audit } from "@/server/audit";
 import { resolveInvite } from "@/features/portal/server/portal-service";
 import { emptyToNull, isRsvpOpen } from "@/features/portal/domain/portal";
-import { MAX_GUESTS_PER_EVENT, findMatchingGuest, normalizeEmail, sortDietary } from "../domain/rsvp";
+import { MAX_GUESTS_PER_EVENT, findPossibleDuplicates, normalizeEmail, sortDietary } from "../domain/rsvp";
 import type { SubmitRsvpInput } from "../schemas";
 import { lockEventGuests } from "./guest-service";
 
@@ -19,19 +20,33 @@ export type RsvpResult = {
   slug: string;
   /** Sólo para revalidar rutas en servidor: NUNCA devolver al cliente */
   portalToken: string;
-  /** "updated" si actualizó una invitada existente, "created" si la creó (link genérico) */
+  /** "updated" con el link personal (su propia invitada); "created" con el link general (siempre nueva) */
   outcome: "created" | "updated";
   via: "invite" | "guest";
+  /**
+   * Link general: coincide por nombre o email con otra invitada (queda marcada para revisión).
+   * Sólo para el servidor: NUNCA devolverlo al cliente (revelaría quién está en la lista).
+   */
+  possibleDuplicate: boolean;
 };
+
+const guestSelect = { id: true, token: true, name: true, rsvpStatus: true } as const;
 
 /**
  * Registra la respuesta de una invitada desde el micrositio /e/[slug]/[token]:
- *  - token personal (EventGuest.token) → actualiza a esa invitada;
- *  - token genérico (Event.inviteToken) → busca a la invitada por nombre normalizado (y email)
- *    o crea una nueva con source SELF_RSVP y token propio.
+ *  - token personal (EventGuest.token) → actualiza a esa invitada y sólo a ella;
+ *  - token general (Event.inviteToken) → SIEMPRE crea una invitada nueva (SELF_RSVP, token propio).
+ *    Nunca re-identifica por nombre ni por email: escribirlos no prueba que sea ella, y hacerlo permitía
+ *    sobrescribir la respuesta de otra invitada y recibir su link personal (BUG-003). Si coincide con
+ *    alguien de la lista se crea igual (la respuesta es idéntica, sin revelar quién está invitada) y
+ *    queda como «Posible duplicado» para que la anfitriona o el equipo lo revisen (+ auditoría).
  * El mensaje para la homenajeada se guarda como EventMessage HONOREE ligado a la invitada (uno por invitada).
  */
-export async function submitRsvp(input: SubmitRsvpInput, now: Date = new Date()): Promise<RsvpResult> {
+export async function submitRsvp(
+  input: SubmitRsvpInput,
+  ctx: { ip?: string | null; now?: Date } = {},
+): Promise<RsvpResult> {
+  const now = ctx.now ?? new Date();
   const resolved = await resolveInvite(input.slug, input.token);
   if (!resolved) throw new NotFoundError("Este enlace de invitación ya no es válido.");
   const { event } = resolved;
@@ -60,36 +75,33 @@ export async function submitRsvp(input: SubmitRsvpInput, now: Date = new Date())
     ...(email ? { email } : {}),
   };
   const honoreeMessage = emptyToNull(r.honoreeMessage);
+  const personalGuest = resolved.guest;
 
-  const { guest, outcome } = await prisma.$transaction(async (tx) => {
+  const { guest, outcome, duplicateIds } = await prisma.$transaction(async (tx) => {
     await lockEventGuests(tx, event.id);
-    let outcome: RsvpResult["outcome"] = "updated";
-    let targetId: string | null = resolved.guest?.id ?? null;
+    let outcome: RsvpResult["outcome"];
+    let duplicateIds: string[] = [];
+    let guest: { id: string; token: string; name: string; rsvpStatus: RsvpStatus };
 
-    if (!targetId) {
+    if (personalGuest) {
+      outcome = "updated";
+      guest = await tx.eventGuest.update({ where: { id: personalGuest.id }, data, select: guestSelect });
+    } else {
+      outcome = "created";
       const existing = await tx.eventGuest.findMany({
         where: { eventId: event.id },
         select: { id: true, name: true, email: true },
         orderBy: { createdAt: "asc" },
       });
-      const match = findMatchingGuest(existing, { name: data.name, email });
-      if (match) targetId = match.id;
-      else if (existing.length >= MAX_GUESTS_PER_EVENT) {
+      if (existing.length >= MAX_GUESTS_PER_EVENT) {
         throw new AppError("La lista de invitadas ya está completa. Escríbele a la anfitriona.", "GUEST_LIMIT", 409);
       }
+      duplicateIds = findPossibleDuplicates(existing, { name: data.name, email }).map((g) => g.id);
+      guest = await tx.eventGuest.create({
+        data: { ...data, eventId: event.id, token: generateToken(), source: "SELF_RSVP" },
+        select: guestSelect,
+      });
     }
-
-    const guest = targetId
-      ? await tx.eventGuest.update({
-          where: { id: targetId },
-          data,
-          select: { id: true, token: true, name: true, rsvpStatus: true },
-        })
-      : await tx.eventGuest.create({
-          data: { ...data, eventId: event.id, token: generateToken(), source: "SELF_RSVP" },
-          select: { id: true, token: true, name: true, rsvpStatus: true },
-        });
-    if (!targetId) outcome = "created";
 
     const previous = await tx.eventMessage.findFirst({
       where: { eventId: event.id, kind: "HONOREE", guestId: guest.id },
@@ -114,18 +126,29 @@ export async function submitRsvp(input: SubmitRsvpInput, now: Date = new Date())
           data: { body: honoreeMessage, authorName: guest.name },
         });
       }
-    } else if (previous && resolved.via === "guest") {
-      // Sólo con su link personal (formulario precargado) un mensaje vacío significa "bórralo".
-      // Con el link genérico el formulario llega vacío: no se borra lo que ya había escrito.
+    } else if (previous && personalGuest) {
+      // Con su link personal (formulario precargado) un mensaje vacío significa "bórralo".
       await tx.eventMessage.delete({ where: { id: previous.id } });
     }
-    return { guest, outcome };
+    return { guest, outcome, duplicateIds };
   });
+
+  const possibleDuplicate = duplicateIds.length > 0;
+  if (possibleDuplicate) {
+    // Rastro para el equipo: alguien respondió con el link general con el nombre o email de otra invitada.
+    await audit({
+      action: "guest.possible_duplicate",
+      entityType: "EventGuest",
+      entityId: guest.id,
+      after: { eventId: event.id, name: guest.name, matchedGuestIds: duplicateIds },
+      ip: ctx.ip ?? null,
+    });
+  }
 
   await track("RSVP_SUBMIT", {
     eventId: event.id,
     path: `/e/${event.micrositeSlug}`,
-    metadata: { status: guest.rsvpStatus, via: resolved.via, outcome },
+    metadata: { status: guest.rsvpStatus, via: resolved.via, outcome, possibleDuplicate },
   });
 
   return {
@@ -138,5 +161,6 @@ export async function submitRsvp(input: SubmitRsvpInput, now: Date = new Date())
     portalToken: event.portalToken,
     outcome,
     via: resolved.via,
+    possibleDuplicate,
   };
 }
