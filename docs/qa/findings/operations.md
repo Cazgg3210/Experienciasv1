@@ -113,7 +113,7 @@ Atender la causa de OPX-BUG-01/EVX-BUG-02; además, no envolver `router.refresh(
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-015 (commit `d38e91e`). `getEventHeader` selecciona `closedAt` y `EventHeader` muestra la insignia «Cerrado». Verificado: FIN-007 PASS 3/3.
 **Type:** UX ISSUE
 **Module:** finance / events (encabezado compartido de las pestañas del evento)
 **Role:** OWNER
@@ -153,7 +153,7 @@ Agregar `closedAt: true` a `getEventHeader` y mostrar `<StatusBadge tone="neutra
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-016 (commit `af52434`). Seed corregido a `/staff/events/<id>` (y `/admin/events/<id>`). Verificado: NOT-007 PASS 3/3.
 **Type:** DATA ISSUE (seed DEMO)
 **Module:** notifications (seed)
 **Role:** STAFF (staff@ivonne-rosa.test)
@@ -190,7 +190,7 @@ Cambiar el seed a `/staff/events/${e1.id}` (sólo datos de demo; no afecta produ
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — aria-controls como BUG-011 (commit `e813c1c`: sin `aria-controls` colgante, foco al campo y de regreso al botón) y contraste como BUG-009 (commit `cf3e12d`). Verificado: STF-024 y la nueva STF-025 PASS 3/3.
 **Type:** UX ISSUE (accesibilidad)
 **Module:** staff (portal `/staff`, `/staff/events/[id]`)
 **Role:** STAFF (staff@ivonne-rosa.test)

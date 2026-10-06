@@ -171,7 +171,7 @@ En `safeCallback`: rechazar cualquier carácter de control o espacio (`/[\u0000-
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-013 (commit `a8ca093`). Verificado: NAV-002 PASS 3/3 (HTTP 404 real).
 **Type:** APPLICATION BUG (SEO)
 **Module:** public (catálogo)
 **Role:** Anónimo
@@ -212,7 +212,7 @@ Resolver la existencia del slug antes del límite de Suspense (quitar `loading.t
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-016 (commit `af52434`). Verificado: NAV-015 PASS 3/3.
 **Type:** DATA ISSUE (seed de la app)
 **Module:** notifications (bandeja mock) / seed
 **Role:** Owner (bandeja) · Staff (enlace de WhatsApp)

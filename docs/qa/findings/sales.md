@@ -156,7 +156,7 @@ Normalizar en `createInboundLead` con `normalizeMxPhone10` → `+52XXXXXXXXXX` p
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-010 (commit `7173e13`). Verificado: QPUB-014 PASS 3/3.
 **Type:** UX ISSUE (accesibilidad WCAG 1.3.1)
 **Module:** quotes (vista pública)
 **Role:** Clienta
@@ -188,7 +188,7 @@ Que cada par quede en un único `<div>` hijo directo del `<dl>` (mover el icono 
 
 **Severity:** LOW
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-009 (commit `cf3e12d`). «Conexión cifrada» usa `text-taupe-deep` (sólo cambio de clase). Verificado: PAY-022 PASS 3/3.
 **Type:** UX ISSUE (accesibilidad WCAG 1.4.3)
 **Module:** payments (layout `/pago/*`)
 **Role:** Clienta
@@ -220,7 +220,7 @@ Usar `text-muted-foreground` (o un taupe más oscuro) para ese texto.
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-012 (commit `f35fb04`). Verificado: QPUB-015 PASS 3/3.
 **Type:** UX ISSUE (accesibilidad WCAG 2.4.3)
 **Module:** quotes (vista pública)
 **Role:** Clienta (teclado / lector de pantalla)
@@ -253,7 +253,7 @@ Guardar el elemento disparador y devolverle el foco en `onCloseAutoFocus` del `D
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Fixed — consolidado como BUG-013 (commit `a8ca093`). `experiencias/[slug]/layout.tsx` valida el slug antes de cualquier `loading.tsx` (los esqueletos del inicio y del catálogo pasan a los grupos `(inicio)` y `(catalogo)`). Verificado: PUB-016 (ahora exige HTTP 404 para inexistente, inválido e inactivo) PASS 3/3.
 **Type:** APPLICATION BUG (SEO)
 **Module:** public (catálogo)
 **Role:** Anónimo / rastreadores
