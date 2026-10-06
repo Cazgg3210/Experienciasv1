@@ -53,6 +53,7 @@ export default async function PaymentResultPage({
         amountLabel={formatMXN(payment.amountCents)}
         kindLabel={PAYMENT_KIND_LABELS[payment.kind]}
         eventTitle={event.title}
+        eventCancelled={event.status === "CANCELLED"}
       />
     </div>
   );

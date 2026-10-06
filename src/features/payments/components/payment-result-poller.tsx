@@ -32,6 +32,7 @@ export function PaymentResultPoller({
   amountLabel,
   kindLabel,
   eventTitle,
+  eventCancelled = false,
 }: {
   p: string;
   s: string;
@@ -41,6 +42,8 @@ export function PaymentResultPoller({
   amountLabel: string;
   kindLabel: string;
   eventTitle: string;
+  /** El evento está cancelado: un cobro tardío no se confirma como un pago normal (el equipo lo reembolsa). */
+  eventCancelled?: boolean;
 }) {
   const [view, setView] = React.useState<PaymentStatusView>(initial);
   const [timedOut, setTimedOut] = React.useState(false);
@@ -143,11 +146,16 @@ export function PaymentResultPoller({
             <CheckCircle2 className="size-8" aria-hidden />
           </div>
           <h1 ref={headingRef} tabIndex={-1} className="font-heading mt-6 text-3xl font-semibold outline-none sm:text-4xl">
-            {view.eventConfirmed ? "¡Pago recibido! Tu fecha está confirmada" : "¡Pago recibido!"}
+            {eventCancelled
+              ? "Recibimos tu pago, pero tu evento está cancelado"
+              : view.eventConfirmed
+                ? "¡Pago recibido! Tu fecha está confirmada"
+                : "¡Pago recibido!"}
           </h1>
           <p className="text-muted-foreground mx-auto mt-3 max-w-md">
-            Gracias por confiar en nosotras. Te enviamos el comprobante por correo y WhatsApp. Desde tu portal puedes
-            invitar a tus amigas, revisar el menú y contarnos todos los detalles.
+            {eventCancelled
+              ? "Tu celebración ya estaba cancelada cuando se completó el cobro. Ya avisamos al equipo para reembolsártelo y te contactaremos muy pronto por correo o WhatsApp."
+              : "Gracias por confiar en nosotras. Te enviamos el comprobante por correo y WhatsApp. Desde tu portal puedes invitar a tus amigas, revisar el menú y contarnos todos los detalles."}
           </p>
           {view.status === "PARTIAL_REFUND" ? (
             <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm">Una parte de este pago ya fue reembolsada.</p>
@@ -168,8 +176,10 @@ export function PaymentResultPoller({
             Tu pago no se completó
           </h1>
           <p className="text-muted-foreground mx-auto mt-3 max-w-md">
-            {view.failureReason ?? "La pasarela no pudo procesar el cargo."} No se realizó ningún cobro. Puedes intentarlo
-            de nuevo con otra tarjeta o escribirnos por WhatsApp.
+            {view.failureReason ?? "La pasarela no pudo procesar el cargo."} No se realizó ningún cobro.{" "}
+            {eventCancelled
+              ? "Si tienes dudas, escríbenos por WhatsApp."
+              : "Puedes intentarlo de nuevo con otra tarjeta o escribirnos por WhatsApp."}
           </p>
           {summary}
           <div className="mt-8 flex flex-col items-center gap-3">

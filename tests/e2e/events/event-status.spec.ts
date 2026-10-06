@@ -225,9 +225,9 @@ test.describe("Eventos · cancelación", { tag: ["@module:events"] }, () => {
     await expect(p2.getByRole("button", { name: "Cancelar evento" })).toHaveCount(0);
   });
 
-  test("[EVT-024] al cancelar, un checkout de anticipo PENDIENTE no debe poder cobrarse", { tag: ["@P0", "@critical"] }, async ({ rolePage, anonPage, db, evidence }) => {
+  test("[EVT-024] al cancelar, un checkout de anticipo PENDIENTE no debe poder cobrarse", { tag: ["@P0", "@critical", "@regression"] }, async ({ rolePage, anonPage, db, evidence }) => {
     evidence("owner", "Clienta abre checkout del anticipo → la fundadora cancela el evento → la clienta paga el enlace abierto");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-01" });
+    test.info().annotations.push({ type: "regression", description: "BUG-002" });
     const ev = await createEventFixture(db, { status: "PENDING_PAYMENT", booking: { totalCents: 1_200_000, depositCents: 600_000 } });
     // 1) La clienta inicia el pago del anticipo desde su portal (checkout del proveedor mock)
     const client = await anonPage();
@@ -263,5 +263,11 @@ test.describe("Eventos · cancelación", { tag: ["@module:events"] }, () => {
     test.info().annotations.push({ type: "estado final del pago", description: final!.status });
     expect((await db.event.findUnique({ where: { id: ev.id } }))?.status).toBe("CANCELLED");
     expect(final!.status, "un evento cancelado no debe cobrar el anticipo de un checkout abierto").not.toBe("PAID");
+    // Corrección: la cancelación anula el checkout abierto (misma transacción) y la pasarela ya no ofrece pagar.
+    expect(afterCancel!.status, "el checkout abierto queda anulado al cancelar").toBe("FAILED");
+    expect(afterCancel!.failureReason).toBe("Evento cancelado.");
+    await expect(client.getByRole("heading", { level: 1, name: "Esta reserva fue cancelada" })).toBeVisible();
+    await expect(payMock).toHaveCount(0);
+    expect(await db.notificationLog.count({ where: { eventId: ev.id, type: "PAYMENT_RECEIVED" } }), "sin «Recibimos tu pago»").toBe(0);
   });
 });

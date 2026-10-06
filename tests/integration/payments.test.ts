@@ -49,6 +49,7 @@ import { getPaymentStatusAction, startCheckoutAction } from "@/features/payments
 import { mockCheckoutAction } from "@/features/payments/server/mock-checkout-actions";
 import { recordManualPaymentAction, refundPaymentAction } from "@/features/payments/server/actions";
 import { estimateFeeCents } from "@/features/payments/domain/amounts";
+import { cancelEvent } from "@/features/events/server/event-service";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { getBookingPaymentSummary, getPaymentResult, getPaymentsPanelData, listRecentPayments } from "@/features/payments/server/queries";
 import { isValidPaymentResultSignature, paymentResultRelativePath } from "@/features/payments/server/payment-links";
@@ -834,6 +835,104 @@ describe("Checkout simulado (mockCheckoutAction)", () => {
     expect(missing).toMatchObject({ ok: false, code: "NOT_FOUND" });
     const invalid = await mockCheckoutAction({ checkoutId: "cs_live_123", outcome: "success" });
     expect(invalid).toMatchObject({ ok: false, code: "VALIDATION_ERROR" });
+  });
+});
+
+describe("Cancelación del evento con checkouts abiertos", () => {
+  const prevInternal = process.env.INTERNAL_APP_URL;
+  beforeEach(() => {
+    // Puerto inalcanzable: el checkout simulado procesa su webhook firmado directamente
+    process.env.INTERNAL_APP_URL = "http://127.0.0.1:9";
+  });
+  afterAll(() => {
+    if (prevInternal === undefined) delete process.env.INTERNAL_APP_URL;
+    else process.env.INTERNAL_APP_URL = prevInternal;
+  });
+
+  it("cancelar anula los checkouts PENDING (FAILED «Evento cancelado.»), lo audita y el checkout simulado ya no cobra", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+
+    const r = await cancelEvent({ eventId: event.id, reason: "La clienta canceló (prueba)", notifyCustomer: false }, owner);
+    expect(r.status).toBe("cancelled");
+    const voided = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(voided).toMatchObject({ status: "FAILED", failureReason: "Evento cancelado." });
+    expect(voided.failedAt).toBeInstanceOf(Date);
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "event.cancelled", entityId: event.id } });
+    expect(log.after).toMatchObject({ voidedPayments: [paymentId] });
+
+    const res = await mockCheckoutAction({ checkoutId: voided.providerCheckoutId!, outcome: "success" });
+    expect(res).toMatchObject({ ok: false, code: "EVENT_CANCELLED" });
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).status).toBe("FAILED");
+    expect(await prisma.webhookEvent.count({ where: { payload: { path: ["paymentId"], equals: paymentId } } })).toBe(0);
+    await expect(startCheckout(booking.id, "DEPOSIT")).rejects.toMatchObject({ code: "EVENT_CANCELLED" });
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED")).toBe(0);
+  });
+
+  it("cancelación y checkout simultáneos nunca dejan un pago pendiente en una reserva cancelada", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const [checkout, cancel] = await Promise.allSettled([
+      startCheckout(booking.id, "DEPOSIT"),
+      cancelEvent({ eventId: event.id, reason: "Cancelación simultánea (prueba)", notifyCustomer: false }, owner),
+    ]);
+    expect(cancel.status).toBe("fulfilled");
+    if (checkout.status === "rejected") expect(checkout.reason).toMatchObject({ code: "EVENT_CANCELLED" });
+    expect(await prisma.payment.count({ where: { bookingId: booking.id, status: "PENDING" } })).toBe(0);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it("un cobro que la pasarela confirma tras cancelar queda PAID con «Reembolso requerido», sin reconfirmar ni avisar a la clienta", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const { paymentId } = await startCheckout(booking.id, "DEPOSIT");
+    await cancelEvent({ eventId: event.id, reason: "Cancelación con sesión abierta", notifyCustomer: false }, owner);
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+
+    const hook = mockWebhook(payment, "payment.succeeded");
+    const res = await postWebhook("mock", hook.body, hook.signature);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ applied: true, note: "cancelled_booking" });
+    const paid = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(paid.status).toBe("PAID");
+    expect(paid.failureReason).toBeNull();
+    expect(paid.notes).toMatch(/^Reembolso requerido: /);
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: event.id } })).status).toBe("CANCELLED");
+    expect(hoisted.onEventConfirmed).not.toHaveBeenCalled();
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED")).toBe(0);
+    expect(await notificationCount(event.id, "PAYMENT_RECEIVED", "WHATSAPP")).toBe(0);
+    expect(await notificationCount(event.id, "BOOKING_CONFIRMED")).toBe(0);
+    expect(await prisma.notificationLog.count({ where: { dedupeKey: `payment-received-team:${paymentId}` } })).toBe(0);
+    const alert = await prisma.notificationLog.findUniqueOrThrow({ where: { dedupeKey: `cancelled-booking-payment:${paymentId}` } });
+    expect(alert.type).toBe("GENERIC");
+    expect(alert.body).toContain("ya estaba cancelado");
+    expect(await prisma.auditLog.count({ where: { action: "payment.collected_after_cancellation", entityId: paymentId } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "event.confirmed_by_payment", entityId: event.id } })).toBe(0);
+    expect((await prisma.webhookEvent.findFirstOrThrow({ where: { externalId: String(hook.payload.id) } })).error).toBe("cancelled_booking");
+
+    const dup = await postWebhook("mock", hook.body, hook.signature);
+    expect(dup.json).toMatchObject({ duplicate: true });
+    expect(await prisma.notificationLog.count({ where: { dedupeKey: `cancelled-booking-payment:${paymentId}` } })).toBe(1);
+
+    // El equipo lo reembolsa desde el panel (el cobro cuenta como pagado para poder devolverlo).
+    const refund = await refundPayment(owner, { paymentId, amountCents: paid.amountCents, reason: "Evento cancelado" });
+    expect(refund.originalStatus).toBe("REFUNDED");
+  });
+
+  it("un pago manual no se registra si el evento se canceló (también dentro del candado)", async () => {
+    const owner = await testOwner();
+    const { event } = await makeFixture();
+    const [manual, cancel] = await Promise.allSettled([
+      recordManualPayment(owner, { eventId: event.id, amountCents: DEPOSIT, kind: "DEPOSIT", method: "CASH", paidAt: localDateKey() }),
+      cancelEvent({ eventId: event.id, reason: "Cancelación simultánea (prueba)", notifyCustomer: false }, owner),
+    ]);
+    // O el pago se registra antes de la cancelación, o se rechaza por evento cancelado; nunca un cobro
+    // manual «para reembolso» sobre una reserva ya cancelada.
+    expect([manual.status, cancel.status]).toContain("fulfilled");
+    if (manual.status === "rejected") expect(manual.reason).toMatchObject({ code: "EVENT_CANCELLED" });
+    if (cancel.status === "rejected") expect(cancel.reason).toMatchObject({ code: "CONFLICT" });
+    expect(await prisma.payment.count({ where: { notes: { startsWith: "Reembolso requerido" }, booking: { eventId: event.id } } })).toBe(0);
   });
 });
 

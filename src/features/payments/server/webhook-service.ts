@@ -7,10 +7,12 @@ import { getPaymentProviderByName } from "@/server/providers";
 import type { NormalizedPaymentEvent } from "@/server/providers/payments/types";
 import { UNDERPAID_REVIEW_NOTE_PREFIX } from "../domain/amounts";
 import {
+  CANCELLED_BOOKING_PAYMENT_NOTE,
   applyPaymentFailed,
   applyPaymentSucceeded,
   applyProviderRefund,
   notifyTeamPaymentAnomaly,
+  runCancelledBookingPaymentEffects,
   runPaymentSuccessEffects,
   type PaymentApplyOutcome,
 } from "./payment-service";
@@ -19,7 +21,7 @@ type Tx = Prisma.TransactionClient;
 
 const AMOUNT_MISMATCH_NOTE = "amount_mismatch";
 /** Notas que se guardan en WebhookEvent.error para revisión (el evento sí se marca procesado). */
-const ANOMALY_NOTES = ["payment_not_found", AMOUNT_MISMATCH_NOTE];
+const ANOMALY_NOTES = ["payment_not_found", AMOUNT_MISMATCH_NOTE, CANCELLED_BOOKING_PAYMENT_NOTE];
 const isAnomaly = (note?: string) => !!note && ANOMALY_NOTES.some((n) => note.startsWith(n));
 
 export type WebhookResponse = { status: number; body: Record<string, unknown> };
@@ -212,7 +214,12 @@ export async function handlePaymentWebhook(
 
   const outcome = processed.outcome;
   if (processed.type === "payment.succeeded" && outcome?.applied) {
-    await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
+    if (outcome.note === CANCELLED_BOOKING_PAYMENT_NOTE) {
+      // Cobro sobre una reserva cancelada: sólo aviso al equipo para reembolsar (sin «Recibimos tu pago»).
+      await runCancelledBookingPaymentEffects({ paymentId: outcome.paymentId, providerName: provider.name });
+    } else {
+      await runPaymentSuccessEffects({ paymentId: outcome.paymentId, confirmed: outcome.confirmed });
+    }
   }
   if (outcome && processed.note?.startsWith(AMOUNT_MISMATCH_NOTE)) {
     const [expected, received] = processed.note.slice(AMOUNT_MISMATCH_NOTE.length + 1).split("/").map(Number);

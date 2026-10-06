@@ -3,6 +3,8 @@ import {
   checkoutAmountCents,
   checkoutLinkState,
   estimateFeeCents,
+  isBookingCancelled,
+  isCollectedPaymentStatus,
   isReusablePendingCheckout,
   maxManualAmountCents,
   planRefund,
@@ -90,18 +92,54 @@ describe("isReusablePendingCheckout", () => {
   });
 });
 
+describe("isBookingCancelled / isCollectedPaymentStatus", () => {
+  it("una reserva está cancelada si ella o su evento lo están", () => {
+    expect(isBookingCancelled({ cancelledAt: null, event: { status: "PENDING_PAYMENT" } })).toBe(false);
+    expect(isBookingCancelled({ cancelledAt: null, event: { status: "CONFIRMED" } })).toBe(false);
+    expect(isBookingCancelled({ cancelledAt: new Date(), event: { status: "PENDING_PAYMENT" } })).toBe(true);
+    expect(isBookingCancelled({ cancelledAt: null, event: { status: "CANCELLED" } })).toBe(true);
+    expect(isBookingCancelled({ cancelledAt: new Date(), event: { status: "CANCELLED" } })).toBe(true);
+  });
+  it("sólo PAID / PARTIAL_REFUND / REFUNDED cuentan como dinero cobrado", () => {
+    expect(isCollectedPaymentStatus("PAID")).toBe(true);
+    expect(isCollectedPaymentStatus("PARTIAL_REFUND")).toBe(true);
+    expect(isCollectedPaymentStatus("REFUNDED")).toBe(true);
+    expect(isCollectedPaymentStatus("PENDING")).toBe(false);
+    expect(isCollectedPaymentStatus("FAILED")).toBe(false);
+  });
+});
+
 describe("checkoutLinkState", () => {
   const now = new Date("2026-10-01T18:00:00Z");
+  const live = { ...booking, cancelledAt: null, event: { status: "PENDING_PAYMENT" } };
   const pending = { kind: "DEPOSIT", status: "PENDING", amountCents: 500_000, createdAt: new Date(now.getTime() - 5 * 60_000) };
   it("payable si el monto sigue vigente y no expiró", () => {
-    expect(checkoutLinkState(pending, booking, [], now)).toBe("payable");
+    expect(checkoutLinkState(pending, live, [], now)).toBe("payable");
   });
   it("processed / expired / stale", () => {
-    expect(checkoutLinkState({ ...pending, status: "PAID" }, booking, [], now)).toBe("processed");
-    expect(checkoutLinkState({ ...pending, createdAt: new Date(now.getTime() - 2 * 60 * 60_000) }, booking, [], now)).toBe("expired");
-    expect(checkoutLinkState(pending, booking, [paid(100_000)], now)).toBe("stale");
-    expect(checkoutLinkState({ ...pending, kind: "BALANCE", amountCents: 1_000_000 }, booking, [paid(500_000)], now)).toBe("stale");
-    expect(checkoutLinkState({ ...pending, kind: "BALANCE", amountCents: 500_000 }, booking, [paid(500_000)], now)).toBe("payable");
+    expect(checkoutLinkState({ ...pending, status: "PAID" }, live, [], now)).toBe("processed");
+    expect(checkoutLinkState({ ...pending, status: "FAILED" }, live, [], now)).toBe("processed");
+    expect(checkoutLinkState({ ...pending, createdAt: new Date(now.getTime() - 2 * 60 * 60_000) }, live, [], now)).toBe("expired");
+    expect(checkoutLinkState(pending, live, [paid(100_000)], now)).toBe("stale");
+    expect(checkoutLinkState({ ...pending, kind: "BALANCE", amountCents: 1_000_000 }, live, [paid(500_000)], now)).toBe("stale");
+    expect(checkoutLinkState({ ...pending, kind: "BALANCE", amountCents: 500_000 }, live, [paid(500_000)], now)).toBe("payable");
+  });
+  it("cancelled: una reserva o evento cancelado nunca se puede pagar (aunque el enlace siga vigente)", () => {
+    const byBooking = { ...live, cancelledAt: new Date(now.getTime() - 60_000) };
+    const byEvent = { ...live, event: { status: "CANCELLED" } };
+    expect(checkoutLinkState(pending, byBooking, [], now)).toBe("cancelled");
+    expect(checkoutLinkState(pending, byEvent, [], now)).toBe("cancelled");
+    // El checkout anulado al cancelar (FAILED) también se muestra como cancelado, no como «procesado».
+    expect(checkoutLinkState({ ...pending, status: "FAILED" }, byBooking, [], now)).toBe("cancelled");
+    // La cancelación manda sobre la expiración y el saldo desactualizado.
+    expect(checkoutLinkState({ ...pending, createdAt: new Date(now.getTime() - 2 * 60 * 60_000) }, byEvent, [], now)).toBe("cancelled");
+    expect(checkoutLinkState(pending, byEvent, [paid(100_000)], now)).toBe("cancelled");
+  });
+  it("un cobro ya registrado sigue como processed aunque después se cancele el evento", () => {
+    const cancelled = { ...live, cancelledAt: new Date(now.getTime() - 60_000), event: { status: "CANCELLED" } };
+    expect(checkoutLinkState({ ...pending, status: "PAID" }, cancelled, [], now)).toBe("processed");
+    expect(checkoutLinkState({ ...pending, status: "PARTIAL_REFUND" }, cancelled, [], now)).toBe("processed");
+    expect(checkoutLinkState({ ...pending, status: "REFUNDED" }, cancelled, [], now)).toBe("processed");
   });
 });
 
