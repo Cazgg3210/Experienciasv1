@@ -102,6 +102,9 @@ test.describe("Smoke", { tag: ["@smoke"] }, () => {
     const page = await rolePage("owner");
     await page.goto("/admin/quotes");
     await expect(page.getByRole("heading", { level: 1, name: "Cotizaciones" })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: /^Q-/ }).first()).toBeVisible();
+    // Otras pruebas del carril crean cotizaciones y la sembrada puede quedar fuera de la 1.ª página: se busca por código.
+    await page.goto(`/admin/quotes?q=${encodeURIComponent(q.code)}`);
     await expect(page.getByText(q.code).first()).toBeVisible();
   });
 
