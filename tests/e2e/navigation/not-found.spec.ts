@@ -18,7 +18,8 @@ test.describe("404", { tag: ["@module:navigation"] }, () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test("[NAV-002] experiencia pública inexistente → contenido 404 y HTTP 404 (no soft-404)", { tag: ["@P3"] }, async ({ anonPage, apiAs, guard, evidence }) => {
+  test("[NAV-002] experiencia pública inexistente → contenido 404 y HTTP 404 (no soft-404)", { tag: ["@P3", "@regression"] }, async ({ anonPage, apiAs, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-013" });
     guard.allow(/status of 404/);
     evidence("anonimo", "/experiencias/no-existe-e2e");
     const page = await anonPage();
@@ -29,7 +30,6 @@ test.describe("404", { tag: ["@module:navigation"] }, () => {
     await expect(page.getByRole("link", { name: "Ver experiencias" })).toHaveAttribute("href", "/experiencias");
     const res = await probe(await apiAs(null), "/experiencias/no-existe-e2e");
     test.info().annotations.push({ type: "observado", description: `HTTP ${res.status} para /experiencias/no-existe-e2e` });
-    test.info().annotations.push({ type: "bug", description: "ACC-BUG-04" });
     expect(res.status, "un recurso público inexistente debe responder 404 (soft-404 con 200)").toBe(404);
   });
 
