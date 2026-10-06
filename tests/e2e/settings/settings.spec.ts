@@ -30,8 +30,9 @@ async function teamUser(db: PrismaClient, role: "OWNER" | "STAFF" = "STAFF") {
 const usersList = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Cuentas del equipo" });
 
 test.describe("Ajustes · páginas", { tag: ["@module:settings"] }, () => {
-  test("[SET-001] todas las secciones de configuración cargan desde la navegación lateral", { tag: ["@P1", "@smoke"] }, async ({ rolePage, evidence }) => {
+  test("[SET-001] todas las secciones de configuración cargan desde la navegación lateral", { tag: ["@P1", "@smoke", "@regression"] }, async ({ rolePage, evidence }) => {
     evidence("superadmin", "/admin/settings › cada sección del menú");
+    test.info().annotations.push({ type: "regression", description: "BUG-006" }); // navegación del cliente entre secciones
     const page = await rolePage("superadmin");
     await page.goto("/admin/settings");
     const nav = page.getByRole("navigation", { name: "Secciones de configuración" });

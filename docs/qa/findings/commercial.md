@@ -69,7 +69,7 @@ Normalizar el teléfono en **todas** las escrituras (perfil, seed, cotización r
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — consolidado como **BUG-006**; causa raíz y corrección en docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»)
 **Type:** INTEGRATION ISSUE (App Router de Next 15.5 / navegación del cliente) — impacto UX directo
 **Module:** leads (también observado en clientas)
 **Role:** OWNER

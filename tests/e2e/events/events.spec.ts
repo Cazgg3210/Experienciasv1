@@ -60,9 +60,9 @@ test.describe("Eventos · listado y detalle", { tag: ["@module:events"] }, () =>
     await expect(page.getByRole("table", { name: "Listado de eventos" }).getByRole("link", { name: other.title })).toBeVisible();
   });
 
-  test("[EVT-038] «Limpiar filtros» regresa al listado sin filtros (navegación del cliente)", { tag: ["@P2"] }, async ({ rolePage, evidence }) => {
+  test("[EVT-038] «Limpiar filtros» regresa al listado sin filtros (navegación del cliente)", { tag: ["@P2", "@regression"] }, async ({ rolePage, evidence }) => {
     evidence("owner", "Eventos con filtros (3 sesiones nuevas) › Limpiar filtros");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-02" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const outcomes: string[] = [];
     for (const start of ["/admin/events?status=INQUIRY", "/admin/events?period=past", "/admin/events?q=zzz-sin-resultados"]) {
       const page = await rolePage("owner");

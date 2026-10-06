@@ -36,9 +36,9 @@ test.describe("Calendario", { tag: ["@module:calendar"] }, () => {
     await expect(page.getByRole("heading", { level: 1, name: ev.title })).toBeVisible();
   });
 
-  test("[CAL-002] navegación de meses con «Siguiente», «Anterior» y «Hoy»", { tag: ["@P1"] }, async ({ rolePage, evidence }) => {
+  test("[CAL-002] navegación de meses con «Siguiente», «Anterior» y «Hoy»", { tag: ["@P1", "@regression"] }, async ({ rolePage, evidence }) => {
     evidence("owner", "Calendario › Siguiente › Anterior › Hoy (navegación del cliente)");
-    test.info().annotations.push({ type: "bug", description: "EVX-BUG-02" });
+    test.info().annotations.push({ type: "regression", description: "BUG-006" });
     const current = todayKey().slice(0, 7);
     const next = addDaysKey(`${current}-15`, 31).slice(0, 7);
     // Tres sesiones nuevas: abrir el calendario y pasar al mes siguiente (navegación del cliente)

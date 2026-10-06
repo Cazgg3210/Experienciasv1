@@ -8,9 +8,10 @@ import { createBookedEvent, createCapsule, expect, makePng, test, uniq } from ".
 test.describe("Recorridos críticos · experiencia", { tag: ["@critical"] }, () => {
   test(
     "[CRIT-004] la anfitriona agrega una invitada en su portal → la invitada confirma RSVP → admin y portal ven la confirmación",
-    { tag: ["@P0", "@module:guests", "@mobile"] },
+    { tag: ["@P0", "@module:guests", "@mobile", "@regression"] },
     async ({ page, anonPage, deskPage, db, evidence }) => {
       evidence("clienta", "Portal /mi-evento/[token] → Agregar invitada; invitada /e/[slug]/[token] → ¡Sí, ahí estaré!; owner en Invitadas");
+      test.info().annotations.push({ type: "regression", description: "BUG-006" }); // confirmación del RSVP (TRV-BUG-01)
       const { event } = await createBookedEvent(db, { status: "CONFIRMED" });
       const guestName = `Camila ${uniq("Inv")}`;
 
@@ -38,13 +39,13 @@ test.describe("Recorridos críticos · experiencia", { tag: ["@critical"] }, () 
       await invitee.getByText("¡Sí, ahí estaré!").click();
       await invitee.getByRole("button", { name: "Enviar mi respuesta" }).click();
       const confirmation = invitee.getByRole("heading", { name: `¡Gracias, ${guestName.split(" ")[0]}! Te esperamos` });
-      // TRV-BUG-01: la respuesta se guarda pero la confirmación a veces no aparece (el form sigue sin cambios).
+      // BUG-006 (TRV-BUG-01, corregido): la respuesta se guardaba pero la confirmación a veces no aparecía.
       // Soft: la prueba FALLA si no aparece, pero sigue validando base, admin y portal.
       await expect.soft(confirmation, "la invitada ve la confirmación tras enviar").toBeVisible();
       if (!(await confirmation.isVisible())) {
         test.info().annotations.push({
           type: "bug",
-          description: "TRV-BUG-01 — RSVP guardado sin confirmación visible para la invitada (formulario sin cambios)",
+          description: "BUG-006 (regresión) — RSVP guardado sin confirmación visible para la invitada (formulario sin cambios)",
         });
       }
 

@@ -418,9 +418,9 @@ export async function waitForDetail(page: import("@playwright/test").Page, base:
 
 /**
  * Sigue un enlace por su href (carga completa). Se usa SÓLO cuando lo que se prueba es el destino
- * (datos de la página 2, listado sin filtros…), no la navegación del cliente: los <Link> que cambian
- * únicamente los searchParams de la misma ruta a veces no navegan con clic (ver COM-BUG-03, cubierto
- * por [LEAD-037]). Devuelve el href para poder validarlo.
+ * (datos de la página 2, listado sin filtros…), no la navegación del cliente: la navegación con clic de
+ * los <Link> que cambian sólo los searchParams de la misma ruta la cubren [LEAD-037], [EVT-038] y
+ * [CAL-002] (regresión de BUG-006). Devuelve el href para poder validarlo.
  */
 export async function followLink(page: import("@playwright/test").Page, link: import("@playwright/test").Locator): Promise<string> {
   const href = await link.getAttribute("href");
