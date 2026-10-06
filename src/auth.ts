@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/db";
+import { revokeSessionsOnSignOut } from "@/features/auth/server/session-service";
 import { rateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
@@ -49,8 +50,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
         logger.info("auth.login_ok", { userId: user.id, role: user.role });
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return { id: user.id, email: user.email, name: user.name, role: user.role, sessionVersion: user.sessionVersion };
       },
     }),
   ],
+  events: {
+    /**
+     * Revocación en servidor al cerrar sesión (POST /api/auth/signout o signOut() de servidor).
+     * Borrar la cookie no basta: una copia del JWT, o una respuesta que estaba en vuelo, seguiría autorizando.
+     * Si esto falla, Auth.js lo registra y de todos modos borra la cookie del navegador.
+     */
+    async signOut(message) {
+      if ("token" in message) await revokeSessionsOnSignOut(message.token);
+    },
+  },
 });

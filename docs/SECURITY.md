@@ -3,7 +3,16 @@
 ## Autenticación y sesiones
 
 - **Equipo** (SUPER_ADMIN, OWNER, STAFF): Auth.js v5 con Credentials (bcrypt cost 10) y sesión **JWT** en cookie
-  `httpOnly`, `sameSite=lax` y `secure` automáticamente bajo HTTPS (`__Secure-` prefix). Duración 12 h.
+  `httpOnly`, `sameSite=lax` y `secure` automáticamente bajo HTTPS (`__Secure-` prefix). Duración 12 h de inactividad.
+- **Revocación en servidor**: cada usuaria tiene `User.sessionVersion`; el JWT guarda la versión con la que se
+  inició sesión y `getCurrentUser()` (única puerta de lectura de la sesión) la compara con la base en cada request.
+  **Cerrar sesión** (evento `signOut` de Auth.js en `/api/auth/signout`), **restablecer la contraseña**,
+  **desactivar** la cuenta o **cambiar su rol** incrementan la versión: todas las sesiones abiertas de esa cuenta
+  (en cualquier dispositivo, o una copia robada de la cookie) dejan de autorizar. Un JWT sin versión (anterior a
+  este cambio) cuenta como 0. El logout sólo incrementa si el token sigue vigente (una cookie ya revocada no puede
+  cerrar las sesiones nuevas).
+- **Sin re-emisión de la cookie en cada respuesta**: el middleware sólo renueva el JWT en `GET` cuando tiene al menos
+  `session.updateAge` (1 h); así una respuesta que estaba en vuelo al cerrar sesión no vuelve a escribir la cookie.
 - Login con rate limit por email (8 intentos / 15 min), comparación de tiempo constante (hash dummy para
   usuarios inexistentes) y mensajes genéricos (no enumeración).
 - **Clientas e invitadas** no tienen contraseña: acceso por **tokens opacos de 256 bits** (`generateToken`) en URL

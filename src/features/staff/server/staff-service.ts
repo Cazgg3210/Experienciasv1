@@ -4,6 +4,7 @@ import type { StaffMember } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "@/db";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { REVOKE_ALL_SESSIONS } from "@/features/auth/server/session-service";
 import { audit } from "@/server/audit";
 import { can, canAssignRole, type Permission } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
@@ -82,7 +83,9 @@ export async function deleteStaffMember(actor: Actor, id: string): Promise<void>
   await prisma.$transaction(async (tx) => {
     await tx.eventChecklistItem.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
     await tx.staffMember.delete({ where: { id } });
-    if (member.userId) await tx.user.update({ where: { id: member.userId }, data: { active: false } });
+    if (member.userId) {
+      await tx.user.update({ where: { id: member.userId }, data: { active: false, ...REVOKE_ALL_SESSIONS } });
+    }
     await audit({ action: "staff.deleted", entityType: "StaffMember", entityId: id, before: snapshot(member), actor }, tx);
   });
 }
@@ -155,7 +158,8 @@ export async function resetStaffPassword(actor: Actor, raw: ResetPasswordValues)
   const input = resetPasswordSchema.parse(raw);
   const user = await linkedUser(input.staffMemberId, actor);
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // La contraseña nueva cierra todas sus sesiones abiertas.
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, ...REVOKE_ALL_SESSIONS } });
   await audit({
     action: "user.password_reset",
     entityType: "User",
@@ -174,7 +178,11 @@ export async function setStaffAccessActive(
   const input = accessActiveSchema.parse(raw);
   const user = await linkedUser(input.staffMemberId, actor);
   if (user.id === actor.id) throw new ForbiddenError("No puedes desactivar tu propio acceso.");
-  await prisma.user.update({ where: { id: user.id }, data: { active: input.active } });
+  // Desactivar revoca sus sesiones: al reactivarla no revive ningún JWT anterior.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { active: input.active, ...(input.active ? {} : REVOKE_ALL_SESSIONS) },
+  });
   await audit({
     action: input.active ? "user.activated" : "user.deactivated",
     entityType: "User",

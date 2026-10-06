@@ -1,8 +1,11 @@
 /**
  * Autenticación — logout, sesión en varias pestañas y sesión invalidada en servidor.
- * La sesión es JWT (12 h); getCurrentUser() revalida `active` y `role` contra la base en cada request
- * (src/server/auth/session.ts). El middleware sólo mira el rol del JWT (src/middleware.ts).
+ * La sesión es JWT (12 h); getCurrentUser() revalida `active`, `role` y `sessionVersion` (revocación) contra la
+ * base en cada request (src/server/auth/session.ts). El middleware sólo mira el rol del JWT (src/middleware.ts)
+ * y ya no re-emite la cookie en cada respuesta (sólo renueva JWT con ≥ 1 h).
+ * Cerrar sesión revoca TODAS las sesiones de la cuenta: aquí sólo se usan cuentas propias (createTeamUser).
  */
+import type { PrismaClient } from "@prisma/client";
 import { expect, test } from "../fixtures";
 import {
   SESSION_COOKIE,
@@ -11,10 +14,14 @@ import {
   loginViaUi,
   probe,
   sessionCookie,
+  strongPassword,
   type TeamUser,
 } from "../permissions/_helpers";
+import { ready } from "../operations/_helpers";
 import { replayServerAction, wasAccepted, wasDenied } from "../fixtures";
-import type { Browser, BrowserContext } from "@playwright/test";
+import type { Browser, BrowserContext, PlaywrightWorkerArgs } from "@playwright/test";
+
+type Playwright = PlaywrightWorkerArgs["playwright"];
 
 async function loggedInContext(browser: Browser, user: TeamUser, home: string): Promise<BrowserContext> {
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
@@ -105,7 +112,7 @@ test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
     }
   });
 
-  test("[AUTH-025] logout invalida la sesión en el servidor (la cookie anterior deja de servir)", { tag: ["@P1", "@negative"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+  test("[AUTH-025] logout invalida la sesión en el servidor (la cookie anterior deja de servir)", { tag: ["@P1", "@negative", "@regression"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
     const user = await createTeamUser(db, { role: "OWNER" });
     evidence("owner", "copia la cookie antes del logout y la reutiliza después (ASVS 3.3.1)");
     const ctx = await loggedInContext(browser, user, "/admin");
@@ -122,7 +129,7 @@ test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
     const replay = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${stolen}` } });
     const res = await probe(replay, "/admin/customers");
     test.info().annotations.push({ type: "observado", description: `GET /admin/customers con cookie previa al logout → ${res.status} ${res.location ?? ""}` });
-    test.info().annotations.push({ type: "bug", description: "ACC-BUG-02" });
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
     expect(res.status, "la cookie emitida antes del logout no debe seguir autorizando").toBe(307);
     expect(res.location).toContain("/login");
     await replay.dispose();
@@ -241,7 +248,7 @@ test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
     await ctx.close();
   });
 
-  test("[AUTH-032] logout con otra pestaña del panel cargando: la sesión NO debe revivir", { tag: ["@P0", "@critical", "@negative"] }, async ({ browser, db, guard, evidence }) => {
+  test("[AUTH-032] logout con otra pestaña del panel cargando: la sesión NO debe revivir", { tag: ["@P0", "@critical", "@negative", "@regression"] }, async ({ browser, db, guard, evidence }) => {
     const user = await createTeamUser(db, { role: "OWNER" });
     evidence(
       "owner",
@@ -283,7 +290,7 @@ test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
     });
 
     // Esperado: sesión cerrada en todo el navegador.
-    test.info().annotations.push({ type: "bug", description: "ACC-BUG-01" });
+    test.info().annotations.push({ type: "regression", description: "BUG-001" });
     const after = await sessionCookie(tab1);
     test.info().annotations.push({ type: "observado", description: `cookie de sesión tras logout: ${after ? "PRESENTE (sesión revivida)" : "ausente"}` });
     await tab1.goto("/admin/customers");
@@ -304,5 +311,212 @@ test.describe("Logout y sesión", { tag: ["@module:auth", "@auth"] }, () => {
     await page.goBack();
     await page.getByRole("link", { name: "Ir al sitio" }).click();
     await expect(page).toHaveURL(/\/$/);
+  });
+});
+
+test.describe("Revocación de sesiones en servidor (sessionVersion)", { tag: ["@module:auth", "@auth"] }, () => {
+  /** Una copia de la cookie de la sesión anterior ya no autoriza: 307 a /login. */
+  async function expectCookieRevoked(playwright: Playwright, baseURL: string | undefined, cookie: string | undefined, path: string) {
+    expect(cookie, "se copió la cookie de la sesión abierta").toBeTruthy();
+    const replay = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Cookie: `${SESSION_COOKIE}=${cookie}` } });
+    const res = await probe(replay, path);
+    test.info().annotations.push({ type: "observado", description: `GET ${path} con la cookie anterior → ${res.status} ${res.location ?? ""}` });
+    expect(res.status, `la cookie anterior ya no autoriza ${path}`).toBe(307);
+    expect(res.location).toContain("/login");
+    await replay.dispose();
+  }
+
+  async function sessionVersion(db: PrismaClient, userId: string): Promise<number> {
+    return (await db.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true } })).sessionVersion;
+  }
+
+  test("[AUTH-033] restablecer la contraseña desde Usuarios cierra las sesiones abiertas de esa cuenta", { tag: ["@P1", "@negative", "@regression"] }, async ({ browser, db, playwright, baseURL, apiAs, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("superadmin", `sesión abierta de ${user.email}; superadmin le restablece la contraseña (resetUserPasswordAction)`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    const before = await sessionVersion(db, user.id);
+
+    const res = await replayServerAction(
+      await apiAs("superadmin"),
+      buildAction("resetUserPasswordAction", "/admin/settings/users", { userId: user.id, password: strongPassword() }),
+    );
+    expect(wasAccepted(res), `${res.outcome} ${res.text.slice(0, 200)}`).toBe(true);
+    await expect.poll(() => sessionVersion(db, user.id)).toBe(before + 1);
+
+    // UI: el siguiente request de la sesión abierta ya no entra al panel
+    await page.goto("/admin/customers");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toHaveCount(0);
+    // Backend: una copia de la cookie tampoco
+    await expectCookieRevoked(playwright, baseURL, cookie, "/admin/customers");
+    await ctx.close();
+  });
+
+  test("[AUTH-034] restablecer la contraseña de un integrante (Staff) cierra su sesión del portal", { tag: ["@P1", "@negative", "@regression"] }, async ({ browser, db, playwright, baseURL, apiAs, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
+    const user = await createTeamUser(db, { role: "STAFF" });
+    evidence("owner", `sesión abierta de ${user.email} en /staff; la fundadora le restablece la contraseña (resetStaffPasswordAction)`);
+    const ctx = await loggedInContext(browser, user, "/staff");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    const before = await sessionVersion(db, user.id);
+
+    const res = await replayServerAction(
+      await apiAs("owner"),
+      buildAction(
+        "resetStaffPasswordAction",
+        `/admin/staff/${user.staffMemberId}`,
+        { staffMemberId: user.staffMemberId, password: strongPassword() },
+        { file: /features\/staff\/server\/actions/ },
+      ),
+    );
+    expect(wasAccepted(res), `${res.outcome} ${res.text.slice(0, 200)}`).toBe(true);
+    await expect.poll(() => sessionVersion(db, user.id)).toBe(before + 1);
+
+    await page.goto("/staff");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("navigation", { name: "Staff" })).toHaveCount(0);
+    await expectCookieRevoked(playwright, baseURL, cookie, "/staff");
+    await ctx.close();
+  });
+
+  test("[AUTH-035] cambiar el rol desde Usuarios cierra la sesión abierta; al volver a entrar aplica el rol nuevo", { tag: ["@P1", "@regression"] }, async ({ browser, db, playwright, baseURL, apiAs, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
+    const user = await createTeamUser(db, { role: "STAFF" });
+    evidence("owner", `sesión abierta de ${user.email} (STAFF); la fundadora la promueve a OWNER (changeUserRoleAction)`);
+    const ctx = await loggedInContext(browser, user, "/staff");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+
+    const res = await replayServerAction(
+      await apiAs("owner"),
+      buildAction("changeUserRoleAction", "/admin/settings/users", { userId: user.id, role: "OWNER" }),
+    );
+    expect(wasAccepted(res), `${res.outcome} ${res.text.slice(0, 200)}`).toBe(true);
+    await expect.poll(async () => (await db.user.findUniqueOrThrow({ where: { id: user.id } })).role).toBe("OWNER");
+
+    await page.goto("/staff");
+    await expect(page).toHaveURL(/\/login/);
+    await expectCookieRevoked(playwright, baseURL, cookie, "/staff");
+    // Nuevo login: el JWT ya trae el rol nuevo y entra al panel
+    await page.context().clearCookies();
+    await loginViaUi(page, user.email, user.password);
+    await page.waitForURL((u) => u.pathname === "/admin");
+    await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toBeVisible();
+    await ctx.close();
+  });
+
+  test("[AUTH-036] desactivar y reactivar una cuenta no revive la sesión anterior", { tag: ["@P1", "@negative", "@regression"] }, async ({ browser, db, playwright, baseURL, apiAs, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("superadmin", `sesión abierta de ${user.email}; superadmin la desactiva y la reactiva (setUserActiveAction)`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+
+    const superadmin = await apiAs("superadmin");
+    for (const active of [false, true]) {
+      const res = await replayServerAction(superadmin, buildAction("setUserActiveAction", "/admin/settings/users", { userId: user.id, active }));
+      expect(wasAccepted(res), `${res.outcome} ${res.text.slice(0, 200)}`).toBe(true);
+      await expect.poll(async () => (await db.user.findUniqueOrThrow({ where: { id: user.id } })).active).toBe(active);
+    }
+
+    // Reactivada, pero la sesión abierta antes de desactivarla sigue revocada
+    await page.goto("/admin/customers");
+    await expect(page).toHaveURL(/\/login/);
+    await expectCookieRevoked(playwright, baseURL, cookie, "/admin/customers");
+    // Un login nuevo sí funciona
+    await page.context().clearCookies();
+    await loginViaUi(page, user.email, user.password);
+    await page.waitForURL((u) => u.pathname === "/admin");
+    await ctx.close();
+  });
+
+  test("[AUTH-037] restablecer la propia contraseña cierra la sesión actual y pide entrar con la nueva", { tag: ["@P1", "@regression"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004" });
+    const user = await createTeamUser(db, { role: "OWNER" });
+    const newPassword = strongPassword();
+    evidence("owner", `${user.email}: Ajustes › Usuarios › (tú) › Contraseña → Restablecer`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    await page.goto("/admin/settings/users");
+    const self = page.getByRole("list", { name: "Cuentas del equipo" }).getByRole("listitem").filter({ hasText: user.email });
+    await expect(self).toContainText("(tú)");
+    await (await ready(self.getByRole("button", { name: "Contraseña" }))).click();
+    const dialog = page.getByRole("dialog", { name: "Restablecer contraseña" });
+    await expect(dialog.getByText("Se cerrarán todas tus sesiones, incluida ésta")).toBeVisible();
+    await dialog.getByLabel("Contraseña temporal").fill(newPassword);
+    await dialog.getByRole("button", { name: "Restablecer" }).click();
+
+    // Sale a /login sin cookie de sesión; la acción quedó auditada a su nombre
+    await page.waitForURL((u) => u.pathname === "/login");
+    await expect(page.getByRole("heading", { name: "Bienvenida de vuelta" })).toBeVisible();
+    expect(await sessionCookie(page), "cookie de sesión eliminada").toBeUndefined();
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: "user.password_reset", entityId: user.id } });
+    expect(audit.actorId).toBe(user.id);
+    await expectCookieRevoked(playwright, baseURL, cookie, "/admin/customers");
+
+    // La contraseña anterior ya no entra; la nueva sí
+    await loginViaUi(page, user.email, user.password);
+    await expect(page.getByText("Correo o contraseña incorrectos.")).toBeVisible();
+    await loginViaUi(page, user.email, newPassword);
+    await page.waitForURL((u) => u.pathname === "/admin");
+    await ctx.close();
+  });
+
+  test("[AUTH-038] una cookie ya revocada no puede cerrar las sesiones nuevas de la cuenta", { tag: ["@P2", "@negative"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+    const user = await createTeamUser(db, { role: "OWNER" });
+    evidence("owner", "cookie vieja (revocada al cerrar sesión) usada contra /api/auth/signout mientras hay una sesión nueva abierta");
+    // Sesión 1: se copia la cookie y se cierra sesión (la versión sube)
+    const first = await loggedInContext(browser, user, "/admin");
+    const firstPage = first.pages()[0]!;
+    guard.watch(firstPage);
+    const stale = await sessionCookie(firstPage);
+    expect(stale).toBeTruthy();
+    await firstPage.waitForLoadState("networkidle");
+    await firstPage.getByRole("complementary").getByRole("button", { name: "Cerrar sesión" }).click();
+    await firstPage.waitForURL(/\/login/);
+    await first.close();
+    const afterLogout = await sessionVersion(db, user.id);
+    expect(afterLogout, "cerrar sesión incrementó la versión").toBe(1);
+
+    // Sesión 2, vigente
+    const second = await loggedInContext(browser, user, "/admin");
+    const secondPage = second.pages()[0]!;
+    guard.watch(secondPage);
+
+    // Con la cookie vieja: token CSRF de Auth.js + POST /api/auth/signout (el flujo real del botón)
+    const host = new URL(baseURL!).hostname;
+    const attacker = await playwright.request.newContext({
+      baseURL,
+      storageState: {
+        cookies: [{ name: SESSION_COOKIE, value: stale!, domain: host, path: "/", expires: -1, httpOnly: true, secure: false, sameSite: "Lax" }],
+        origins: [],
+      },
+    });
+    const { csrfToken } = (await (await attacker.get("/api/auth/csrf")).json()) as { csrfToken: string };
+    const signout = await attacker.post("/api/auth/signout", { form: { csrfToken, callbackUrl: "/login" }, maxRedirects: 0 });
+    // Prueba de que Auth.js SÍ procesó el signout (borra la cookie después de emitir el evento signOut)
+    expect(
+      signout.headersArray().some((h) => h.name.toLowerCase() === "set-cookie" && /session-token=;/.test(h.value)),
+      `signout procesado (${signout.status()})`,
+    ).toBe(true);
+
+    // La versión no cambió y la sesión nueva sigue viva
+    expect(await sessionVersion(db, user.id)).toBe(afterLogout);
+    await secondPage.goto("/admin/customers");
+    await expect(secondPage).toHaveURL(/\/admin\/customers$/);
+    await expect(secondPage.getByRole("heading", { level: 1 })).toBeVisible();
+    await attacker.dispose();
+    await second.close();
   });
 });

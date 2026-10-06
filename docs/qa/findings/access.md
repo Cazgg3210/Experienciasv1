@@ -22,7 +22,7 @@ Además: **ENV-01** (ENVIRONMENT ISSUE de la infraestructura paralela) y observa
 
 **Severity:** CRITICAL
 **Priority:** P0
-**Status:** Open
+**Status:** Fixed — BUG-001 (verificado en carril 1; ver «Resolution»)
 **Type:** POTENTIAL SECURITY ISSUE
 **Module:** auth (logout) / middleware
 **Role:** OWNER (aplica a cualquier rol del equipo: SUPER_ADMIN, OWNER, STAFF)
@@ -72,13 +72,18 @@ Sesión 100 % stateless (JWT 12 h, `src/auth.config.ts:12`) + re-emisión de la 
 2. Mientras tanto (mitigación parcial): no re-emitir la cookie en requests de prefetch/RSC, y hacer el logout con navegación completa a un endpoint de servidor que responda `Clear-Site-Data: "cookies"` y redirija a `/login`.
 3. Mantener [AUTH-032] como prueba `@regression`.
 
+### Resolution (BUG-001)
+- Revocación en servidor: `User.sessionVersion` (migración `20261006140000_user_session_version`, aditiva). El JWT guarda la versión al iniciar sesión (`authorize` → callback `jwt`) y `getCurrentUser` la compara con la base (token sin versión = 0). El evento `signOut` de Auth.js (`src/auth.ts`, endpoint `/api/auth/signout` que usa el botón) la incrementa con comparar-e-incrementar (`src/features/auth/server/session-service.ts`).
+- Causa de la "resurrección": `src/middleware.ts` ya no deja pasar la re-emisión de `Set-Cookie authjs.session-token` en cada respuesta; sólo renueva el JWT en `GET` cuando tiene ≥ `session.updateAge` (1 h). Los borrados de la cookie se conservan.
+- Pruebas: [AUTH-032], [CRIT-014] y [CRIT-012] `@regression` (anotación `regression: BUG-001`). CRIT-009/011/012/014 usan ahora cuentas propias: cerrar sesión revoca todas las sesiones de la cuenta y no debe tocar las cuentas DEMO compartidas. En CRIT-014 la precondición "el servidor re-emite la cookie" pasó a ser el assert de la corrección (no la re-emite con un JWT reciente) y se agregó la verificación de que la cookie anterior al logout, si reapareciera, ya no abre el portal.
+
 ---
 
 ## ACC-BUG-02 — La sesión no se invalida en el servidor: la cookie copiada antes del logout sigue dando acceso
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — BUG-004 (verificado en carril 1; ver «Resolution»)
 **Type:** POTENTIAL SECURITY ISSUE
 **Module:** auth (sesión)
 **Role:** OWNER (cualquier rol del equipo)
@@ -118,6 +123,9 @@ Misma causa raíz que ACC-BUG-01 (sin estado de sesión en servidor).
 
 ### Recommended fix
 La misma revocación por `sessionVersion` de ACC-BUG-01; incrementarla también al restablecer contraseña (`src/features/users/server/user-service.ts` `resetUserPassword`, `src/features/staff/server/staff-service.ts` `resetStaffPassword`) y al desactivar.
+
+### Resolution (BUG-004)
+Revocación por `sessionVersion` (ver ACC-BUG-01). Se incrementa al cerrar sesión, al restablecer la contraseña (Usuarios y Staff), al desactivar (Usuarios, Staff y al eliminar una ficha con acceso) y al cambiar el rol, en el mismo `update` que el cambio. Restablecer la propia contraseña cierra también la sesión actual (la acción borra la cookie y la UI lleva a `/login`). Pruebas: [AUTH-025] `@regression` y nuevas [AUTH-033] (reset en Usuarios), [AUTH-034] (reset de staff), [AUTH-035] (cambio de rol), [AUTH-036] (desactivar/reactivar), [AUTH-037] (reset propio), [AUTH-038] (una cookie revocada no cierra las sesiones nuevas).
 
 ---
 

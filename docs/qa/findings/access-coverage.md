@@ -5,6 +5,8 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 
 **Total 256** — PASS 251 · FAIL 5
 
+> Actualización 2026-10-06 (corrección de BUG-001 / BUG-004, carril 1): AUTH-025 y AUTH-032 pasan como `@regression`; se agregaron AUTH-033…AUTH-038 (revocación de sesiones). Los totales de arriba son de la corrida de auditoría original.
+
 | ID | Módulo | Escenario | Rol | Priority | Automated | Result |
 |---|---|---|---|---|---|---|
 | API-001 | api | /api/health responde {status:ok} sin caché | Anónimo | P1 | ✅ tests/e2e/api/handlers.spec.ts | PASS |
@@ -70,14 +72,20 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 | AUTH-022 | auth | respuestas del panel autenticado no se cachean (Cache-Control no-store) | Owner | P2 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-023 | auth | sin cookies (request directo / apiAs anónimo) las páginas privadas redirigen a login | Anónimo | P0 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-024 | auth | cookie de sesión manipulada o falsificada no autoriza | Anónimo | P0 | ✅ tests/e2e/auth/session.spec.ts | PASS |
-| AUTH-025 | auth | logout invalida la sesión en el servidor (la cookie anterior deja de servir) | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | FAIL (ACC-BUG-02) |
+| AUTH-025 | auth | logout invalida la sesión en el servidor (la cookie anterior deja de servir) | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
 | AUTH-026 | auth | dos pestañas: logout en una ⇒ la otra pierde acceso en el siguiente request | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-027 | auth | desactivar a una usuaria con sesión abierta corta su acceso en el siguiente request (páginas y acciones) | Owner | P0 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-028 | auth | bajar de OWNER a STAFF con sesión abierta: el siguiente request ya no autoriza el panel ni sus acciones | Owner | P0 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-029 | auth | subir de STAFF a OWNER aplica en el siguiente request (sin re-login) | Staff | P2 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-030 | auth | logout desde el portal staff | Staff | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-031 | auth | /sin-acceso: página 403 clara, noindex y con salidas | Anónimo | P3 | ✅ tests/e2e/auth/session.spec.ts | PASS |
-| AUTH-032 | auth | logout con otra pestaña del panel cargando: la sesión NO debe revivir | Owner | P0 | ✅ tests/e2e/auth/session.spec.ts | FAIL (ACC-BUG-01) |
+| AUTH-032 | auth | logout con otra pestaña del panel cargando: la sesión NO debe revivir | Owner | P0 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-001) |
+| AUTH-033 | auth | restablecer la contraseña desde Usuarios cierra las sesiones abiertas de esa cuenta | Superadmin | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-034 | auth | restablecer la contraseña de un integrante (Staff) cierra su sesión del portal | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-035 | auth | cambiar el rol desde Usuarios cierra la sesión abierta; al volver a entrar aplica el rol nuevo | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-036 | auth | desactivar y reactivar una cuenta no revive la sesión anterior | Superadmin | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-037 | auth | restablecer la propia contraseña cierra la sesión actual y pide entrar con la nueva | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-038 | auth | una cookie ya revocada no puede cerrar las sesiones nuevas de la cuenta | Owner | P2 | ✅ tests/e2e/auth/session.spec.ts | PASS |
 | AUTH-040 | auth | ruta privada sin sesión → login con callbackUrl → tras entrar vuelve a esa ruta | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-041 | auth | STAFF con callbackUrl a /admin termina en /staff | Staff | P1 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-042 | auth | STAFF con callbackUrl interno permitido (/staff/...) lo respeta | Staff | P2 | ✅ tests/e2e/auth/callback.spec.ts | PASS |

@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/db";
+import { isSessionVersionCurrent } from "@/features/auth/domain/session";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { can, type AppRole, type Permission } from "@/server/auth/permissions";
 
@@ -14,9 +15,10 @@ export type SessionUser = {
 };
 
 /**
- * Usuario actual (o null). Cacheado por request.
+ * Usuario actual (o null). Cacheado por request. ÚNICA puerta de lectura de la sesión del equipo.
  * La sesión es JWT, así que se revalida contra la base en cada request: un usuario desactivado
- * pierde el acceso de inmediato y los cambios de rol aplican sin esperar a que expire el token.
+ * pierde el acceso de inmediato, los cambios de rol aplican sin esperar a que expire el token y un JWT
+ * revocado (cerró sesión, se restableció la contraseña, etc.: `sessionVersion` distinta) deja de autorizar.
  */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
@@ -24,9 +26,10 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!u?.id || !u.role) return null;
   const dbUser = await prisma.user.findUnique({
     where: { id: u.id },
-    select: { id: true, email: true, name: true, role: true, active: true },
+    select: { id: true, email: true, name: true, role: true, active: true, sessionVersion: true },
   });
   if (!dbUser || !dbUser.active || dbUser.role === "CUSTOMER") return null;
+  if (!isSessionVersionCurrent(u.sessionVersion, dbUser.sessionVersion)) return null;
   return { id: dbUser.id, email: dbUser.email, name: dbUser.name, role: dbUser.role };
 });
 

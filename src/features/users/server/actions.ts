@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { signOut } from "@/auth";
 import { protectedAction } from "@/server/action";
 import { changeRoleSchema, createUserSchema, resetPasswordSchema, setActiveSchema } from "../schemas";
 import { changeUserRole, createUser, resetUserPassword, setUserActive } from "./user-service";
@@ -49,7 +50,13 @@ export const resetUserPasswordAction = protectedAction(
   },
   async (input, { user }) => {
     const res = await resetUserPassword(input, user);
+    if (res.id === user.id) {
+      // Restablecer la propia contraseña revoca todas sus sesiones, incluida ésta: se borra también la cookie
+      // y el cliente la lleva a /login para entrar con la contraseña nueva.
+      await signOut({ redirect: false });
+      return { id: res.id, signedOut: true };
+    }
     revalidatePath(USERS_PATH);
-    return res;
+    return { id: res.id, signedOut: false };
   },
 );

@@ -1,27 +1,39 @@
 /**
  * Recorrido crítico de ACCESO (P0): login/logout por rol con el formulario real, home de cada rol,
  * barreras básicas del middleware (UI y request directo) y callbackUrl.
- * Cada prueba usa un contexto NUEVO (sin la sesión guardada) para no afectar a las demás.
+ * Cada prueba usa un contexto NUEVO (sin la sesión guardada) para no afectar a las demás. Las que CIERRAN
+ * sesión usan una cuenta propia del rol: cerrar sesión revoca todas las sesiones de la cuenta (BUG-001).
  */
-import { ACCOUNTS, PASSWORD, expect, loginViaUi, test, type E2ERole } from "./_helpers";
+import {
+  ACCOUNTS,
+  PASSWORD,
+  createBackofficeUser,
+  createBookedEvent,
+  createStaffUser,
+  expect,
+  loginViaUi,
+  rx,
+  test,
+  type E2ERole,
+} from "./_helpers";
 
-const BACKOFFICE: Array<{ id: string; role: E2ERole }> = [
-  { id: "CRIT-009", role: "owner" },
-  { id: "CRIT-011", role: "superadmin" },
+const BACKOFFICE: Array<{ id: string; role: E2ERole; dbRole: "OWNER" | "SUPER_ADMIN" }> = [
+  { id: "CRIT-009", role: "owner", dbRole: "OWNER" },
+  { id: "CRIT-011", role: "superadmin", dbRole: "SUPER_ADMIN" },
 ];
 
 test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] }, () => {
-  for (const { id, role } of BACKOFFICE) {
+  for (const { id, role, dbRole } of BACKOFFICE) {
     test(
       `[${id}] ${role}: login → panel → logout → las rutas privadas vuelven a pedir login (UI y request)`,
       { tag: ["@P0", "@module:auth"] },
       async ({ page, db, evidence }) => {
-        const acc = ACCOUNTS[role];
-        evidence(role, "Login por formulario → /admin → Cerrar sesión → /admin pide login");
-        const before = (await db.user.findUnique({ where: { email: acc.email } }))?.lastLoginAt ?? null;
+        const acc = await createBackofficeUser(db, dbRole);
+        evidence(role, `Login por formulario (cuenta propia ${acc.email}) → /admin → Cerrar sesión → /admin pide login`);
+        const before = acc.user.lastLoginAt;
 
-        await loginViaUi(page, acc.email, PASSWORD, /^\/admin$/);
-        await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Hola, ${acc.name.split(" ")[0]}`);
+        await loginViaUi(page, acc.email, acc.password, /^\/admin$/);
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Hola, ${acc.user.name.split(" ")[0]}`);
         await expect(page.getByRole("navigation", { name: "Navegación del panel" })).toBeVisible();
         const after = (await db.user.findUnique({ where: { email: acc.email } }))?.lastLoginAt ?? null;
         if (after) expect(after.getTime(), "lastLoginAt actualizado").toBeGreaterThan(before?.getTime() ?? 0);
@@ -52,12 +64,20 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
 
   test(
     "[CRIT-012] staff: login → /staff; /admin la regresa a /staff; logout cierra el portal",
-    { tag: ["@P0", "@module:auth", "@mobile"] },
-    async ({ page, evidence }) => {
-      const acc = ACCOUNTS.staff;
-      evidence("staff", "Login por formulario → /staff; intento /admin; Cerrar sesión");
-      await loginViaUi(page, acc.email, PASSWORD, /^\/staff/);
+    { tag: ["@P0", "@module:auth", "@mobile", "@regression"] },
+    async ({ page, db, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-001" });
+      // Cuenta STAFF propia con un evento asignado: su tarjeta en /staff dispara el prefetch RSC que, en vuelo
+      // durante el logout, revivía la sesión (reproducción natural de BUG-001).
+      const acc = await createStaffUser(db);
+      const { event } = await createBookedEvent(db);
+      await db.staffAssignment.create({
+        data: { eventId: event.id, staffMemberId: acc.member.id, function: "SERVER", startsAt: event.startsAt, endsAt: event.endsAt },
+      });
+      evidence("staff", `Login por formulario (cuenta propia ${acc.email}, 1 evento asignado) → /staff; intento /admin; Cerrar sesión`);
+      await loginViaUi(page, acc.email, acc.password, /^\/staff/);
       await expect(page.getByRole("heading", { level: 1, name: "Mis próximos eventos" })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Eventos próximos" }).getByRole("link", { name: rx(event.title) })).toBeVisible();
 
       await page.goto("/admin/finance");
       await expect(page).toHaveURL(/\/staff$/);
@@ -69,8 +89,8 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
       await page.waitForURL(/\/login/);
       await page.goto("/staff");
       if (!/\/login/.test(page.url())) {
-        // Reproducción natural de TRV-BUG-06: un prefetch RSC en vuelo re-creó la cookie de sesión.
-        test.info().annotations.push({ type: "bug", description: "TRV-BUG-06 la sesión revivió tras el logout (prefetch en vuelo)" });
+        // Reproducción natural de BUG-001: un prefetch RSC en vuelo re-creó la cookie de sesión.
+        test.info().annotations.push({ type: "observado", description: "la sesión revivió tras el logout (prefetch en vuelo)" });
       }
       await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fstaff/);
     },
@@ -79,11 +99,15 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
   test(
     "[CRIT-014] logout definitivo: una respuesta que estaba en vuelo al cerrar sesión no revive la sesión",
     { tag: ["@P0", "@module:auth", "@regression"] },
-    async ({ page, evidence }) => {
-      evidence("staff", "Login → 2ª pestaña con petición a /staff en vuelo → Cerrar sesión → llega la respuesta → /staff");
-      const acc = ACCOUNTS.staff;
-      await loginViaUi(page, acc.email, PASSWORD, /^\/staff/);
+    async ({ page, db, evidence }) => {
+      test.info().annotations.push({ type: "regression", description: "BUG-001" });
+      // Cuenta STAFF propia: cerrar sesión revoca todas las sesiones de la cuenta (no se usa la DEMO compartida).
+      const acc = await createStaffUser(db);
+      evidence("staff", `Login (cuenta propia ${acc.email}) → 2ª pestaña con petición a /staff en vuelo → Cerrar sesión → llega la respuesta → /staff`);
+      await loginViaUi(page, acc.email, acc.password, /^\/staff/);
       await expect(page.getByRole("heading", { level: 1, name: "Mis próximos eventos" })).toBeVisible();
+      const preLogoutCookie = (await page.context().cookies()).find((c) => c.name === "authjs.session-token" && c.value);
+      expect(preLogoutCookie, "hay cookie de sesión antes del logout").toBeTruthy();
 
       // Una petición autenticada (prefetch RSC / otra pestaña del portal) sale ANTES del logout y su
       // respuesta llega DESPUÉS (red móvil lenta). Se retiene la respuesta REAL del servidor, sin modificarla.
@@ -93,10 +117,12 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
       const loggedOut = new Promise<void>((r) => (releaseAfterLogout = r));
       let delivered!: () => void;
       const fulfilled = new Promise<void>((r) => (delivered = r));
+      let serverResponded = false;
       let refreshedCookie = false;
       await tab2.route("**/staff?e2e-inflight=1", async (route) => {
         const response = await route.fetch();
         refreshedCookie = /authjs\.session-token=ey/.test(response.headers()["set-cookie"] ?? "");
+        serverResponded = true;
         await loggedOut;
         await route.fulfill({ response });
         delivered();
@@ -106,8 +132,11 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
           headers: { RSC: "1" },
         }).then((r) => r.status);
       });
-      await expect.poll(() => refreshedCookie, { message: "el servidor respondió con la cookie de sesión renovada" }).toBe(true);
-      test.info().annotations.push({ type: "observación", description: "cada respuesta autenticada del middleware re-emite Set-Cookie authjs.session-token" });
+      // El servidor ya respondió (sesión aún vigente); la respuesta queda retenida hasta después del logout.
+      await expect.poll(() => serverResponded, { message: "el servidor respondió la petición en vuelo antes del logout" }).toBe(true);
+      // Causa raíz de BUG-001: el middleware re-emitía Set-Cookie authjs.session-token en CADA respuesta autenticada.
+      // Ahora sólo renueva el JWT en GET cuando tiene ≥ 1 h (updateAge); uno recién emitido no se re-escribe.
+      expect(refreshedCookie, "una respuesta autenticada con JWT reciente no re-emite la cookie de sesión").toBe(false);
 
       // Evidencia: qué respuestas (de cualquier pestaña) traen Set-Cookie de sesión después del logout
       const resurrectors: string[] = [];
@@ -124,7 +153,6 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
       await page.waitForURL(/\/login/);
       const afterLogout = (await page.context().cookies()).some((c) => c.name === "authjs.session-token" && c.value);
       test.info().annotations.push({ type: "Set-Cookie de sesión tras logout", description: resurrectors.join(" ; ") || "ninguna (antes de liberar)" });
-      if (afterLogout) test.info().annotations.push({ type: "bug", description: "TRV-BUG-06 la sesión sigue/reaparece justo después del logout" });
       expect.soft(afterLogout, "la cookie de sesión se borró al cerrar sesión").toBe(false);
       releaseAfterLogout();
       await fulfilled;
@@ -133,10 +161,16 @@ test.describe("Recorridos críticos · acceso", { tag: ["@critical", "@auth"] },
 
       const revived = (await page.context().cookies()).some((c) => c.name === "authjs.session-token" && c.value);
       test.info().annotations.push({ type: "Set-Cookie de sesión tras logout (final)", description: resurrectors.join(" ; ") || "ninguna" });
-      if (revived) test.info().annotations.push({ type: "bug", description: "TRV-BUG-06 respuesta en vuelo revive la sesión tras logout" });
       expect(revived, "ninguna respuesta posterior al logout vuelve a crear la cookie de sesión").toBe(false);
       await page.goto("/staff");
       await expect(page, "tras cerrar sesión /staff exige login").toHaveURL(/\/login\?callbackUrl=%2Fstaff/);
+
+      // Defensa en profundidad: si una respuesta de la ventana de renovación (JWT ≥ 1 h) re-escribiera la cookie
+      // anterior al logout, esa cookie ya está revocada en servidor (User.sessionVersion) y no abre el portal.
+      await page.context().addCookies([preLogoutCookie!]);
+      await page.goto("/staff");
+      await expect(page, "la cookie anterior al logout ya no abre el portal").toHaveURL(/\/login/);
+      await expect(page.getByRole("heading", { level: 1, name: "Mis próximos eventos" })).toHaveCount(0);
     },
   );
 
