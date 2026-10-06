@@ -19,6 +19,7 @@ import {
   voidOpenCheckoutsForCancelledBooking,
 } from "@/features/payments/server/payment-service";
 import { getSettings } from "@/features/settings/server/settings-service";
+import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
 import { CAPACITY_STATUSES, eventStatusMachine } from "../domain/event-status";
 import {
   ScheduleError,
@@ -182,7 +183,7 @@ export async function createManualEvent(
     customerId = await findOrCreateCustomer({
       name: input.newCustomer.name,
       email: blankToNull(input.newCustomer.email)?.toLowerCase() ?? null,
-      phone: blankToNull(input.newCustomer.phone)?.replace(/[^\d+]/g, "") ?? null,
+      phone: phoneForStorage(input.newCustomer.phone, "newCustomer.phone"),
     });
   }
 
@@ -246,8 +247,7 @@ export async function createManualEvent(
 }
 
 async function findOrCreateCustomer(input: { name: string; email: string | null; phone: string | null }) {
-  let customer = input.email ? await prisma.customer.findUnique({ where: { email: input.email } }) : null;
-  if (!customer && input.phone) customer = await prisma.customer.findFirst({ where: { phone: input.phone } });
+  const customer = await findCustomerByContact(prisma, { email: input.email, phone: input.phone });
   if (customer) {
     await prisma.customer.update({
       where: { id: customer.id },

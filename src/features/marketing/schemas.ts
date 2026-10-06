@@ -2,13 +2,12 @@ import { z } from "zod";
 import type { Occasion } from "@prisma/client";
 import { OCCASION_LABELS } from "@/lib/labels";
 import { isValidDateKey, localDateKey } from "@/lib/dates";
+import { isValidPhone } from "@/lib/phone";
 import { CLIENT_TRACKABLE_TYPES, SESSION_ID_RE } from "./domain/analytics";
 
 /** Esquemas Zod compartidos cliente/servidor del sitio público. */
 
 const OCCASION_VALUES = Object.keys(OCCASION_LABELS) as [Occasion, ...Occasion[]];
-
-const digitsOf = (v: string) => v.replace(/\D/g, "");
 
 export const contactFormSchema = z.object({
   name: z
@@ -22,10 +21,8 @@ export const contactFormSchema = z.object({
     .min(1, "Escribe tu WhatsApp o teléfono")
     .max(25, "Número demasiado largo")
     .refine((v) => /^[\d\s()+.-]+$/.test(v), "Usa sólo números (puedes incluir +, espacios o guiones)")
-    .refine((v) => {
-      const n = digitsOf(v).length;
-      return n >= 10 && n <= 15;
-    }, "Escribe un número de 10 dígitos (con lada)"),
+    // Lo que `normalizePhone` puede llevar a la forma canónica (la captura de leads la guarda así).
+    .refine((v) => isValidPhone(v), "Escribe un número de 10 dígitos (con lada)"),
   email: z
     .string({ required_error: "Escribe tu correo" })
     .trim()

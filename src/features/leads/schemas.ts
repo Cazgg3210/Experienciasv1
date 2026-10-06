@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { isValidDateKey } from "@/lib/dates";
+import { isValidPhone } from "@/lib/phone";
 import { LEAD_SOURCE_VALUES, LEAD_STATUS_VALUES } from "./domain/lead-filters";
 import { LOGGABLE_ACTIVITY_TYPES } from "./domain/lead-workflow";
 
@@ -43,20 +44,13 @@ const optionalDate = z
   .optional()
   .refine((v) => !v || isValidDateKey(v), "Elige una fecha válida");
 
-export function phoneDigits(value: string | null | undefined): string {
-  return (value ?? "").replace(/\D/g, "");
-}
-
+/** Acepta lo que `normalizePhone` puede llevar a la forma canónica (la captura la guarda así). */
 const optionalPhone = z
   .string()
   .trim()
   .max(30, "Teléfono demasiado largo")
   .optional()
-  .refine((v) => {
-    if (!v) return true;
-    const d = phoneDigits(v);
-    return /^[+\d\s().-]+$/.test(v) && d.length >= 10 && d.length <= 15;
-  }, "Escribe un teléfono de 10 dígitos (puedes incluir lada +52)");
+  .refine((v) => !v || isValidPhone(v), "Escribe un teléfono de 10 dígitos (puedes incluir lada +52)");
 
 const optionalEmail = z
   .string()

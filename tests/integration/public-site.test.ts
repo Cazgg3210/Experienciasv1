@@ -190,7 +190,7 @@ describe("formulario de contacto → lead CONTACT_FORM", () => {
     expect(lead.status).toBe("NEW");
     expect(lead.code).toBe(result.code);
     expect(lead.email).toBe(email);
-    expect(lead.phone).toBe(phone);
+    expect(lead.phone).toBe(`+52${phone}`); // forma canónica única del teléfono (BUG-008)
     expect(lead.occasion).toBe("BRIDAL");
     expect(lead.notes).toBe("Quiero un bridal brunch para 10 amigas en Granada.");
     expect(lead.eventDate && toDateKey(lead.eventDate)).toBe(eventDate);

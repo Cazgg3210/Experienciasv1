@@ -5,8 +5,10 @@ import {
   buildWhatsappMessage,
   firstName,
   isContactActivity,
+  LEAD_INTAKE_CHANNELS,
   mailtoLink,
   nextLeadStatuses,
+  notifiesInboundLead,
   requiresLostReason,
   shouldAutoContact,
   telLink,
@@ -34,6 +36,14 @@ describe("reglas de contacto", () => {
     expect(nextLeadStatuses("WON")).toEqual([]);
     expect(requiresLostReason("LOST")).toBe(true);
     expect(requiresLostReason("WON")).toBe(false);
+  });
+});
+
+describe("avisos de lead entrante (BUG-014)", () => {
+  it("sólo la captura pública avisa; la del equipo nunca, sea cual sea su origen", () => {
+    expect(notifiesInboundLead("public")).toBe(true);
+    expect(notifiesInboundLead("team")).toBe(false);
+    expect(LEAD_INTAKE_CHANNELS).toEqual(["public", "team"]);
   });
 });
 

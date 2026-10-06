@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/db";
 import { dateOnly, localDateKey, toDateKey } from "@/lib/dates";
+import { phoneSearchDigits } from "@/lib/phone";
 import { balanceDueCents, netPaidCents } from "@/features/payments/domain/payment-status";
 import { effectiveDateRange, sortDirection, type EventFilters } from "../domain/event-filters";
 
@@ -229,7 +230,7 @@ export type EventDetail = NonNullable<Awaited<ReturnType<typeof getEventDetail>>
 export async function searchCustomers(q: string) {
   const term = q.trim();
   if (term.length < 2) return [];
-  const digits = term.replace(/\D/g, "");
+  const digits = phoneSearchDigits(term);
   return prisma.customer.findMany({
     where: {
       OR: [

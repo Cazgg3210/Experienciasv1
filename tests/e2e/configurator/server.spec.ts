@@ -335,9 +335,9 @@ test.describe("Configurador — backend", { tag: ["@module:configurator"] }, () 
 
   test(
     "[CONF-022] la clienta se reconoce entre canales por teléfono (configurador → diseñador IA / contacto)",
-    { tag: ["@P2"] },
+    { tag: ["@P2", "@regression"] },
     async ({ db, request, baseURL, evidence }) => {
-      test.info().annotations.push({ type: "bug", description: "SAL-BUG-02" });
+      test.info().annotations.push({ type: "regression", description: "BUG-008" });
       evidence("anonimo", "Mismo teléfono 10 dígitos en configurador y en el formulario de contacto");
       const phone = String(base.phone);
       const conf = okData(await callAction<{ code: string }>(request, baseURL!, "submitConfiguratorAction", base, ROUTE));

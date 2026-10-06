@@ -233,7 +233,7 @@ describe("Cotizaciones — creación", () => {
     expect(qa.customerId).toBe(qb.customerId);
     const c = await prisma.customer.findUniqueOrThrow({ where: { id: qa.customerId } });
     expect(c.email).toBe(email);
-    expect(c.phone).toBe("5598765432");
+    expect(c.phone).toBe("+525598765432"); // forma canónica única del teléfono (BUG-008)
   });
 });
 

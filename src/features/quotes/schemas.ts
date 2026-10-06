@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidPhone } from "@/lib/phone";
 
 /**
  * Esquemas Zod del módulo Cotizaciones (compartidos cliente/servidor).
@@ -86,7 +87,7 @@ export const quickCustomerSchema = z
       .string()
       .trim()
       .max(30)
-      .refine((v) => v === "" || v.replace(/\D/g, "").length >= 10, "Teléfono de 10 dígitos")
+      .refine((v) => v === "" || isValidPhone(v), "Teléfono de 10 dígitos")
       .optional(),
   })
   .superRefine((v, ctx) => {

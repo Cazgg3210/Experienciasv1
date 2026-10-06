@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma, type LeadSource } from "@prisma/client";
 import { prisma } from "@/db";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { phoneSearchDigits, samePhone } from "@/lib/phone";
 import { audit } from "@/server/audit";
 import { can, type Permission } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
@@ -14,6 +15,7 @@ import {
   totalPaidByCustomer,
 } from "../domain/customer-rules";
 import type { UpdateCustomerInput } from "../schemas";
+import { phoneForStorage } from "./customer-contact";
 
 type Ctx = { ip?: string | null };
 
@@ -64,7 +66,9 @@ function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhere
     { instagram: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
     { referralCode: { contains: query, mode: "insensitive" } },
   ];
-  const digits = query.replace(/\D/g, "");
+  // Un teléfono completo (+52, 521, con espacios…) se busca por su número nacional: encuentra la forma
+  // canónica "+52…" y las que quedaron en 10 dígitos.
+  const digits = phoneSearchDigits(query);
   if (digits.length >= 4 && digits !== query) {
     or.push({ phone: { contains: digits } }, { whatsapp: { contains: digits } });
   }
@@ -231,8 +235,8 @@ export async function updateCustomer(actor: SessionUser, input: UpdateCustomerIn
   const next = {
     name: input.name.trim(),
     email: normalizeEmail(input.email),
-    phone: normalizeOptional(input.phone),
-    whatsapp: normalizeOptional(input.whatsapp),
+    phone: phoneForStorage(input.phone, "phone"),
+    whatsapp: phoneForStorage(input.whatsapp, "whatsapp"),
     instagram: normalizeInstagram(input.instagram),
     notes: normalizeOptional(input.notes),
     marketingOptIn: input.marketingOptIn,
@@ -246,7 +250,10 @@ export async function updateCustomer(actor: SessionUser, input: UpdateCustomerIn
     if (taken) throw new ValidationError(EMAIL_TAKEN, { email: [EMAIL_TAKEN] });
   }
 
-  const changed = (Object.keys(next) as Array<keyof typeof next>).filter((k) => next[k] !== current[k]);
+  // Un teléfono que sólo pasa a la forma canónica (mismo número) no cuenta como cambio.
+  const changed = (Object.keys(next) as Array<keyof typeof next>).filter((k) =>
+    k === "phone" || k === "whatsapp" ? !samePhone(next[k], current[k]) : next[k] !== current[k],
+  );
   if (!changed.length) return { changed: [] as string[] };
 
   try {

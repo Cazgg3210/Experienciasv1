@@ -15,6 +15,7 @@ import { can } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
+import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
 import { leadStatusMachine, type LeadStatus } from "@/features/leads/domain/lead-status";
 import { calculateFromLines, QuoteEngineError, type QuoteResult } from "../domain/quote-engine";
 import { quoteStatusMachine, isQuoteExpired } from "../domain/quote-status";
@@ -156,13 +157,16 @@ async function resolveCustomer(tx: Tx, input: CreateQuoteData): Promise<{ id: st
   }
   const nc = quickCustomerSchema.parse(input.newCustomer ?? {});
   const email = emptyToNull(nc.email)?.toLowerCase() ?? null;
-  const phone = emptyToNull(nc.phone)?.replace(/[^\d+]/g, "") ?? null;
-  if (email) {
-    const existing = await tx.customer.findUnique({ where: { email }, select: { id: true, name: true, phone: true } });
-    if (existing) {
-      if (!existing.phone && phone) await tx.customer.update({ where: { id: existing.id }, data: { phone, whatsapp: phone } });
-      return { id: existing.id, name: existing.name };
-    }
+  const phone = phoneForStorage(nc.phone, "newCustomer.phone");
+  // Misma regla que la captura de leads: si ya existe (por correo o por teléfono) se reutiliza.
+  const existing = await findCustomerByContact(tx, { email, phone });
+  if (existing) {
+    const fill = {
+      ...(!existing.phone && phone ? { phone, whatsapp: phone } : {}),
+      ...(!existing.email && email ? { email } : {}),
+    };
+    if (Object.keys(fill).length) await tx.customer.update({ where: { id: existing.id }, data: fill });
+    return { id: existing.id, name: existing.name };
   }
   return tx.customer.create({
     data: {

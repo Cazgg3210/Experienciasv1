@@ -28,9 +28,16 @@ import {
   listCustomers,
   updateCustomer,
 } from "@/features/customers/server/customer-service";
+import { submitContactRequest } from "@/features/marketing/server/contact-service";
+import { contactFormSchema } from "@/features/marketing/schemas";
 import { testOwner, testStaff, uid } from "./helpers";
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** Teléfono MX de 10 dígitos único. */
+function newPhone(): string {
+  return `55${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
+}
 
 async function makeCustomer(name = "Clienta Prueba") {
   return prisma.customer.create({
@@ -327,6 +334,62 @@ describe("createManualLead / updateLead", () => {
     expect(again.customerId).toBe(res.customerId);
   });
 
+  it("BUG-014: la captura del equipo no envía avisos de lead entrante aunque el origen sea Instagram; la pública sí", async () => {
+    const owner = await testOwner();
+    const team = await createManualLead(owner, {
+      name: "Captura Equipo",
+      email: `${uid("equipo")}@example.test`,
+      phone: newPhone(),
+      occasion: "BIRTHDAY",
+      source: "INSTAGRAM",
+    });
+    expect(await prisma.notificationLog.count({ where: { leadId: team.leadId } })).toBe(0);
+
+    const pub = await submitContactRequest(
+      contactFormSchema.parse({
+        name: "Captura Pública",
+        phone: newPhone(),
+        email: `${uid("publica")}@example.test`,
+        occasion: "BIRTHDAY",
+        message: "Hola, queremos un brunch de cumpleaños.",
+        consent: true,
+      }),
+    );
+    const sent = await prisma.notificationLog.findMany({ where: { leadId: pub.leadId! }, select: { type: true } });
+    expect(sent.map((n) => n.type)).toEqual(expect.arrayContaining(["LEAD_RECEIVED", "GENERIC"]));
+  });
+
+  it("BUG-008: reconoce a la clienta por teléfono aunque se haya guardado con otro formato; guarda la forma canónica", async () => {
+    const owner = await testOwner();
+    const national = newPhone();
+    const spaced = `+52 ${national.slice(0, 2)} ${national.slice(2, 6)} ${national.slice(6)}`;
+    // Dato previo a la forma canónica (perfil editado a mano / seed antiguo): no se modifica
+    const legacy = await prisma.customer.create({
+      data: { name: "Clienta Formato", phone: spaced, referralCode: uid("IR-").toUpperCase() },
+    });
+
+    const viaPanel = await createManualLead(owner, { name: "Otro Nombre", phone: `521${national}`, occasion: "BIRTHDAY", source: "WHATSAPP" });
+    expect(viaPanel.customerId).toBe(legacy.id);
+    const viaSite = await submitContactRequest(
+      contactFormSchema.parse({
+        name: "Clienta Formato",
+        phone: national,
+        email: `${uid("formato")}@example.test`,
+        occasion: "BIRTHDAY",
+        message: "Escribo otra vez por el sitio.",
+        consent: true,
+      }),
+    );
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: viaSite.leadId! } });
+    expect(lead.customerId).toBe(legacy.id);
+    expect(lead.phone).toBe(`+52${national}`);
+    expect(await prisma.customer.count({ where: { id: legacy.id, phone: spaced } })).toBe(1);
+
+    // Un número distinto (mismos últimos dígitos, otra lada) no se confunde
+    const other = await createManualLead(owner, { name: "Otra Clienta", phone: `+1 ${national.slice(0, 3)} ${national.slice(3)}`, occasion: "BIRTHDAY", source: "MANUAL" });
+    expect(other.customerId).not.toBe(legacy.id);
+  });
+
   it("edita datos, recalcula banderas y deja actividad + auditoría", async () => {
     const owner = await testOwner();
     const lead = await makeLead({ name: "Original", guestCount: 6 });
@@ -426,11 +489,25 @@ describe("updateCustomer", () => {
     expect(updated).toMatchObject({
       name: "Sofía Actualizada",
       email: email.toLowerCase(),
-      phone: "55 1111 2222",
+      phone: "+525511112222", // forma canónica única del teléfono (BUG-008)
       whatsapp: null,
       instagram: "sofi.brunch",
       marketingOptIn: true,
     });
+    expect(await prisma.auditLog.count({ where: { entityId: customer.id, action: "customer.updated" } })).toBe(1);
+
+    // El mismo número escrito con otro formato no es un cambio (ni escribe ni audita)
+    const same = await updateCustomer(owner, {
+      customerId: customer.id,
+      name: "Sofía Actualizada",
+      email,
+      phone: "+52 1 55 1111-2222",
+      whatsapp: "",
+      instagram: "@sofi.brunch",
+      notes: "Alérgica a nueces",
+      marketingOptIn: true,
+    });
+    expect(same.changed).toEqual([]);
     expect(await prisma.auditLog.count({ where: { entityId: customer.id, action: "customer.updated" } })).toBe(1);
   });
 

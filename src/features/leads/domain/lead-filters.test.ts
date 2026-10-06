@@ -146,6 +146,13 @@ describe("buildLeadWhere", () => {
       ]),
     );
   });
+
+  it("un teléfono completo en cualquier formato se busca por su número nacional (BUG-008)", () => {
+    for (const q of ["+52 1 55 5102 3315", "+52 55 5102-3315", "525551023315"]) {
+      const or = (buildLeadWhere({ ...EMPTY_LEAD_FILTERS, q }).AND as Array<{ OR?: unknown[] }>)[0]!.OR!;
+      expect(or, q).toContainEqual({ phone: { contains: "5551023315" } });
+    }
+  });
 });
 
 describe("buildLeadOrderBy", () => {

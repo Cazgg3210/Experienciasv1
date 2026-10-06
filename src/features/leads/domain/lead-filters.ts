@@ -4,6 +4,7 @@
  */
 import type { LeadSource, LeadStatus, Prisma } from "@prisma/client";
 import { dateOnly, isValidDateKey, toDateKey, zonedDateTime } from "@/lib/dates";
+import { phoneSearchDigits } from "@/lib/phone";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -179,10 +180,6 @@ export function toggleStatus(filters: LeadFilters, status: LeadStatus): LeadFilt
   return { ...filters, statuses };
 }
 
-function digitsOf(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
 /** where de Prisma para los filtros. `ignoreStatus` sirve para los conteos por estado. */
 export function buildLeadWhere(filters: LeadFilters, opts: { ignoreStatus?: boolean } = {}): Prisma.LeadWhereInput {
   const and: Prisma.LeadWhereInput[] = [];
@@ -200,7 +197,8 @@ export function buildLeadWhere(filters: LeadFilters, opts: { ignoreStatus?: bool
       { code: { contains: q, mode: "insensitive" } },
       { phone: { contains: q } },
     ];
-    const digits = digitsOf(q);
+    // Un teléfono completo (+52, 521, con espacios…) se busca por su número nacional.
+    const digits = phoneSearchDigits(q);
     if (digits.length >= 4 && digits !== q) or.push({ phone: { contains: digits } });
     and.push({ OR: or });
   }

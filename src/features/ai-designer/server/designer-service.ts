@@ -474,7 +474,7 @@ async function convertDesignToLeadOnce(
       },
       sessionId: ctx.sessionId ?? null,
     },
-    { actor: ctx.actor ?? null },
+    { actor: ctx.actor ?? null, channel: "public" },
   );
 
   // Liga sólo si nadie lo ligó antes (pestañas paralelas u otra instancia del servidor).

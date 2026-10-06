@@ -40,6 +40,18 @@
 
 Grupos mayores a `maxStandardGuests` (12) se aceptan como **consulta especial**.
 
+## Clientas, teléfonos y captura de leads
+
+- **Teléfono canónico** (`@/lib/phone` → `normalizePhone`): se guarda en E.164 — `+52` + 10 dígitos para México
+  (se aceptan 10 dígitos, `+52`, `52`, el prefijo legado `521` y espacios/guiones/puntos/paréntesis) y `+lada…` para
+  otros países. Toda escritura de clientas y leads usa esta forma; los esquemas Zod validan con la misma función.
+- **Busca o crea clienta** (`findCustomerByContact`): primero por correo y luego por teléfono, comparando sólo dígitos
+  contra las formas del mismo número (reconoce datos guardados antes de la forma canónica). La usan la captura de
+  leads (`createInboundLead`), el alta manual de evento y la cotización con «Clienta nueva».
+- **Avisos de lead entrante** («Recibimos tu solicitud» a la clienta y «Nuevo lead» al equipo): sólo cuando el lead
+  entra por un canal público (configurador, diseñador IA, contacto). Una captura del equipo en el panel no avisa,
+  sea cual sea su origen comercial (Instagram, WhatsApp, recomendación…).
+
 ## Disponibilidad (V1)
 
 `src/features/bookings/domain/availability.ts`: reglas por día de la semana (abierto, máximo de eventos, horario),

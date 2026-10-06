@@ -2,6 +2,7 @@
  * Lógica pura del wizard del configurador (sin I/O ni React): pasos, validación por paso,
  * normalización de datos, reconciliación con el catálogo y armado del payload final.
  */
+import { mxNationalNumber } from "@/lib/phone";
 import type { ConfiguratorOccasion } from "../schemas";
 
 export const TOTAL_STEPS = 10;
@@ -152,14 +153,10 @@ export function startTimeOptions(from = "08:00", to = "18:00", stepMinutes = 30)
 
 /**
  * Teléfono mexicano a 10 dígitos (acepta espacios, guiones, +52 y 521). null si no es válido.
+ * Misma regla que el resto del sistema (`@/lib/phone`); la forma que se guarda es "+52" + estos 10 dígitos.
  */
 export function normalizeMxPhone10(input: string | null | undefined): string | null {
-  if (!input) return null;
-  const digits = input.replace(/\D/g, "");
-  if (digits.length === 10) return digits;
-  if (digits.length === 12 && digits.startsWith("52")) return digits.slice(2);
-  if (digits.length === 13 && digits.startsWith("521")) return digits.slice(3);
-  return null;
+  return mxNationalNumber(input);
 }
 
 /** "Polanco, Granada e Irrigación" (conjunción española con y/e). */

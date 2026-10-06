@@ -37,7 +37,7 @@ export async function submitContactRequest(
       notes: input.message,
       sessionId: input.sessionId ?? null,
     },
-    { actor: ctx.actor ?? null },
+    { actor: ctx.actor ?? null, channel: "public" },
   );
   return { code: result.code, leadId: result.leadId };
 }

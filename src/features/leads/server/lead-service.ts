@@ -4,12 +4,14 @@ import { prisma } from "@/db";
 import { dateOnly, toDateKey } from "@/lib/dates";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { LEAD_STATUS_LABELS } from "@/lib/labels";
+import { samePhone } from "@/lib/phone";
 import { InvalidTransitionError } from "@/lib/state-machine";
 import { audit } from "@/server/audit";
 import { can, type Permission } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { createInboundLead, type InboundLeadResult } from "@/features/leads/server/lead-intake";
+import { phoneForStorage } from "@/features/customers/server/customer-contact";
 import { leadStatusMachine } from "../domain/lead-status";
 import {
   LEAD_STATUS_VALUES,
@@ -184,7 +186,10 @@ export type AssignableUser = Awaited<ReturnType<typeof listAssignableUsers>>[num
 // ESCRITURA
 // -----------------------------------------------------------------------------
 
-/** Captura manual desde el panel. Reutiliza la captura única (clienta, timeline, snapshot). */
+/**
+ * Captura manual desde el panel. Reutiliza la captura única (clienta, timeline, snapshot).
+ * Canal "team": no dispara avisos de lead entrante aunque el origen sea Instagram, WhatsApp, etc.
+ */
 export async function createManualLead(actor: SessionUser, input: CreateLeadInput): Promise<InboundLeadResult> {
   assertCan(actor, "leads:write");
   const serviceAreaId = clean(input.serviceAreaId);
@@ -205,7 +210,7 @@ export async function createManualLead(actor: SessionUser, input: CreateLeadInpu
       source: input.source ?? "MANUAL",
       assignedToId: actor.role === "OWNER" || actor.role === "SUPER_ADMIN" ? actor.id : null,
     },
-    { actor },
+    { actor, channel: "team" },
   );
 }
 
@@ -454,7 +459,7 @@ export async function updateLead(
   const next = {
     name: input.name.trim(),
     email: clean(input.email)?.toLowerCase() ?? null,
-    phone: clean(input.phone),
+    phone: phoneForStorage(input.phone),
     occasion: input.occasion,
     occasionOther: input.occasion === "OTHER" ? clean(input.occasionOther) : null,
     eventDate: clean(input.eventDate) ? dateOnly(input.eventDate!.trim()) : null,
@@ -479,8 +484,9 @@ export async function updateLead(
 
   await assertCatalogRefs(next);
 
-  const changedKeys = (Object.keys(next) as Array<keyof typeof next>).filter(
-    (k) => comparable(next[k]) !== comparable(lead[k as keyof typeof lead]),
+  // Un teléfono que sólo pasa a la forma canónica (mismo número) no cuenta como cambio.
+  const changedKeys = (Object.keys(next) as Array<keyof typeof next>).filter((k) =>
+    k === "phone" ? !samePhone(next.phone, lead.phone) : comparable(next[k]) !== comparable(lead[k as keyof typeof lead]),
   );
   if (!changedKeys.length) return { changed: [] };
 
