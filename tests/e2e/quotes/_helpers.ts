@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { APIRequestContext } from "@playwright/test";
 import type { PrismaClient } from "@prisma/client";
-import { test } from "../fixtures";
+import { expect, test } from "../fixtures";
 
 // -----------------------------------------------------------------------------
 // Server Actions directas
@@ -396,14 +396,35 @@ export async function quoteState(db: PrismaClient, id: string) {
 }
 
 /**
- * Navega y espera a que la página quede hidratada (sin tráfico de red pendiente). Los formularios
- * del panel son componentes cliente (react-hook-form): interactuar antes de la hidratación hace que
- * el estado del formulario no vea el cambio (p. ej. un select nativo sin onChange). No es un sleep:
- * espera un estado observable de la red.
+ * Navega y espera a que la página quede hidratada. Los formularios del panel son componentes cliente
+ * (react-hook-form): interactuar antes de la hidratación hace que el estado del formulario no vea el
+ * cambio (p. ej. un select nativo sin onChange). No es un sleep: espera un estado observable del DOM.
  */
 export async function gotoReady(page: import("@playwright/test").Page, url: string) {
   await page.goto(url);
-  await page.waitForLoadState("networkidle");
+  await waitForHydration(page);
+}
+
+/**
+ * Espera a que React haya hidratado el <main> y TODOS los controles interactivos de la página (React marca
+ * cada nodo que hidrata o crea con `__reactProps$…`). Sustituye a `waitForLoadState("networkidle")`, que
+ * Playwright desaconseja y que en Firefox a veces no llega nunca aunque todos los requests ya terminaron
+ * (QUO-019: 45 s de espera con la red quieta desde el segundo 2).
+ */
+export async function waitForHydration(page: import("@playwright/test").Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const isReact = (el: Element) => Object.keys(el).some((k) => k.startsWith("__reactProps$"));
+          const main = document.querySelector("main");
+          if (!main || !isReact(main)) return false;
+          // Los <input type="hidden"> que React agrega en el servidor para las Server Actions no se hidratan.
+          return Array.from(document.querySelectorAll('button, a[href], input:not([type="hidden"]), select, textarea')).every(isReact);
+        }),
+      { message: "la página no terminó de hidratarse", timeout: 30_000 },
+    )
+    .toBe(true);
 }
 
 /** Espera la redirección al detalle `${base}/<id>` (excluye `${base}/new`). Devuelve el id. */
