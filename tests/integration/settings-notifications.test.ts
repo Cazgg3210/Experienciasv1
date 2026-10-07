@@ -36,6 +36,7 @@ import {
   setUserActive,
 } from "@/features/users/server/user-service";
 import { listAuditLogs } from "@/features/audit/server/audit-queries";
+import { revokeSessionsOnSignOut } from "@/features/auth/server/session-service";
 import {
   deleteGalleryItem,
   deleteTestimonial,
@@ -508,6 +509,79 @@ describe("usuarios y roles", () => {
     expect(await bcrypt.compare("Contrasena-Inicial-1", user.passwordHash!)).toBe(false);
     const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "user.password_reset", entityId: id } });
     expect(JSON.stringify(log)).not.toContain("Contrasena-Nueva-22");
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Revocación de sesiones (BUG-001 / BUG-004): User.sessionVersion
+// -----------------------------------------------------------------------------
+
+describe("revocación de sesiones (sessionVersion)", () => {
+  const version = async (id: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { id }, select: { sessionVersion: true } })).sessionVersion;
+
+  it("restablecer contraseña, desactivar y cambiar el rol revocan (+1); reactivar y los intentos rechazados no", async () => {
+    const { id } = await createUser(
+      { name: "Sesiones QA", email: `${uid("sv")}@ivonne-rosa.test`, role: "STAFF", password: "Contrasena-Inicial-7" },
+      owner,
+    );
+    expect(await version(id)).toBe(0);
+
+    await resetUserPassword({ userId: id, password: "Contrasena-Nueva-77" }, owner);
+    expect(await version(id)).toBe(1);
+
+    await setUserActive({ userId: id, active: false }, owner);
+    expect(await version(id)).toBe(2);
+    await setUserActive({ userId: id, active: true }, owner);
+    expect(await version(id)).toBe(2);
+
+    await changeUserRole({ userId: id, role: "OWNER" }, owner);
+    expect(await version(id)).toBe(3);
+
+    // Rechazados: contraseña débil, rol que OWNER no puede asignar, actor sin permiso → nada cambia
+    await expect(resetUserPassword({ userId: id, password: "corta" }, owner)).rejects.toBeTruthy();
+    await expect(changeUserRole({ userId: id, role: "SUPER_ADMIN" }, owner)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const staffRow = await prisma.user.create({ data: { email: `${uid("st")}@ivonne-rosa.test`, name: "Staff sin permiso", role: "STAFF" } });
+    const staffActor: SessionUser = { id: staffRow.id, email: staffRow.email, name: staffRow.name, role: "STAFF" };
+    await expect(resetUserPassword({ userId: id, password: "Contrasena-Nueva-88" }, staffActor)).rejects.toBeTruthy();
+    await expect(setUserActive({ userId: id, active: false }, staffActor)).rejects.toBeTruthy();
+    await expect(changeUserRole({ userId: id, role: "STAFF" }, staffActor)).rejects.toBeTruthy();
+    expect(await prisma.user.findUniqueOrThrow({ where: { id } })).toMatchObject({ sessionVersion: 3, active: true, role: "OWNER" });
+  });
+
+  it("restablecer la PROPIA contraseña también revoca la sesión con la que se hizo", async () => {
+    const row = await prisma.user.create({ data: { email: `${uid("self")}@ivonne-rosa.test`, name: "Fundadora Self", role: "OWNER" } });
+    const self: SessionUser = { id: row.id, email: row.email, name: row.name, role: "OWNER" };
+    await resetUserPassword({ userId: self.id, password: "Contrasena-Propia-51" }, self);
+    expect(await version(self.id)).toBe(1);
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "user.password_reset", entityId: self.id } });
+    expect(log.after).toMatchObject({ self: true });
+    expect(log.actorId).toBe(self.id);
+  });
+
+  it("cerrar sesión compara e incrementa: sólo un token vigente revoca; uno viejo, ajeno o malformado no", async () => {
+    const user = await prisma.user.create({ data: { email: `${uid("lo")}@ivonne-rosa.test`, name: "Logout QA", role: "STAFF" } });
+    // Token anterior a la revocación (sin versión) cuenta como 0: vigente mientras la base siga en 0
+    expect(await revokeSessionsOnSignOut({ uid: user.id })).toBe(true);
+    expect(await version(user.id)).toBe(1);
+
+    // La cookie vieja (versión 0) ya no puede cerrar las sesiones nuevas
+    expect(await revokeSessionsOnSignOut({ uid: user.id, sessionVersion: 0 })).toBe(false);
+    expect(await revokeSessionsOnSignOut({ uid: user.id })).toBe(false);
+    // Valores inesperados fallan cerrado
+    expect(await revokeSessionsOnSignOut({ uid: user.id, sessionVersion: "1" })).toBe(false);
+    expect(await revokeSessionsOnSignOut({ uid: user.id, sessionVersion: -1 })).toBe(false);
+    expect(await revokeSessionsOnSignOut({ uid: 42, sessionVersion: 1 })).toBe(false);
+    expect(await revokeSessionsOnSignOut(null)).toBe(false);
+    expect(await version(user.id)).toBe(1);
+
+    // Dos cierres simultáneos con el mismo token vigente: sólo uno incrementa
+    const results = await Promise.all([
+      revokeSessionsOnSignOut({ uid: user.id, sessionVersion: 1 }),
+      revokeSessionsOnSignOut({ uid: user.id, sessionVersion: 1 }),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await version(user.id)).toBe(2);
   });
 });
 

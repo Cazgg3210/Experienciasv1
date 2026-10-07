@@ -136,7 +136,7 @@ export function RefundDialog({
             <SubmitButton
               pending={form.formState.isSubmitting}
               pendingText="Procesando…"
-              className="bg-destructive hover:bg-destructive/90 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
               Reembolsar {typeof amount === "number" && amount > 0 ? formatMXN(amount) : ""}
             </SubmitButton>

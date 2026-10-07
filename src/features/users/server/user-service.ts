@@ -45,6 +45,23 @@ async function countActiveSuperAdmins(tx: Tx): Promise<number> {
   return tx.user.count({ where: { role: "SUPER_ADMIN", active: true } });
 }
 
+/**
+ * Regla de Usuarios para desactivar una cuenta desde OTRO módulo (p. ej. eliminar la ficha de staff ligada,
+ * que desactiva su acceso): las mismas restricciones que `setUserActive` — nadie desactiva su propia cuenta,
+ * sólo un super admin toca a otro super admin y nunca queda el sistema sin super admin activo.
+ * Toma el lock de super admins: debe llamarse dentro de la transacción que desactiva. Una cuenta ya inactiva pasa.
+ */
+export async function checkLinkedAccountDeactivation(
+  tx: Tx,
+  actor: Pick<SessionUser, "id" | "role">,
+  userId: string,
+): Promise<RuleResult> {
+  await lockSuperAdmins(tx);
+  const target = await tx.user.findUnique({ where: { id: userId }, select: { id: true, role: true, active: true } });
+  if (!target || !target.active) return { ok: true };
+  return checkActiveChange(actor, target, false, await countActiveSuperAdmins(tx));
+}
+
 export type TeamUserRow = {
   id: string;
   name: string;

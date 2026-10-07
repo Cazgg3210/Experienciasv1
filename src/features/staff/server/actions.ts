@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { signOut } from "@/auth";
 import { protectedAction } from "@/server/action";
 import { staffChecklistUpdateSchema } from "@/features/operations/schemas";
 import { updateChecklistItemAsStaff } from "@/features/operations/server/checklist-service";
@@ -67,7 +68,13 @@ export const resetStaffPasswordAction = protectedAction(
   { name: "staff.resetPassword", schema: resetPasswordSchema, permission: "users:manage" },
   async (input, { user }) => {
     const res = await resetStaffPassword(user, input);
-    return { email: res.email };
+    if (res.self) {
+      // Restablecer la propia contraseña (fundadora con ficha de staff) revoca todas sus sesiones, incluida ésta:
+      // se borra también la cookie y el cliente la lleva a /login (mismo flujo que Ajustes › Usuarios).
+      await signOut({ redirect: false });
+      return { email: res.email, signedOut: true };
+    }
+    return { email: res.email, signedOut: false };
   },
 );
 

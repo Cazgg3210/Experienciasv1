@@ -466,4 +466,29 @@ test.describe("Configurador — wizard", { tag: ["@module:configurator"] }, () =
       expect(blocking.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
     },
   );
+
+  test(
+    "[CONF-024] resumen con líneas por persona («· N × $precio») sin texto atenuado bajo AA",
+    { tag: ["@P2", "@a11y", "@regression"] },
+    async ({ page }, testInfo) => {
+      // El detalle «· N × $precio» sólo aparece con cantidades > 1 (menú o extra por persona): el barrido de
+      // CONF-012 (menú incluido) no lo veía y quedaba con text-muted-foreground/80 (~4.1:1).
+      test.info().annotations.push({ type: "regression", description: "BUG-009 (texto atenuado restante en el configurador)" });
+      test.info().annotations.push({ type: "rol", description: "anonimo" });
+      await completeWizard(page, { experience: "Birthday Table", menu: "Brunch Premium", guests: 9 });
+      const detail = page.getByText(/· 9 × \$380/);
+      await expect(detail).toBeVisible();
+      // El detalle hereda el gris secundario completo (sin opacidad) del resto de la línea
+      const styles = await detail.evaluate((el) => {
+        const own = getComputedStyle(el);
+        return { color: own.color, opacity: own.opacity, parent: getComputedStyle(el.parentElement!).color };
+      });
+      expect(styles.opacity).toBe("1");
+      expect(styles.color).toBe(styles.parent);
+      await testInfo.attach("resumen-por-persona.png", { body: await page.getByRole("main").screenshot(), contentType: "image/png" });
+      const { all, blocking } = await scanA11y(page, testInfo);
+      expect(all.filter((v) => v.id === "color-contrast").map((v) => v.nodes.map((n) => n.target.join(" ")).join(", "))).toEqual([]);
+      expect(blocking.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
+    },
+  );
 });

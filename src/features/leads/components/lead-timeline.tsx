@@ -83,7 +83,7 @@ export function LeadTimeline({ activities, now = new Date() }: { activities: Tim
                 </time>
               </div>
               {a.message ? <p className="text-muted-foreground mt-0.5 text-sm break-words whitespace-pre-line">{a.message}</p> : null}
-              <p className="text-muted-foreground/90 mt-0.5 text-xs">{a.actor?.name ?? "Sistema"}</p>
+              <p className="text-muted-foreground mt-0.5 text-xs">{a.actor?.name ?? "Sistema"}</p>
             </div>
           </li>
         );

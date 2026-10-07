@@ -569,6 +569,99 @@ describe("accesos de staff", () => {
       createStaffAccess({ id: staff.id, email: staff.email, role: "STAFF" }, { staffMemberId: member.id, email: `${uid()}@x.test`, password: "Temporal2026x" }),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  // Regresión BUG-004: cada cambio sensible del acceso revoca los JWT emitidos antes (sessionVersion + 1).
+  it("restablecer, desactivar y eliminar revocan las sesiones del acceso; reactivar e intentos rechazados no", async () => {
+    const version = async (id: string) =>
+      (await prisma.user.findUniqueOrThrow({ where: { id }, select: { sessionVersion: true } })).sessionVersion;
+    const member = await makeMember({ email: null });
+    const email = `${uid("sesion")}@ivonne-rosa.test`;
+    await createStaffAccess(owner, { staffMemberId: member.id, email, password: "Temporal2026x" });
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    expect(user.sessionVersion).toBe(0);
+
+    expect(await resetStaffPassword(owner, { staffMemberId: member.id, password: "NuevaClave2026" })).toEqual({
+      email,
+      userId: user.id,
+      self: false,
+    });
+    expect(await version(user.id)).toBe(1);
+
+    // Rechazados (sin permiso o con datos inválidos): la versión no cambia
+    const staff = await testStaff();
+    const staffActor = { id: staff.id, email: staff.email, role: "STAFF" as const };
+    await expect(resetStaffPassword(staffActor, { staffMemberId: member.id, password: "NuevaClave2027" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(setStaffAccessActive(staffActor, { staffMemberId: member.id, active: false })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(resetStaffPassword(owner, { staffMemberId: member.id, password: "corta1" })).rejects.toThrow();
+    expect(await version(user.id)).toBe(1);
+
+    await setStaffAccessActive(owner, { staffMemberId: member.id, active: false });
+    expect(await version(user.id)).toBe(2);
+    // Reactivar no revive los JWT anteriores ni revoca otra vez
+    await setStaffAccessActive(owner, { staffMemberId: member.id, active: true });
+    expect(await version(user.id)).toBe(2);
+
+    // Eliminar la ficha (sin historial) desactiva la cuenta y revoca sus sesiones en la misma transacción
+    await deleteStaffMember(owner, member.id);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({ active: false, sessionVersion: 3 });
+  });
+
+  it("restablecer la PROPIA contraseña desde Staff (fundadora con ficha) revoca su sesión y queda auditado como propio", async () => {
+    const founder = await prisma.user.create({
+      data: { email: `${uid("fundadora")}@ivonne-rosa.test`, name: "Fundadora con ficha", role: "OWNER" },
+    });
+    const member = await prisma.staffMember.create({
+      data: { name: founder.name, userId: founder.id, primaryFunction: "COORDINATOR" },
+    });
+    const actor = { id: founder.id, email: founder.email, role: "OWNER" as const };
+
+    const res = await resetStaffPassword(actor, { staffMemberId: member.id, password: "NuevaClave2026" });
+    expect(res).toEqual({ email: founder.email, userId: founder.id, self: true });
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: founder.id } });
+    expect(after.sessionVersion).toBe(1);
+    expect(await bcrypt.compare("NuevaClave2026", after.passwordHash!)).toBe(true);
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "user.password_reset", entityId: founder.id } });
+    expect(log.actorId).toBe(founder.id);
+    expect(log.after).toMatchObject({ self: true, staffMemberId: member.id });
+    expect(JSON.stringify(log)).not.toContain("NuevaClave2026");
+
+    // Su propio acceso no se puede desactivar desde la ficha (y no se revoca nada)
+    await expect(setStaffAccessActive(actor, { staffMemberId: member.id, active: false })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: founder.id } })).toMatchObject({ active: true, sessionVersion: 1 });
+  });
+
+  // Eliminar una ficha ligada desactiva su cuenta: antes se saltaba las reglas de Usuarios (una OWNER podía
+  // desactivar a una SUPER_ADMIN o a sí misma borrando la ficha ligada).
+  it("eliminar una ficha ligada aplica las reglas de Usuarios: ni la propia cuenta ni una super admin si no lo eres", async () => {
+    const superAdmin = await prisma.user.create({
+      data: { email: `${uid("sa")}@ivonne-rosa.test`, name: "Super admin con ficha", role: "SUPER_ADMIN", active: true },
+    });
+    const saMember = await prisma.staffMember.create({ data: { name: superAdmin.name, userId: superAdmin.id, primaryFunction: "SERVER" } });
+    const founder = await prisma.user.create({
+      data: { email: `${uid("own")}@ivonne-rosa.test`, name: "Fundadora con ficha", role: "OWNER", active: true },
+    });
+    const ownMember = await prisma.staffMember.create({ data: { name: founder.name, userId: founder.id, primaryFunction: "SERVER" } });
+    const actor = { id: founder.id, email: founder.email, role: "OWNER" as const };
+    try {
+      await expect(deleteStaffMember(actor, saMember.id)).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(deleteStaffMember(actor, ownMember.id)).rejects.toBeInstanceOf(ConflictError);
+      // Nada cambió: fichas, cuentas activas y sesiones vigentes
+      expect(await prisma.staffMember.count({ where: { id: { in: [saMember.id, ownMember.id] } } })).toBe(2);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: superAdmin.id } })).toMatchObject({ active: true, sessionVersion: 0 });
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: founder.id } })).toMatchObject({ active: true, sessionVersion: 0 });
+      expect(await prisma.auditLog.count({ where: { action: "staff.deleted", entityId: { in: [saMember.id, ownMember.id] } } })).toBe(0);
+
+      // Una super admin sí puede eliminar la ficha ligada a otra cuenta (se desactiva y se revocan sus sesiones)
+      const otherSa = await prisma.user.create({
+        data: { email: `${uid("sa2")}@ivonne-rosa.test`, name: "Otra super admin", role: "SUPER_ADMIN", active: false },
+      });
+      await deleteStaffMember({ id: otherSa.id, email: otherSa.email, role: "SUPER_ADMIN" }, ownMember.id);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: founder.id } })).toMatchObject({ active: false, sessionVersion: 1 });
+    } finally {
+      // No dejar super admins activas de prueba (otra prueba revisa el caso «última super admin activa»)
+      await prisma.user.update({ where: { id: superAdmin.id }, data: { active: false } });
+    }
+  });
 });
 
 // =============================================================================

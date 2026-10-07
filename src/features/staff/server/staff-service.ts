@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { prisma } from "@/db";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { REVOKE_ALL_SESSIONS } from "@/features/auth/server/session-service";
+import { checkLinkedAccountDeactivation } from "@/features/users/server/user-service";
 import { audit } from "@/server/audit";
 import { can, canAssignRole, type Permission } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
@@ -81,6 +82,17 @@ export async function deleteStaffMember(actor: Actor, id: string): Promise<void>
     throw new ConflictError("Tiene eventos en su historial. Desactívala en lugar de eliminarla.");
   }
   await prisma.$transaction(async (tx) => {
+    if (member.userId) {
+      // Eliminar la ficha desactiva su cuenta: mismas reglas que Ajustes › Usuarios (no la propia, no una
+      // super admin si no lo eres, nunca la última super admin activa).
+      const rule = await checkLinkedAccountDeactivation(tx, actor, member.userId);
+      if (!rule.ok) {
+        const message = `Esta ficha tiene una cuenta de acceso que se desactivaría al eliminarla. ${rule.message}`;
+        if (rule.code === "FORBIDDEN") throw new ForbiddenError(message);
+        if (rule.code === "CONFLICT") throw new ConflictError(message);
+        throw new ValidationError(message);
+      }
+    }
     await tx.eventChecklistItem.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
     await tx.staffMember.delete({ where: { id } });
     if (member.userId) {
@@ -153,21 +165,35 @@ async function linkedUser(staffMemberId: string, actor: Actor) {
   return member.user;
 }
 
-export async function resetStaffPassword(actor: Actor, raw: ResetPasswordValues): Promise<{ email: string }> {
+/**
+ * Restablece la contraseña del acceso ligado al integrante y cierra todas sus sesiones abiertas.
+ * `self` indica que quien la restablece es la propia usuaria (una fundadora con ficha de staff): su sesión
+ * actual también quedó revocada y la acción debe cerrar sesión en el navegador (como en Ajustes › Usuarios).
+ */
+export async function resetStaffPassword(
+  actor: Actor,
+  raw: ResetPasswordValues,
+): Promise<{ email: string; userId: string; self: boolean }> {
   assertCan(actor, "users:manage");
   const input = resetPasswordSchema.parse(raw);
   const user = await linkedUser(input.staffMemberId, actor);
+  const self = user.id === actor.id;
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
-  // La contraseña nueva cierra todas sus sesiones abiertas.
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, ...REVOKE_ALL_SESSIONS } });
-  await audit({
-    action: "user.password_reset",
-    entityType: "User",
-    entityId: user.id,
-    after: { email: user.email, staffMemberId: input.staffMemberId },
-    actor,
+  await prisma.$transaction(async (tx) => {
+    // La contraseña nueva cierra todas sus sesiones abiertas (incluida la propia si se la restablece a sí misma).
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash, ...REVOKE_ALL_SESSIONS } });
+    await audit(
+      {
+        action: "user.password_reset",
+        entityType: "User",
+        entityId: user.id,
+        after: { email: user.email, staffMemberId: input.staffMemberId, self },
+        actor,
+      },
+      tx,
+    );
   });
-  return { email: user.email };
+  return { email: user.email, userId: user.id, self };
 }
 
 export async function setStaffAccessActive(

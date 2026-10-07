@@ -36,6 +36,7 @@ export function StaffAccessCard({
   access,
   canManage,
   loginUrl,
+  isSelf = false,
 }: {
   staffMemberId: string;
   staffName: string;
@@ -43,6 +44,8 @@ export function StaffAccessCard({
   access: Access;
   canManage: boolean;
   loginUrl: string;
+  /** El acceso ligado a esta ficha es el de quien está viendo la página (fundadora con ficha de staff). */
+  isSelf?: boolean;
 }) {
   const router = useRouter();
   const [credentials, setCredentials] = React.useState<{ email: string; password: string } | null>(null);
@@ -70,27 +73,30 @@ export function StaffAccessCard({
         <div className="flex flex-wrap gap-2">
           {access ? (
             <>
-              <ResetPasswordDialog staffMemberId={staffMemberId} email={access.email} onDone={setCredentials} />
-              <ConfirmDialog
-                trigger={
-                  <Button type="button" variant="ghost" className={access.active ? "text-destructive" : undefined}>
-                    {access.active ? <ShieldOff className="size-4" aria-hidden /> : <ShieldCheck className="size-4" aria-hidden />}
-                    {access.active ? "Desactivar acceso" : "Reactivar acceso"}
-                  </Button>
-                }
-                title={access.active ? "¿Desactivar el acceso?" : "¿Reactivar el acceso?"}
-                description={
-                  access.active
-                    ? `${staffName} ya no podrá iniciar sesión en el portal de staff.`
-                    : `${staffName} podrá volver a iniciar sesión con su contraseña actual.`
-                }
-                confirmLabel={access.active ? "Desactivar" : "Reactivar"}
-                destructive={access.active}
-                onConfirm={async () => {
-                  const res = await setStaffAccessActiveAction({ staffMemberId, active: !access.active });
-                  if (handleActionResult(res, { success: access.active ? "Acceso desactivado" : "Acceso reactivado" })) router.refresh();
-                }}
-              />
+              <ResetPasswordDialog staffMemberId={staffMemberId} email={access.email} isSelf={isSelf} onDone={setCredentials} />
+              {/* Nadie desactiva su propio acceso (el servidor también lo rechaza). */}
+              {isSelf ? null : (
+                <ConfirmDialog
+                  trigger={
+                    <Button type="button" variant="ghost" className={access.active ? "text-destructive" : undefined}>
+                      {access.active ? <ShieldOff className="size-4" aria-hidden /> : <ShieldCheck className="size-4" aria-hidden />}
+                      {access.active ? "Desactivar acceso" : "Reactivar acceso"}
+                    </Button>
+                  }
+                  title={access.active ? "¿Desactivar el acceso?" : "¿Reactivar el acceso?"}
+                  description={
+                    access.active
+                      ? `${staffName} ya no podrá iniciar sesión en el portal de staff.`
+                      : `${staffName} podrá volver a iniciar sesión con su contraseña actual.`
+                  }
+                  confirmLabel={access.active ? "Desactivar" : "Reactivar"}
+                  destructive={access.active}
+                  onConfirm={async () => {
+                    const res = await setStaffAccessActiveAction({ staffMemberId, active: !access.active });
+                    if (handleActionResult(res, { success: access.active ? "Acceso desactivado" : "Acceso reactivado" })) router.refresh();
+                  }}
+                />
+              )}
             </>
           ) : (
             <CreateAccessDialog staffMemberId={staffMemberId} defaultEmail={defaultEmail} onDone={setCredentials} />
@@ -222,10 +228,12 @@ function CreateAccessDialog({
 function ResetPasswordDialog({
   staffMemberId,
   email,
+  isSelf,
   onDone,
 }: {
   staffMemberId: string;
   email: string;
+  isSelf: boolean;
   onDone: (c: { email: string; password: string }) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -239,7 +247,13 @@ function ResetPasswordDialog({
 
   async function onSubmit(values: z.output<typeof resetPasswordSchema>) {
     const res = await resetStaffPasswordAction(values);
-    if (handleActionResult(res, { form, success: "Contraseña restablecida" })) {
+    const success = isSelf ? "Contraseña actualizada. Inicia sesión con la nueva." : "Contraseña restablecida";
+    if (handleActionResult(res, { form, success })) {
+      if (res.ok && res.data.signedOut) {
+        // Sus sesiones se cerraron (incluida ésta): navegación completa para no conservar datos del panel en memoria.
+        window.location.assign("/login");
+        return;
+      }
       onDone({ email, password: values.password });
       setOpen(false);
     }
@@ -256,7 +270,11 @@ function ResetPasswordDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Restablecer contraseña</DialogTitle>
-          <DialogDescription>La contraseña anterior dejará de funcionar de inmediato.</DialogDescription>
+          <DialogDescription>
+            {isSelf
+              ? "Define tu nueva contraseña. Se cerrarán todas tus sesiones, incluida ésta, y entrarás de nuevo con ella."
+              : "La contraseña anterior dejará de funcionar de inmediato y sus sesiones abiertas se cierran."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <PasswordField

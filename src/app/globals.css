@@ -107,7 +107,9 @@
   --accent-foreground: #3d4734;
   /* Tonos de estado: se usan como TEXTO sobre su propio fondo al 10 % (StatusBadge, avisos) y como
      fondo sólido con *-foreground. Cada uno llega a ≥ 4.6:1 (WCAG AA) como texto sobre tono/10
-     compuesto en ivory, card, sidebar, sand-soft, muted y sage-soft (y ≥ 5.8:1 sobre ivory). */
+     compuesto en ivory, card, sidebar, sand-soft, muted y sage-soft (y ≥ 5.8:1 sobre ivory).
+     Hover con fondo más intenso: como máximo tono/15 (al 20 % ya baja de 4.5:1). Lo vigilan
+     tests/unit/design-tokens-contrast.test.ts y tests/unit/ui-contrast-classes.test.ts. */
   --destructive: #a03e2b;
   --destructive-foreground: #fffdf9;
   --success: #4c6639;
@@ -151,8 +153,10 @@
   --muted-foreground: #c2b6a8;
   --accent: #3a4233;
   --accent-foreground: #f1ebe2;
-  --destructive: #d9725c;
-  /* Tonos de estado claros para fondo oscuro (≥ 4.6:1 como texto sobre tono/10 en background, card y muted) */
+  /* Tonos de estado claros para fondo oscuro (misma tonalidad que en claro): ≥ 4.5:1 como texto sobre su
+     fondo al 10–20 % en background, card, sidebar y muted, y su *-foreground oscuro sobre el tono sólido. */
+  --destructive: #eab0a4;
+  --destructive-foreground: #1f1d1b;
   --success: #abc698;
   --success-foreground: #1f1d1b;
   --warning: #e3b772;

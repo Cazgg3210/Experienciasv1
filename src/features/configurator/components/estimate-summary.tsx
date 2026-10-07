@@ -45,7 +45,7 @@ export function EstimateBreakdown({
             <span className="text-muted-foreground min-w-0">
               {l.description}
               {l.quantity > 1 && l.type !== "EXTRA_GUEST" ? (
-                <span className="text-muted-foreground/80">
+                <span className="text-muted-foreground">
                   {" "}
                   · {l.quantity} × {formatMXN(l.unitPriceCents)}
                 </span>
