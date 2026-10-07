@@ -362,8 +362,8 @@ const HYDRATION_TIMEOUT_MS = 15_000;
  * la sección de la página (Suspense de loading.tsx, que React hidrata con prioridad baja): pasaba de ~8 s a
  * más de 30 s y `ready()` vencía (FIN-006, STF-021). Si React reemplaza el nodo, se vuelve a resolver.
  *
- * El tope es uno solo para todo: el nodo se resuelve primero (con lo que quede del tope) y la espera dentro de
- * la página recibe sólo lo que sobra después de resolverlo, así que `ready()` nunca pasa de HYDRATION_TIMEOUT_MS.
+ * Un solo tope para todo: la página recibe el instante límite (reloj de la máquina, el mismo del navegador) y no
+ * espera más allá de él aunque resolver el nodo haya tardado, así que `ready()` no pasa de HYDRATION_TIMEOUT_MS.
  */
 export async function ready(locator: Locator): Promise<Locator> {
   await expect(locator).toBeVisible();
@@ -371,28 +371,22 @@ export async function ready(locator: Locator): Promise<Locator> {
   const remaining = () => Math.max(0, deadline - Date.now());
   let state = "sin hidratar";
   while (remaining() > 0) {
-    const handle = await locator.elementHandle({ timeout: Math.max(1, remaining()) }).catch(() => null);
-    if (!handle) {
-      state = "no se encontró el elemento";
-      break;
-    }
-    state = await handle
+    state = await locator
       .evaluate(
-        (el, ms) =>
+        (el, until) =>
           new Promise<string>((resolve) => {
-            const until = performance.now() + ms;
             const check = () => {
               if (!el.isConnected) resolve("reemplazado");
               else if (Object.keys(el).some((k) => k.startsWith("__reactProps$"))) resolve("hidratado");
-              else if (performance.now() >= until) resolve("sin hidratar");
+              else if (Date.now() >= until) resolve("sin hidratar");
               else setTimeout(check, 50);
             };
             check();
           }),
-        remaining(),
+        deadline,
+        { timeout: Math.max(1, remaining()) },
       )
-      .catch((error: Error) => `error: ${error.message.split("\n")[0]}`)
-      .finally(() => handle.dispose().catch(() => {}));
+      .catch((error: Error) => `error: ${error.message.split("\n")[0]}`);
     if (state === "hidratado") return locator;
     if (state === "sin hidratar") break;
     // Nodo reemplazado o contexto de ejecución destruido (re-render, navegación): se vuelve a resolver.
