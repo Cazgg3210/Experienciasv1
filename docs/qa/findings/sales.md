@@ -302,6 +302,27 @@ Guardar el elemento disparador y devolverle el foco en `onCloseAutoFocus` del `D
 ### Recommended Fix
 Agregar `experiencias/[slug]/layout.tsx` que valide el slug y llame `notFound()` antes de `loading.tsx` (mismo patrón que `cotizacion/[token]/layout.tsx`).
 
+### Revisión del patrón en otras rutas (BUG-013, seguimiento ronda 1)
+**Causa común.** En Next 15.5 un `loading.tsx` envuelve en Suspense todo lo que cuelga de su segmento. Un `notFound()` dentro de ese límite llega cuando el streaming ya empezó con HTTP 200: se ve la página «no encontrado», pero el status es 200 (soft-404). Un `layout.tsx` que valida antes de su propio `loading.tsx` da un 404 real **sólo si ningún segmento por encima** tiene `loading.tsx` ni envuelve `children` en `<Suspense>`.
+
+**Rutas públicas y por token (revisadas; todas con 404 real):**
+
+| Ruta | Dónde se valida | Límite de carga |
+|---|---|---|
+| `/experiencias/[slug]` | `experiencias/[slug]/layout.tsx` | `[slug]/loading.tsx` (debajo del guardián) |
+| `/cotizacion/[token]` | `cotizacion/[token]/layout.tsx` | `[token]/loading.tsx` |
+| `/mi-evento/[token]` y `/resumen` | `mi-evento/[token]/layout.tsx` | `[token]/loading.tsx`, `resumen/loading.tsx` |
+| `/e/[slug]/[token]` | `e/[slug]/[token]/layout.tsx` | `[token]/loading.tsx` |
+| `/memory/[token]` | `memory/[token]/layout.tsx` | `[token]/loading.tsx` |
+| `/pago/mock/[checkoutId]` | `pago/mock/[checkoutId]/layout.tsx` | `[checkoutId]/loading.tsx` |
+| `/pago/resultado` | la propia página (firma HMAC) | ninguno en su cadena |
+
+El resto de las páginas públicas (`/`, `/experiencias`, `/como-funciona`, `/contacto`, `/crear-experiencia`, `/crear-experiencia/ai`, `/nuestra-historia`, `/privacidad`, `/terminos`, `/login`, `/mi-evento`) no llama `notFound()`; las URL sin ruta responden 404 real desde `app/not-found.tsx`.
+
+**Robustez.** El 404 dependía de que nadie agregara un `loading.tsx` en `(public)/`, `experiencias/`, `(experience)/` o en los segmentos intermedios. Ahora lo vigila `tests/unit/route-not-found-contract.test.ts`: recorre `src/app` y falla si un layout guardián de `(public)`, `(experience)` o `(auth)` queda dentro de un `loading.*` o de un `<Suspense>` ancestro, o si una página de esos grupos llama `notFound()` dentro de un límite de carga sin layout guardián. Se comprobó que falla al crear `(public)/loading.tsx` o `(experience)/loading.tsx`. La restricción también está comentada en `(public)/layout.tsx` y `(experience)/layout.tsx`. [NAV-034] `@regression` verifica en el build real que las 8 rutas responden HTTP 404 con un slug/token inexistente.
+
+**Zonas internas con soft-404 conocido (fuera del contrato a propósito).** `(admin)/admin/loading.tsx` y `(staff)/staff/loading.tsx` envuelven todo su panel, así que estas rutas muestran «No encontramos…» con HTTP 200 cuando el id no existe: `/admin/catalog/addons/[id]`, `/admin/catalog/experiences/[id]`, `/admin/catalog/menus/[id]`, `/admin/customers/[id]`, `/admin/events/[id]` (y `/financials`, `/guests`, `/memory`, `/operations`), `/admin/inventory/[id]`, `/admin/inventory/events/[eventId]`, `/admin/leads/[id]`, `/admin/operations/templates/[id]`, `/admin/purchases/[id]`, `/admin/quotes/[id]` (y `/print`), `/admin/staff/[id]`, `/admin/vendors/[id]` (y `/edit`) y `/staff/events/[id]`. Requieren sesión, llevan `X-Robots-Tag: noindex` y no exponen datos (la barrera «No encontramos este evento» es correcta), así que no hay impacto de SEO ni de seguridad; sólo el monitoreo por status no los distingue. Cambiarlo exigiría quitar el esqueleto general del panel o validar cada id en un layout propio: queda como mejora opcional, no como bug. [NAV-004] lo registra como anotación `observado`.
+
 ---
 
 ## Defectos / riesgos de la infraestructura compartida (no son bugs de la app)

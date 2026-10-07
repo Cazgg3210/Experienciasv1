@@ -3,7 +3,7 @@
  * Contenido genérico (sin fugas), salida útil y HTTP status (soft-404 = hallazgo; ver project-profile §Comportamientos).
  */
 import { expect, test } from "../fixtures";
-import { probe } from "../permissions/_helpers";
+import { probe, token } from "../permissions/_helpers";
 
 test.describe("404", { tag: ["@module:navigation"] }, () => {
   test("[NAV-001] ruta pública inexistente → 404 'Esta mesa no está puesta' con regreso al inicio", { tag: ["@P2"] }, async ({ anonPage, guard, evidence }) => {
@@ -31,6 +31,31 @@ test.describe("404", { tag: ["@module:navigation"] }, () => {
     const res = await probe(await apiAs(null), "/experiencias/no-existe-e2e");
     test.info().annotations.push({ type: "observado", description: `HTTP ${res.status} para /experiencias/no-existe-e2e` });
     expect(res.status, "un recurso público inexistente debe responder 404 (soft-404 con 200)").toBe(404);
+  });
+
+  test("[NAV-034] rutas públicas y por token con slug/token inexistente → HTTP 404 real (no soft-404)", { tag: ["@P3", "@regression"] }, async ({ apiAs, evidence }) => {
+    // Complementa el contrato estático tests/unit/route-not-found-contract.test.ts con el status real del build.
+    test.info().annotations.push({ type: "regression", description: "BUG-013 (revisión del patrón en rutas públicas y por token)" });
+    evidence("anonimo", "GET directo (sin seguir redirects) a cada ruta con un valor inexistente");
+    const anon = await apiAs(null);
+    const fake = token();
+    const paths = [
+      "/experiencias/no-existe-e2e",
+      `/cotizacion/${fake}`,
+      `/mi-evento/${fake}`,
+      `/mi-evento/${fake}/resumen`,
+      `/e/no-existe-e2e/${fake}`,
+      `/memory/${fake}`,
+      "/pago/mock/no-existe-e2e",
+      `/pago/resultado?p=no-existe-e2e&s=${fake.slice(0, 32)}`,
+    ];
+    const statuses: string[] = [];
+    for (const path of paths) {
+      const res = await probe(anon, path);
+      statuses.push(`${path.replace(fake, "<token>")} → ${res.status}`);
+    }
+    test.info().annotations.push({ type: "observado", description: statuses.join(" · ") });
+    expect(statuses.filter((s) => !s.endsWith("→ 404"))).toEqual([]);
   });
 
   test("[NAV-003] ruta inexistente dentro del panel (owner) → HTTP 404 con la página 404 general", { tag: ["@P2"] }, async ({ rolePage, guard, evidence }) => {
