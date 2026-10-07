@@ -9,6 +9,8 @@ import {
   createCapsuleFixture,
   createEventFixture,
   describe as d,
+  fillBeforeHydration,
+  holdPageChunk,
   tinyPng,
   token,
   uploadGuestPhoto,
@@ -42,13 +44,6 @@ test.describe("Memory Capsule · pública", { tag: ["@module:memory"] }, () => {
   });
 
   test("[MEM-021] lo que la invitada escribe antes de que la página hidrate no se borra (libro de visitas y subida de fotos)", { tag: ["@P0", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
-    // WebKit no revela el contenido en streaming (Suspense) mientras falte un script por cargar, así que no se
-    // puede escribir de forma determinista antes de hidratar. La corrección no depende del navegador (registro
-    // de react-hook-form) y CRIT-008 cubre WebKit de punta a punta.
-    if (browserName === "webkit") {
-      test.info().annotations.push({ type: "not-applicable", description: "WebKit no revela el streaming con JS pendiente" });
-      test.skip(true, "NOT APPLICABLE en WebKit: no se puede escenificar la escritura antes de hidratar");
-    }
     evidence("invitada", "/memory/[token] con el JS retenido › escribe nombre y mensaje › hidrata › Dejar mi mensaje");
     // CRIT-008 (WebKit): react-hook-form con defaultValues "" vaciaba al hidratar el «Tu nombre» ya escrito.
     test.info().annotations.push({ type: "regression", description: "CRIT-008 WebKit: nombre escrito antes de hidratar se borraba" });
@@ -57,27 +52,27 @@ test.describe("Memory Capsule · pública", { tag: ["@module:memory"] }, () => {
     const page = await anonPage();
     // Celular lento simulado de forma determinista: el chunk de la página (formularios de la cápsula) no llega
     // hasta que la invitada ya escribió; el resto de la app sí carga.
-    let releaseJs!: () => void;
-    const jsHeld = new Promise<void>((resolve) => (releaseJs = resolve));
-    let chunkRequested = false;
-    await page.route(/\/_next\/static\/chunks\/app\/\(experience\)\/memory\/%5Btoken%5D\/page-\w+\.js$/, async (route) => {
-      chunkRequested = true;
-      await jsHeld;
-      await route.continue();
-    });
+    const held = await holdPageChunk(page, "(experience)/memory/[token]");
     await page.goto(cap.path, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
-    await expect.poll(() => chunkRequested, { message: "el chunk de la página quedó retenido" }).toBe(true);
-    const guestbook = page.getByRole("form", { name: "Dejar un mensaje en el libro de visitas" });
-    const submit = guestbook.getByRole("button", { name: "Dejar mi mensaje" });
-    await expect(submit, "aún sin hidratar: el envío sigue deshabilitado").toBeDisabled();
+    await held.requested();
+    // Antes de hidratar, en WebKit los formularios (segmento en streaming) existen pero siguen ocultos: ver
+    // fillBeforeHydration. Por eso estos locators alcanzan elementos ocultos.
+    const guestbookBefore = page.getByRole("form", { name: "Dejar un mensaje en el libro de visitas", includeHidden: true });
+    await expect(
+      guestbookBefore.getByRole("button", { name: "Dejar mi mensaje", includeHidden: true }),
+      "aún sin hidratar: el envío sigue deshabilitado",
+    ).toBeDisabled();
     const author = `Inés ${uniq("Pre")}`;
     const body = `Escrito antes de hidratar ${uniq("txt")}`;
-    await guestbook.getByRole("textbox", { name: /^Tu nombre/ }).fill(author);
-    await guestbook.getByLabel("Tu mensaje").fill(body);
-    const upload = page.getByRole("region", { name: "¿Tienes fotos del día?" });
-    await upload.getByRole("textbox", { name: /^Tu nombre/ }).fill(author);
+    await fillBeforeHydration(guestbookBefore.getByRole("textbox", { name: /^Tu nombre/, includeHidden: true }), author, browserName);
+    await fillBeforeHydration(guestbookBefore.getByLabel("Tu mensaje"), body, browserName);
+    const uploadBefore = page.getByRole("region", { name: "¿Tienes fotos del día?", includeHidden: true });
+    await fillBeforeHydration(uploadBefore.getByRole("textbox", { name: /^Tu nombre/, includeHidden: true }), author, browserName);
 
-    releaseJs();
+    held.release();
+    const guestbook = page.getByRole("form", { name: "Dejar un mensaje en el libro de visitas" });
+    const submit = guestbook.getByRole("button", { name: "Dejar mi mensaje" });
+    const upload = page.getByRole("region", { name: "¿Tienes fotos del día?" });
     await waitHydrated(submit);
     await expect(submit).toBeEnabled();
     // Lo escrito sigue ahí después de hidratar…

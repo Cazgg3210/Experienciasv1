@@ -101,9 +101,9 @@ Otros eventos: "Bridal Brunch de Mariana" (`CONFIRMED`), "Karaoke & Mimosas de D
 
 **Corrección:** `src/components/layout/segment-children.tsx` (un `Fragment` con `key`, sin DOM). Se aplica en los 7 layouts que tienen un `error.tsx` hermano y pintan `children` dentro de un elemento HTML: `(public)`, `(experience)/pago`, `admin` (vía `AdminShell`), `admin/catalog`, `admin/content`, `admin/events/[id]` y `admin/settings`. Los layouts por token de `(experience)` devuelven `children` directo, y `staff` no tiene `error.tsx`.
 
-**Regresión:** [NAV-034..036] en `tests/e2e/navigation/hydration.spec.ts` retrasan sólo el chunk de `error.tsx` y exigen que el `<main id="contenido">` hidratado sea el mismo nodo que llegó del servidor.
+**Regresión:** [NAV-037..039] en `tests/e2e/navigation/hydration.spec.ts` retrasan sólo el chunk de `error.tsx` y exigen que el `<main id="contenido">` hidratado sea el mismo nodo que llegó del servidor.
 
-Si aparece un #418 nuevo en Firefox, revisa primero si un layout nuevo o modificado pinta `children` sin `<SegmentChildren>`. El envoltorio se retira sólo cuando una versión de Next lo corrija y NAV-034..036 pasen en Firefox sin él.
+Si aparece un #418 nuevo en Firefox, revisa primero si un layout nuevo o modificado pinta `children` sin `<SegmentChildren>`. El envoltorio se retira sólo cuando una versión de Next lo corrija y NAV-037..039 pasen en Firefox sin él.
 
 ### Formularios públicos y por token antes de hidratar
 Un celular lento ve el HTML del servidor y puede escribir o enviar antes de que React hidrate. Eso producía dos defectos, ambos corregidos (commits `e2f3699` y `d96a82a`, más CRIT-008 y MEM-021 en la cápsula): lo escrito se borraba al hidratar, y el formulario se enviaba de forma nativa por **GET**, con nombre, correo, dirección o alergias en la URL (historial, logs, Referer). El patrón vigente tiene tres partes:

@@ -13,7 +13,7 @@ import { Fragment } from "react";
  * página se vuelve a pintar en el cliente. Un `Fragment` con `key` tiene su propio fiber: la
  * suspensión se reintenta en él, que no reclama nodos, y la hidratación sigue intacta.
  * Es un defecto de React (canary 19.2 incluido en Next 15.5), no de la app; quitar este envoltorio
- * sólo cuando una versión de Next lo corrija y [NAV-034..036] (tests/e2e/navigation/hydration.spec.ts)
+ * sólo cuando una versión de Next lo corrija y [NAV-037..039] (tests/e2e/navigation/hydration.spec.ts)
  * sigan pasando en Firefox sin él.
  */
 export function SegmentChildren({ children }: { children: React.ReactNode }) {

@@ -11,6 +11,9 @@
  * Reproducción determinista: se retrasa SÓLO el chunk de `error.tsx` del segmento (red lenta simulada) y se
  * comprueba que (1) no hay error de página (el guard falla ante #418), y (2) el <main id="contenido"> que
  * React hidrató es el MISMO nodo que llegó del servidor (tras un #418 React lo reemplaza por uno nuevo).
+ *
+ * IDs: NAV-037…039. Antes eran NAV-034…036, pero NAV-034 ya era el 404 real de not-found.spec.ts (BUG-013).
+ * NAV-035 y NAV-036 quedan retirados: no los reutilices, porque los informes anteriores los citan.
  */
 import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
@@ -53,7 +56,7 @@ async function expectServerHtmlHydrated(page: Page, chunk: { served: () => boole
 }
 
 test.describe("Hidratación con chunk de error.tsx tardío", { tag: ["@regression"] }, () => {
-  test("[NAV-034] /pago/mock: el checkout simulado hidrata el HTML del servidor aunque pago/error.tsx llegue tarde", { tag: ["@P0", "@module:payments"] }, async ({ page, db, apiAs, request, baseURL, evidence }) => {
+  test("[NAV-037] /pago/mock: el checkout simulado hidrata el HTML del servidor aunque pago/error.tsx llegue tarde", { tag: ["@P0", "@module:payments"] }, async ({ page, db, apiAs, request, baseURL, evidence }) => {
     evidence("clienta", "Cotización aceptada → /pago/mock/<checkout> con el chunk de pago/error.tsx retrasado");
     test.info().annotations.push({ type: "regression", description: "PAY-001 Firefox: React #418 en /pago/mock" });
     const owner = await apiAs("owner");
@@ -67,7 +70,7 @@ test.describe("Hidratación con chunk de error.tsx tardío", { tag: ["@regressio
     await expect(page.getByRole("button", { name: /\(simulado\)$/ })).toBeEnabled();
   });
 
-  test("[NAV-035] sitio público: el configurador hidrata el HTML del servidor aunque (public)/error.tsx llegue tarde", { tag: ["@P0", "@module:configurator"] }, async ({ page, evidence }) => {
+  test("[NAV-038] sitio público: el configurador hidrata el HTML del servidor aunque (public)/error.tsx llegue tarde", { tag: ["@P0", "@module:configurator"] }, async ({ page, evidence }) => {
     evidence("anonimo", "/crear-experiencia con el chunk de (public)/error.tsx retrasado");
     const chunk = await delayChunk(page, /\/_next\/static\/chunks\/app\/\(public\)\/error-[\w]+\.js$/);
     await page.goto("/crear-experiencia");
@@ -75,7 +78,7 @@ test.describe("Hidratación con chunk de error.tsx tardío", { tag: ["@regressio
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
-  test("[NAV-036] panel: /admin/quotes hidrata el HTML del servidor aunque admin/error.tsx llegue tarde", { tag: ["@P0", "@module:quotes"] }, async ({ rolePage, evidence }) => {
+  test("[NAV-039] panel: /admin/quotes hidrata el HTML del servidor aunque admin/error.tsx llegue tarde", { tag: ["@P0", "@module:quotes"] }, async ({ rolePage, evidence }) => {
     evidence("owner", "/admin/quotes con el chunk de (admin)/admin/error.tsx retrasado");
     const page = await rolePage("owner");
     const chunk = await delayChunk(page, /\/_next\/static\/chunks\/app\/\(admin\)\/admin\/error-[\w]+\.js$/);
