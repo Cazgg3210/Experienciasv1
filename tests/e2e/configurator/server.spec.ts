@@ -314,8 +314,8 @@ test.describe("Configurador — backend", { tag: ["@module:configurator"] }, () 
   );
 
   test(
-    "[CONF-021] la misma clienta (mismo teléfono) que vuelve a escribir no se duplica",
-    { tag: ["@P2"] },
+    "[CONF-021] la misma clienta (mismo teléfono) que vuelve a escribir no se duplica (y su perfil no toma el correo escrito en el sitio)",
+    { tag: ["@P2", "@regression"] },
     async ({ db, request, baseURL, evidence }) => {
       evidence("anonimo", "Dos solicitudes del configurador: sin correo y luego con correo");
       const first = okData(await callAction<{ code: string }>(request, baseURL!, "submitConfiguratorAction", base, ROUTE));
@@ -328,8 +328,16 @@ test.describe("Configurador — backend", { tag: ["@module:configurator"] }, () 
         db.lead.findUniqueOrThrow({ where: { code: second.code } }),
       ]);
       expect(l2.customerId).toBe(l1.customerId);
+      // Desde el sitio público NO se completa el perfil de una clienta existente con el correo que se
+      // escribió (cualquiera que conozca su teléfono podría recibir sus enlaces de cotización/portal/pagos):
+      // el correo queda en el lead y el timeline le pide al equipo confirmarlo antes de actualizar el perfil.
+      test.info().annotations.push({ type: "regression", description: "revisión BUG-008: captura pública no completa contacto" });
       const customer = await db.customer.findUniqueOrThrow({ where: { id: l1.customerId! } });
-      expect(customer.email, "se completa el correo de la clienta existente").toBe(email);
+      expect(customer.email, "el correo escrito en el sitio no se agrega al perfil").toBeNull();
+      expect(l2.email).toBe(email);
+      const created = await db.leadActivity.findFirstOrThrow({ where: { leadId: l2.id, type: "CREATED" } });
+      expect(created.message).toContain(`correo ${email}`);
+      expect(created.message).toContain("No se agregaron a su perfil");
     },
   );
 

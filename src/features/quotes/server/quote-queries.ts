@@ -3,7 +3,7 @@ import type { Occasion, Prisma, QuoteStatus } from "@prisma/client";
 import { prisma } from "@/db";
 import { isPlausibleToken } from "@/lib/tokens";
 import { localTime, toDateKey } from "@/lib/dates";
-import { phoneSearchDigits } from "@/lib/phone";
+import { customerPhoneSearchFilter } from "@/features/customers/server/customer-contact";
 import { getSettings } from "@/features/settings/server/settings-service";
 import type { QuoteListFilters } from "../schemas";
 
@@ -22,12 +22,15 @@ export async function listQuotes(filters: QuoteListFilters, now: Date = new Date
   }
   const q = filters.q?.trim();
   if (q) {
+    // Teléfono en cualquier formato ("55 1234 5678", "+52 1 55…", filas antiguas con separadores).
+    const phoneFilter = await customerPhoneSearchFilter(prisma, q);
     where.OR = [
       { code: { contains: q, mode: "insensitive" } },
       { title: { contains: q, mode: "insensitive" } },
       { customer: { name: { contains: q, mode: "insensitive" } } },
       { customer: { email: { contains: q, mode: "insensitive" } } },
-      { customer: { phone: { contains: q.replace(/[^\d+]/g, "") || q } } },
+      { customer: { phone: { contains: q } } },
+      ...(phoneFilter ? [{ customer: phoneFilter }] : []),
     ];
   }
   const [rows, total] = await Promise.all([
@@ -322,13 +325,13 @@ export async function getLeadPrefill(leadId: string): Promise<LeadPrefill | null
 export async function searchCustomers(q: string) {
   const term = q.trim();
   if (term.length < 2) return [];
-  const digits = phoneSearchDigits(term);
+  const phoneFilter = await customerPhoneSearchFilter(prisma, term);
   return prisma.customer.findMany({
     where: {
       OR: [
         { name: { contains: term, mode: "insensitive" } },
         { email: { contains: term, mode: "insensitive" } },
-        ...(digits.length >= 4 ? [{ phone: { contains: digits } }, { whatsapp: { contains: digits } }] : []),
+        ...(phoneFilter ? [phoneFilter] : []),
       ],
     },
     orderBy: { updatedAt: "desc" },
