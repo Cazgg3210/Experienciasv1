@@ -175,8 +175,10 @@ test.describe("Eventos · alta manual", { tag: ["@module:events"] }, () => {
     await page.getByRole("textbox", { name: "Fecha", exact: true }).fill(date);
     await expect(page.getByRole("status").filter({ hasText: "Fecha disponible." })).toBeVisible();
     await page.getByRole("button", { name: "Crear evento" }).click();
-    await page.waitForURL(/\/admin\/events\/(?!new)[a-z0-9]+$/);
+    // El aviso aparece al crear y dura 4 s; la navegación al detalle viene después (en WebKit tarda ~5 s), así que
+    // se valida primero el aviso y luego la URL (mismo caso que FIN-006).
     await expect(page.getByText(/Evento EV-[A-Z0-9-]+ creado/)).toBeVisible();
+    await page.waitForURL(/\/admin\/events\/(?!new)[a-z0-9]+$/);
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 
     const id = page.url().split("/").pop()!;

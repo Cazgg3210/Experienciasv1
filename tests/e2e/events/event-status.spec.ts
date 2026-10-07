@@ -4,7 +4,7 @@
  * Paquete 4 · carril 4 · prefijo EVT.
  */
 import { expect, test } from "../fixtures";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
   callAction,
   createEventFixture,
@@ -23,11 +23,16 @@ async function openStatus(page: Page, id: string) {
   return panel;
 }
 
-/** Abre el diálogo de confirmación de la transición y la confirma. */
-async function transition(page: Page, label: string) {
+/**
+ * Abre el diálogo de confirmación de la transición y la confirma. Con `toast`, valida ese aviso ANTES de esperar
+ * el cierre del diálogo: sonner lo muestra 4 s desde que la acción responde y el diálogo se va al terminar el render
+ * que la acción provoca (en WebKit, varios segundos); validarlo después lo perdía (EVT-017, mismo caso que FIN-006).
+ */
+async function transition(page: Page, label: string, toast?: Locator) {
   await page.getByRole("region", { name: "Estado" }).getByRole("button", { name: label }).click();
   const dialog = page.getByRole("alertdialog", { name: label });
   await dialog.getByRole("button", { name: label }).click();
+  if (toast) await expect(toast).toBeVisible();
   await expect(dialog).toBeHidden();
 }
 
@@ -39,8 +44,7 @@ test.describe("Eventos · estados", { tag: ["@module:events"] }, () => {
     const page = await rolePage("owner");
     const panel = await openStatus(page, ev.id);
     await expect(panel).toContainText("Consulta");
-    await transition(page, "Confirmar evento");
-    await expect(page.getByText("Estado actualizado: Confirmado")).toBeVisible();
+    await transition(page, "Confirmar evento", page.getByText("Estado actualizado: Confirmado"));
     await expect(panel).toContainText("Confirmado");
     expect((await db.event.findUnique({ where: { id: ev.id } }))?.status).toBe("CONFIRMED");
     const audit = await lastAudit(db, "event.status_changed", ev.id);
@@ -67,8 +71,7 @@ test.describe("Eventos · estados", { tag: ["@module:events"] }, () => {
       ["Marcar como completado", "Completado", "COMPLETED"],
     ];
     for (const [action, label, status] of steps) {
-      await transition(page, action);
-      await expect(page.getByText(`Estado actualizado: ${label}`).last()).toBeVisible();
+      await transition(page, action, page.getByText(`Estado actualizado: ${label}`).last());
       await expect.poll(async () => (await db.event.findUnique({ where: { id: ev.id } }))?.status).toBe(status);
     }
     await expect(panel).toContainText("Este estado es final; no hay más transiciones.");
