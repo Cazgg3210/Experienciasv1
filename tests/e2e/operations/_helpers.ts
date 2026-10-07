@@ -350,6 +350,9 @@ export async function attachSale(
 
 /** Tope de la espera de hidratación de `ready()`: el mismo `expect.timeout` de playwright.config.ts. */
 const HYDRATION_TIMEOUT_MS = 15_000;
+/** Margen del temporizador de Node sobre el instante límite: lo que tarda la página en contestar ya resuelta. */
+const PAGE_ANSWER_MARGIN_MS = 1_000;
+const PAGE_UNRESPONSIVE = "la página no respondió";
 
 /**
  * Espera a que React haya hidratado el elemento (tiene sus props de React) antes de interactuar.
@@ -364,6 +367,9 @@ const HYDRATION_TIMEOUT_MS = 15_000;
  *
  * Un solo tope para todo: la página recibe el instante límite (reloj de la máquina, el mismo del navegador) y no
  * espera más allá de él aunque resolver el nodo haya tardado, así que `ready()` no pasa de HYDRATION_TIMEOUT_MS.
+ * Si la página deja de contestar (Firefox congelado, ENV-04: sus temporizadores no corren y `evaluate` no
+ * regresa nunca), un temporizador de Node corta la espera al límite + PAGE_ANSWER_MARGIN_MS con
+ * «la página no respondió», en lugar de consumir el tope de la prueba completa.
  */
 export async function ready(locator: Locator): Promise<Locator> {
   await expect(locator).toBeVisible();
@@ -371,7 +377,7 @@ export async function ready(locator: Locator): Promise<Locator> {
   const remaining = () => Math.max(0, deadline - Date.now());
   let state = "sin hidratar";
   while (remaining() > 0) {
-    state = await locator
+    const inPage = locator
       .evaluate(
         (el, until) =>
           new Promise<string>((resolve) => {
@@ -387,8 +393,16 @@ export async function ready(locator: Locator): Promise<Locator> {
         { timeout: Math.max(1, remaining()) },
       )
       .catch((error: Error) => `error: ${error.message.split("\n")[0]}`);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unresponsive = new Promise<string>((resolve) => {
+      timer = setTimeout(
+        () => resolve(`${PAGE_UNRESPONSIVE} (sin respuesta ${PAGE_ANSWER_MARGIN_MS} ms después del límite de ${HYDRATION_TIMEOUT_MS} ms)`),
+        remaining() + PAGE_ANSWER_MARGIN_MS,
+      );
+    });
+    state = await Promise.race([inPage, unresponsive]).finally(() => clearTimeout(timer));
     if (state === "hidratado") return locator;
-    if (state === "sin hidratar") break;
+    if (state === "sin hidratar" || state.startsWith(PAGE_UNRESPONSIVE)) break;
     // Nodo reemplazado o contexto de ejecución destruido (re-render, navegación): se vuelve a resolver.
     await new Promise((r) => setTimeout(r, Math.min(100, remaining())));
   }

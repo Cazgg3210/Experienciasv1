@@ -22,6 +22,7 @@ config({ path: ".env" });
  *                      puerto 3200+N, base <E2E_DATABASE_URL>_l<N>, sesiones .auth/l<N>/, resultados test-results/l<N>/.
  *                      Todos los carriles comparten el mismo build .next-e2e (sin código de app cambiando entre corridas).
  *   E2E_FIREFOX_EXECUTABLE  ruta a un Firefox de Playwright alterno (p. ej. si no arranca desde %LOCALAPPDATA%)
+ *   E2E_FIREFOX_WORKERS     workers del proyecto firefox (entero ≥ 1; default 1 por ENV-04: Firefox se congela con varias páginas)
  *   E2E_SUITE          suites especiales que NO corren junto con el resto (se ejecutan en una invocación aparte, 1 worker):
  *                        global    → *.global.spec.ts (cambian ajustes/flags/reglas globales; restauran al terminar)
  *                        ratelimit → *.ratelimit.spec.ts (servidor CON rate limit; carril 9 por defecto)
@@ -30,6 +31,10 @@ const SUITE = process.env.E2E_SUITE ?? "";
 if (!["", "global", "ratelimit"].includes(SUITE)) throw new Error(`E2E_SUITE inválido: ${SUITE}`);
 const LANE = Number(process.env.E2E_LANE ?? (SUITE === "ratelimit" ? 9 : 0));
 if (!Number.isInteger(LANE) || LANE < 0 || LANE > 9) throw new Error(`E2E_LANE inválido: ${process.env.E2E_LANE}`);
+// Workers del proyecto firefox (ENV-04): entero ≥ 1. Se valida siempre, igual que E2E_LANE, para que un valor mal escrito
+// no termine en NaN o 0 sin avisar.
+const FIREFOX_WORKERS = Number(process.env.E2E_FIREFOX_WORKERS ?? 1);
+if (!Number.isInteger(FIREFOX_WORKERS) || FIREFOX_WORKERS < 1) throw new Error(`E2E_FIREFOX_WORKERS inválido: ${process.env.E2E_FIREFOX_WORKERS}`);
 // Idempotente: los workers vuelven a evaluar este archivo con el entorno ya ajustado.
 process.env.E2E_DATABASE_URL_BASE ??= process.env.E2E_DATABASE_URL;
 if (LANE > 0 && process.env.E2E_DATABASE_URL_BASE) {
@@ -82,7 +87,7 @@ function regularProjects() {
             // en localhost y en 127.0.0.1, con y sin traza/video; con una sola página no apareció en 4,900 llamadas.
             // ENVIRONMENT ISSUE, no de la app. Medido con EVT-005/017, PUR-002/005, STF-003 y SET-015 ×8: con dos
             // Firefox fallaron 22/48 (11 congelamientos, dos pruebas a la vez); con uno, 3/48 (los 3, congelamientos).
-            workers: Number(process.env.E2E_FIREFOX_WORKERS ?? 1),
+            workers: FIREFOX_WORKERS,
             use: {
               ...desktop("Desktop Firefox"),
               ...(process.env.E2E_FIREFOX_EXECUTABLE ? { launchOptions: { executablePath: process.env.E2E_FIREFOX_EXECUTABLE } } : {}),
