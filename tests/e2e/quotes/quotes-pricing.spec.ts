@@ -268,7 +268,9 @@ test.describe("Cotizaciones · precios y conceptos", { tag: ["@module:quotes"] }
     await form.getByRole("spinbutton", { name: "Invitadas" }).fill("9");
     await expect(form.getByText("Se ajustarán invitadas adicionales, menú y add-ons por persona (conservando precios).")).toBeVisible();
     await form.getByRole("button", { name: "Guardar datos" }).click();
-    await expect(page.getByText("Datos actualizados")).toBeVisible();
+    // El toast y la entrada del Historial (quote.updated) dicen lo mismo: se valida cada uno en su región.
+    await expect(page.getByRole("region", { name: /^Notificaciones/ }).getByText("Datos actualizados")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Historial" }).getByText("Datos actualizados")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(newTitle);
     const after = await db.quote.findUniqueOrThrow({ where: { id: q.id }, include: { items: true } });
     expect(after.guestCount).toBe(9);
