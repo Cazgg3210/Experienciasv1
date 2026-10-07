@@ -402,6 +402,42 @@ export async function sessionCookie(page: Page): Promise<string | undefined> {
   return (await page.context().cookies()).find((c) => c.name === SESSION_COOKIE)?.value;
 }
 
+export type SetCookieAttributes = { name: string; value: string; attributes: Record<string, string | true> };
+
+/** Parsea un encabezado Set-Cookie: nombre, valor y atributos (claves en minúsculas; flags como `true`). */
+export function parseSetCookie(header: string): SetCookieAttributes {
+  const [pair = "", ...attrs] = header.split(";").map((p) => p.trim());
+  const eq = pair.indexOf("=");
+  const attributes: Record<string, string | true> = {};
+  for (const a of attrs.filter(Boolean)) {
+    const i = a.indexOf("=");
+    if (i === -1) attributes[a.toLowerCase()] = true;
+    else attributes[a.slice(0, i).trim().toLowerCase()] = a.slice(i + 1).trim();
+  }
+  return { name: pair.slice(0, eq), value: pair.slice(eq + 1), attributes };
+}
+
+/**
+ * Captura el Set-Cookie de la sesión que emite el POST de /login, tal como lo envía el servidor.
+ * Llamar ANTES de enviar el formulario. Es independiente del motor: WebKit en Windows guarda las cookies
+ * sin SameSite (context.cookies() reporta "None" aunque el servidor envíe SameSite=Lax), así que los
+ * atributos que define la app se verifican en la respuesta HTTP real y no en el almacén del navegador.
+ */
+export function waitForSessionSetCookie(page: Page): Promise<SetCookieAttributes> {
+  return page
+    .waitForResponse(
+      async (res) =>
+        res.request().method() === "POST" &&
+        new URL(res.url()).pathname === "/login" &&
+        (await res.headersArray()).some((h) => h.name.toLowerCase() === "set-cookie" && h.value.startsWith(`${SESSION_COOKIE}=`)),
+      { timeout: 30_000 },
+    )
+    .then(async (res) => {
+      const header = (await res.headersArray()).find((h) => h.name.toLowerCase() === "set-cookie" && h.value.startsWith(`${SESSION_COOKIE}=`));
+      return parseSetCookie(header!.value);
+    });
+}
+
 /** GET sin seguir redirects: { status, location }. */
 export async function probe(api: APIRequestContext, url: string, headers: Record<string, string> = {}) {
   const res = await api.get(url, { maxRedirects: 0, failOnStatusCode: false, headers });
