@@ -69,18 +69,20 @@ test.describe("Staff · integrantes", { tag: ["@module:staff"] }, () => {
 
   test("[STF-014] el alta valida nombre, teléfono y correo (sin crear registro)", { tag: ["@P2", "@negative"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "/admin/staff/new con datos inválidos");
-    const before = await db.staffMember.count();
+    // Correo inválido pero único (sin @): marca propia para comprobar que no se creó nada sin depender de un
+    // conteo global, que otras pruebas del carril cambian en paralelo.
+    const badEmail = `no-es-correo-${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
     const page = await rolePage("owner");
     await page.goto("/admin/staff/new");
     await (await ready(page.getByLabel("Nombre completo"))).fill("A");
     await page.getByLabel("Teléfono / WhatsApp").fill("123");
-    await page.getByLabel("Correo").fill("no-es-correo");
+    await page.getByLabel("Correo").fill(badEmail);
     await page.getByRole("button", { name: "Agregar al equipo" }).click();
     await expect(page.getByText("Escribe el nombre completo.")).toBeVisible();
     await expect(page.getByText("Escribe un teléfono de 10 dígitos.")).toBeVisible();
     await expect(page.getByText("Correo inválido.")).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/staff\/new$/);
-    expect(await db.staffMember.count()).toBe(before);
+    expect(await db.staffMember.count({ where: { OR: [{ email: badEmail }, { email: badEmail.toLowerCase() }] } }), "no se creó el integrante").toBe(0);
   });
 
   test("[STF-015] editar un integrante (tarifa, tipo, desactivar) persiste y deja de ofrecerse al asignar", { tag: ["@P1"] }, async ({ rolePage, db, evidence }) => {

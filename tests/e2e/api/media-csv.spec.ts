@@ -70,14 +70,15 @@ test.describe("API — /api/media/[id] (URLs firmadas)", { tag: ["@module:api"] 
 test.describe("API — /api/media/upload", { tag: ["@module:api"] }, () => {
   test("[API-062] sin sesión → 401; con sesión pero Origin ajeno o sin Origin → 403 (CSRF); nada se guarda", { tag: ["@P0", "@negative"] }, async ({ apiAs, baseURL, db, evidence }) => {
     evidence("owner", "subidas sin sesión / cross-origin");
-    const before = await db.mediaAsset.count();
+    // Marca propia en `alt`: otras pruebas del carril suben imágenes en paralelo, así que un conteo global no sirve.
+    const fields = { purpose: "GALLERY", alt: `API-062 ${Date.now()}-${Math.random().toString(36).slice(2)}` };
     const anon = await apiAs(null);
-    expect((await upload(anon, baseURL!, { purpose: "GALLERY" }, { name: "a.png", mimeType: "image/png", buffer: PNG })).status()).toBe(401);
+    expect((await upload(anon, baseURL!, fields, { name: "a.png", mimeType: "image/png", buffer: PNG })).status()).toBe(401);
     const owner = await apiAs("owner");
-    expect((await upload(owner, baseURL!, { purpose: "GALLERY" }, { name: "a.png", mimeType: "image/png", buffer: PNG }, { Origin: "https://evil.example" })).status()).toBe(403);
-    expect((await upload(owner, baseURL!, { purpose: "GALLERY" }, { name: "a.png", mimeType: "image/png", buffer: PNG }, {})).status()).toBe(403);
-    expect((await upload(owner, baseURL!, { purpose: "GALLERY" }, { name: "a.png", mimeType: "image/png", buffer: PNG }, { "Sec-Fetch-Site": "cross-site", Origin: baseURL! })).status()).toBe(403);
-    expect(await db.mediaAsset.count()).toBe(before);
+    expect((await upload(owner, baseURL!, fields, { name: "a.png", mimeType: "image/png", buffer: PNG }, { Origin: "https://evil.example" })).status()).toBe(403);
+    expect((await upload(owner, baseURL!, fields, { name: "a.png", mimeType: "image/png", buffer: PNG }, {})).status()).toBe(403);
+    expect((await upload(owner, baseURL!, fields, { name: "a.png", mimeType: "image/png", buffer: PNG }, { "Sec-Fetch-Site": "cross-site", Origin: baseURL! })).status()).toBe(403);
+    expect(await db.mediaAsset.count({ where: { alt: fields.alt } }), "ninguna subida rechazada dejó un MediaAsset").toBe(0);
   });
 
   test("[API-063] magic bytes falsos (texto .jpg), SVG con script y HTML → rechazados sin MediaAsset", { tag: ["@P0", "@negative"] }, async ({ apiAs, baseURL, db, evidence }) => {

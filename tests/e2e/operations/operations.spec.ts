@@ -61,7 +61,10 @@ test.describe("Operaciones · tablero y orden de producción", { tag: ["@module:
     await page.goto(opsUrl(ev.id));
     const checklist = page.getByRole("region", { name: "Checklist", exact: true });
     await expect(checklist.getByText("Aún no hay checklist para este evento")).toBeVisible();
-    await (await ready(checklist.getByRole("button", { name: "Generar desde plantillas" }).first())).click();
+    const generate = await ready(checklist.getByRole("button", { name: "Generar desde plantillas" }).first());
+    // checklist-board hace router.refresh(): recargar con ese fetch en vuelo aborta en Firefox (OPS-010)
+    const refreshed = routerRefreshed(page, opsUrl(ev.id));
+    await generate.click();
     await expect(toast(page, `Agregamos ${expected} tareas desde las plantillas.`)).toBeVisible();
     await expect.poll(() => db.eventChecklistItem.count({ where: { eventId: ev.id } })).toBe(expected);
     const items = await db.eventChecklistItem.findMany({ where: { eventId: ev.id } });
@@ -70,6 +73,7 @@ test.describe("Operaciones · tablero y orden de producción", { tag: ["@module:
     const sample = await db.eventChecklistItem.findFirstOrThrow({ where: { eventId: ev.id }, include: { templateItem: true } });
     expect(sample.dueAt!.getTime()).toBe(ev.startsAt.getTime() + sample.templateItem!.offsetMinutes * 60_000);
 
+    await refreshed;
     await page.reload();
     await expect(checklist.getByRole("heading", { level: 3, name: "T-7 días" })).toBeVisible();
     await expect(checklist.getByRole("heading", { level: 3, name: "Cierre" })).toBeVisible();

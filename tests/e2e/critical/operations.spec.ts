@@ -14,6 +14,7 @@ import {
   test,
   uniq,
 } from "./_helpers";
+import { routerRefreshed } from "../operations/_helpers";
 
 test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critical"] }, () => {
   test(
@@ -184,6 +185,8 @@ test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critica
 
       // Cerrar el evento
       await owner.getByRole("button", { name: "Cerrar evento" }).click();
+      // close-event-button hace router.refresh(): recargar con ese fetch en vuelo aborta en Firefox (OPS-010)
+      const refreshed = routerRefreshed(owner, `/admin/events/${event.id}/financials`);
       await owner.getByRole("alertdialog").getByRole("button", { name: "Cerrar evento" }).click();
       await expect(owner.getByText("Evento cerrado. Enviamos el agradecimiento a la clienta.")).toBeVisible();
 
@@ -208,6 +211,7 @@ test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critica
       await expectNotification(db, { eventId: event.id, type: "POST_EVENT" }, "agradecimiento post-evento");
 
       // Ya no se puede volver a cerrar ni agregar costos
+      await refreshed;
       await owner.reload();
       await expect(owner.getByRole("button", { name: "Cerrar evento" })).toHaveCount(0);
 

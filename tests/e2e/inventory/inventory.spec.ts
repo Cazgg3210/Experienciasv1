@@ -16,6 +16,7 @@ import {
   pickRadixOption,
   ready,
   swapInBody,
+  routerRefreshed,
   toast,
   uniq,
 } from "../operations/_helpers";
@@ -159,6 +160,8 @@ test.describe("Inventario · artículos y stock", { tag: ["@module:inventory"] }
     await dialog.getByLabel(/Cantidad/).fill("5");
     await dialog.getByLabel("Motivo").fill("Compra de 5 piezas E2E");
     await expect(dialog.getByText(/Total 10 → 15/)).toBeVisible();
+    // stock-adjust-dialog hace router.refresh(): recargar con ese fetch en vuelo aborta en Firefox (OPS-010)
+    const refreshed = routerRefreshed(page, `/admin/inventory/${item.id}`);
     await dialog.getByRole("button", { name: "Registrar movimiento" }).click();
     await expect(toast(page, "Stock actualizado")).toBeVisible();
     await expect.poll(async () => (await db.inventoryItem.findUnique({ where: { id: item.id } }))?.totalQuantity).toBe(15);
@@ -166,6 +169,7 @@ test.describe("Inventario · artículos y stock", { tag: ["@module:inventory"] }
     expect(mv).toMatchObject({ quantity: 5, reason: "Compra de 5 piezas E2E" });
     expect(mv.actorId).not.toBeNull();
     expect(await auditCount(db, "inventory.adjusted", item.id)).toBe(1);
+    await refreshed;
     await page.reload();
     await expect(page.getByText("15 pz")).toBeVisible();
   });
