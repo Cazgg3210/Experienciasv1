@@ -5,7 +5,8 @@ import { generateCode } from "@/lib/codes";
 import { slugify } from "@/lib/slug";
 import { dateOnly, isValidDateKey, toDateKey, zonedDateTime } from "@/lib/dates";
 import { verifyMockSignature, signMockPayload } from "@/server/providers/payments/mock-signature";
-import { normalizeMxPhone, whatsappLink } from "@/server/providers/whatsapp/links";
+import { whatsappDigits, whatsappLink } from "@/server/providers/whatsapp/links";
+import { normalizePhone } from "@/lib/phone";
 
 describe("money", () => {
   it("formatea MXN y opera con bps", () => {
@@ -62,8 +63,24 @@ describe("mock webhook signature", () => {
 
 describe("whatsapp links", () => {
   it("normaliza teléfonos MX y arma deep links", () => {
-    expect(normalizeMxPhone("55 1234 5678")).toBe("525512345678");
-    expect(normalizeMxPhone("+52 1 55 1234 5678")).toBe("525512345678");
+    expect(whatsappDigits("55 1234 5678")).toBe("525512345678");
+    expect(whatsappDigits("+52 1 55 1234 5678")).toBe("525512345678");
+    expect(whatsappDigits("5215512345678")).toBe("525512345678"); // número del negocio en ajustes
+    expect(whatsappDigits("+1 (415) 555-0123")).toBe("14155550123");
     expect(whatsappLink("5512345678", "Hola")).toBe("https://wa.me/525512345678?text=Hola");
+  });
+
+  it("usa la MISMA regla que la forma canónica de la app (normalizePhone), sin el +", () => {
+    const values = ["55 1234 5678", "+52 55 1234 5678", "+34 912 345 678", "+52 55 1234 567", "0445512345678", "tel: 5512345678", "55+12345678", "", null];
+    for (const v of values) {
+      expect(whatsappDigits(v), String(v)).toBe(normalizePhone(v)?.slice(1) ?? null);
+    }
+  });
+
+  it("un valor que no es teléfono no inventa un número: el enlace abre WhatsApp para elegir contacto", () => {
+    expect(whatsappDigits("+52 55 1234 567")).toBeNull(); // 52 + 9 dígitos
+    expect(whatsappDigits("0445512345678")).toBeNull(); // prefijo de marcación antiguo
+    expect(whatsappLink("123", "Hola")).toBe("https://wa.me/?text=Hola");
+    expect(whatsappLink(null)).toBe("https://wa.me/");
   });
 });

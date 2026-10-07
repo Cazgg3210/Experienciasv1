@@ -1,28 +1,36 @@
 /**
  * Teléfonos: UNA forma canónica para guardar y comparar (E.164).
  *  - México (por defecto): "+52" + 10 dígitos. Acepta los 10 dígitos, +52 / 52 y el prefijo legado de
- *    celulares 521 (+52 1), con espacios, guiones, puntos y paréntesis.
- *  - Otros países: "+" + lada + número (11 a 15 dígitos en total).
- * Pura y sin dependencias: la usan los esquemas Zod (cliente y servidor), los servicios y las búsquedas.
+ *    celulares 521 (+52 1), con espacios, guiones, puntos y paréntesis. El número nacional nunca empieza
+ *    con 0 ni con 1 (las ladas de México van del 2 al 9; 044/045/01 eran prefijos de marcación).
+ *  - Otros países: "+" + lada + número (11 a 15 dígitos en total). Una lada que empieza con 52 ES México,
+ *    así que sólo vale con su longitud mexicana (52 + 10 o 521 + 10).
+ *  - Con "+" al inicio siempre viene la lada: "+" seguido de 10 dígitos no es un número nacional.
+ * Pura y sin dependencias: la usan los esquemas Zod (cliente y servidor), los servicios, las búsquedas y
+ * los enlaces/avisos de WhatsApp (`whatsappDigits` en @/server/providers/whatsapp/links).
  */
 
 const SEPARATORS = /[\s().-]/g;
 
-/** Dígitos del teléfono (sin separadores ni "+"), o null si trae otra cosa (letras, "+" en medio…). */
-function phoneDigits(input: string | null | undefined): string | null {
+/** Dígitos del teléfono y si traía "+" (lada explícita), o null si trae otra cosa (letras, "+" en medio…). */
+function phoneParts(input: string | null | undefined): { digits: string; plus: boolean } | null {
   if (typeof input !== "string") return null;
-  const match = /^\+?(\d+)$/.exec(input.replace(SEPARATORS, ""));
-  return match ? match[1]! : null;
+  const match = /^(\+?)(\d+)$/.exec(input.replace(SEPARATORS, ""));
+  return match ? { digits: match[2]!, plus: match[1] === "+" } : null;
 }
 
-/** Número nacional de México a 10 dígitos, o null si no es un teléfono mexicano. */
+const MX_NATIONAL = /^[2-9]\d{9}$/;
+
+/** Número nacional de México a 10 dígitos, o null si no es un teléfono mexicano válido. */
 export function mxNationalNumber(input: string | null | undefined): string | null {
-  const digits = phoneDigits(input);
-  if (!digits) return null;
-  if (digits.length === 10) return digits;
-  if (digits.length === 12 && digits.startsWith("52")) return digits.slice(2);
-  if (digits.length === 13 && digits.startsWith("521")) return digits.slice(3);
-  return null;
+  const parts = phoneParts(input);
+  if (!parts) return null;
+  const { digits, plus } = parts;
+  let national: string | null = null;
+  if (digits.length === 10 && !plus) national = digits;
+  else if (digits.length === 12 && digits.startsWith("52")) national = digits.slice(2);
+  else if (digits.length === 13 && digits.startsWith("521")) national = digits.slice(3);
+  return national && MX_NATIONAL.test(national) ? national : null;
 }
 
 /**
@@ -32,10 +40,12 @@ export function mxNationalNumber(input: string | null | undefined): string | nul
 export function normalizePhone(input: string | null | undefined): string | null {
   const national = mxNationalNumber(input);
   if (national) return `+52${national}`;
-  const digits = phoneDigits(input);
-  // Lada internacional: nunca empieza con 0 (044/045/01 eran prefijos de marcación nacional, no ladas).
-  if (digits && digits.length >= 11 && digits.length <= 15 && !digits.startsWith("0")) return `+${digits}`;
-  return null;
+  const digits = phoneParts(input)?.digits;
+  if (!digits || digits.length < 11 || digits.length > 15) return null;
+  // Lada internacional: nunca empieza con 0 (044/045/01 eran prefijos de marcación nacional, no ladas) y
+  // una que empieza con 52 es México con una longitud equivocada ("+52 55 1234 567", "52 1 55 1234 567").
+  if (digits.startsWith("0") || digits.startsWith("52")) return null;
+  return `+${digits}`;
 }
 
 export function isValidPhone(input: string | null | undefined): boolean {
