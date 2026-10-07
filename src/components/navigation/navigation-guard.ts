@@ -51,9 +51,14 @@ function trackHeadResources(host: NavigationGuardHost, now: () => number, touch:
   const settle = (el: Element) => {
     if (pending.delete(el)) touch();
   };
+  // `noModule` (los polyfills de Next) nunca se descarga en navegadores modernos ni dispara `load`.
   const isLoading = (el: Element) =>
-    (el.nodeName === "SCRIPT" && Boolean((el as HTMLScriptElement).src)) ||
-    (el.nodeName === "LINK" && (el as HTMLLinkElement).rel === "stylesheet" && !(el as HTMLLinkElement).sheet);
+    (el.nodeName === "SCRIPT" &&
+      Boolean((el as HTMLScriptElement).src) &&
+      !(el as HTMLScriptElement).noModule) ||
+    (el.nodeName === "LINK" &&
+      (el as HTMLLinkElement).rel === "stylesheet" &&
+      !(el as HTMLLinkElement).sheet);
   new Observer((records) => {
     for (const record of records) {
       record.addedNodes.forEach((node) => {
@@ -82,7 +87,9 @@ function report(log: Pick<Console, "error" | "warn"> | undefined, event: Navigat
       `[navegación] La navegación a ${event.url} no se confirmó tras ${Math.round(event.waitedMs / 1000)} s con la red en reposo; se recurre a una carga completa (BUG-006).`,
     );
   } else {
-    log.warn(`[navegación] ${event.url}: su segmento se había descartado por obsoleto; se recupera con ${event.via === "refresh" ? "router.refresh()" : "una carga completa"} (BUG-006).`);
+    log.warn(
+      `[navegación] ${event.url}: su segmento se había descartado por obsoleto; se recupera con ${event.via === "refresh" ? "router.refresh()" : "una carga completa"} (BUG-006).`,
+    );
   }
 }
 
@@ -121,7 +128,8 @@ export function installNavigationGuard(host: NavigationGuardHost): InstalledNavi
         refresh();
         return true;
       },
-      hardNavigate: (url: string, type: NavigationType) => (type === "push" ? host.location.assign(url) : host.location.replace(url)),
+      hardNavigate: (url: string, type: NavigationType) =>
+        type === "push" ? host.location.assign(url) : host.location.replace(url),
       report: (event) => report(host.console, event),
     },
     transitions,

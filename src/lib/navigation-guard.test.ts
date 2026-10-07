@@ -76,7 +76,9 @@ describe("navigation guard › navegación colgada (red de seguridad)", () => {
     expect(env.hardNavigations).toEqual([]);
     env.advance(1_001);
     expect(env.hardNavigations).toEqual([{ url: `${ORIGIN}/admin/calendar?month=2026-11`, type: "push" }]);
-    expect(env.events).toEqual([{ kind: "stalled", url: `${ORIGIN}/admin/calendar?month=2026-11`, type: "push", waitedMs: 5_000 }]);
+    expect(env.events).toEqual([
+      { kind: "stalled", url: `${ORIGIN}/admin/calendar?month=2026-11`, type: "push", waitedMs: 5_000 },
+    ]);
     expect(env.pendingTimers()).toBe(0);
   });
 
@@ -84,7 +86,9 @@ describe("navigation guard › navegación colgada (red de seguridad)", () => {
     const env = setup("/admin/inventory?q=vaso");
     env.guard.start("?q=vaso&inactive=1", "replace");
     env.advance(6_000);
-    expect(env.hardNavigations).toEqual([{ url: `${ORIGIN}/admin/inventory?q=vaso&inactive=1`, type: "replace" }]);
+    expect(env.hardNavigations).toEqual([
+      { url: `${ORIGIN}/admin/inventory?q=vaso&inactive=1`, type: "replace" },
+    ]);
   });
 
   it("no interviene si la URL cambió (confirmada o redirigida a otra parte)", () => {
@@ -162,7 +166,9 @@ describe("navigation guard › URLs con lazy fetch descartado (parte B)", () => 
     expect(env.refreshes()).toBe(0); // todavía no: Next despacha la navegación justo después del hook
     env.advance(0);
     expect(env.refreshes()).toBe(1);
-    expect(env.events).toEqual([{ kind: "recovered", url: `${ORIGIN}/admin/settings`, type: "traverse", via: "refresh" }]);
+    expect(env.events).toEqual([
+      { kind: "recovered", url: `${ORIGIN}/admin/settings`, type: "traverse", via: "refresh" },
+    ]);
 
     env.setHref("/admin/settings/pricing");
     env.guard.start(`${ORIGIN}/admin/settings/pricing`, "traverse");
@@ -203,7 +209,9 @@ describe("navigation guard › URLs con lazy fetch descartado (parte B)", () => 
     env.guard.start(`${ORIGIN}/admin/settings`, "traverse");
     env.advance(0);
     expect(env.hardNavigations).toEqual([{ url: `${ORIGIN}/admin/settings`, type: "traverse" }]);
-    expect(env.events).toEqual([{ kind: "recovered", url: `${ORIGIN}/admin/settings`, type: "traverse", via: "reload" }]);
+    expect(env.events).toEqual([
+      { kind: "recovered", url: `${ORIGIN}/admin/settings`, type: "traverse", via: "reload" },
+    ]);
   });
 
   it("recuerda como máximo 50 URLs (olvida las más antiguas)", () => {

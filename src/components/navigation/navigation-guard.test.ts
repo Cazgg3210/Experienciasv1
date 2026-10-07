@@ -9,11 +9,20 @@ const PAYLOAD = '0:{"b":"build-123","f":[["children","settings"]],"S":false}\n';
 const lazyHeaders = {
   RSC: "1",
   "Next-Router-State-Tree": encodeURIComponent(
-    JSON.stringify(["", { children: ["admin", { children: ["settings", { children: ["__PAGE__", {}, null, "refetch"] }] }] }, null, null, true]),
+    JSON.stringify([
+      "",
+      { children: ["admin", { children: ["settings", { children: ["__PAGE__", {}, null, "refetch"] }] }] },
+      null,
+      null,
+      true,
+    ]),
   ),
 };
 
-function host(path = "/admin/settings", fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+function host(
+  path = "/admin/settings",
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) {
   const calls: Array<{ self: unknown; args: unknown[] }> = [];
   const location = { href: `${ORIGIN}${path}`, assign: vi.fn(), replace: vi.fn() };
   const console = { error: vi.fn(), warn: vi.fn() };
@@ -26,7 +35,9 @@ function host(path = "/admin/settings", fetchImpl?: (input: RequestInfo | URL, i
     addEventListener: (type, listener) => (listeners[type] = listener),
     fetch: function (this: unknown, ...args: unknown[]) {
       calls.push({ self: this, args });
-      return fetchImpl ? fetchImpl(args[0] as RequestInfo, args[1] as RequestInit) : Promise.resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }));
+      return fetchImpl
+        ? fetchImpl(args[0] as RequestInfo, args[1] as RequestInit)
+        : Promise.resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }));
     } as typeof fetch,
   };
   return { h, calls, location, console, listeners };
@@ -81,7 +92,9 @@ describe("installNavigationGuard", () => {
   it("una petición RSC en curso aplaza la red de seguridad (página lenta)", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     let respond!: () => void;
-    const slow = new Promise<Response>((resolve) => (respond = () => resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }))));
+    const slow = new Promise<Response>(
+      (resolve) => (respond = () => resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }))),
+    );
     const { h, location } = host("/admin/calendar", () => slow);
     const guard = installNavigationGuard(h);
     guard.start("/admin/calendar?month=2026-11", "replace");
@@ -109,7 +122,9 @@ describe("installNavigationGuard", () => {
   it("lazy fetch descartado (B) → al volver con Atrás usa router.refresh() del puente", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     let respond!: () => void;
-    const slow = new Promise<Response>((resolve) => (respond = () => resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }))));
+    const slow = new Promise<Response>(
+      (resolve) => (respond = () => resolve(new Response(PAYLOAD, { headers: { "content-type": RSC } }))),
+    );
     const { h, location, console } = host("/admin/settings", () => slow);
     const guard = installNavigationGuard(h);
     const refresh = vi.fn();
@@ -143,5 +158,58 @@ describe("installNavigationGuard", () => {
     guard.start(location.href, "traverse");
     await vi.advanceTimersByTimeAsync(0);
     expect(location.replace).toHaveBeenCalledWith(`${ORIGIN}/admin/settings`);
+  });
+
+  it("scripts y hojas de estilo que se agregan a <head> aplazan la red de seguridad hasta 5 s después de cargar (salvo noModule)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    type Fake = {
+      nodeType: 1;
+      nodeName: string;
+      src?: string;
+      noModule?: boolean;
+      rel?: string;
+      sheet?: unknown;
+      fire(type: string): void;
+      addEventListener(type: string, fn: () => void): void;
+    };
+    const element = (props: Partial<Fake>): Fake => {
+      const listeners: Record<string, () => void> = {};
+      return {
+        nodeType: 1,
+        nodeName: "SCRIPT",
+        ...props,
+        addEventListener: (type, fn) => (listeners[type] = fn),
+        fire: (type) => listeners[type]?.(),
+      };
+    };
+    let notify!: (records: Array<{ addedNodes: Fake[]; removedNodes: Fake[] }>) => void;
+    class FakeObserver {
+      constructor(cb: typeof notify) {
+        notify = cb;
+      }
+      observe() {}
+    }
+    const { h, location } = host("/admin/calendar");
+    Object.assign(h, {
+      document: { head: {} } as unknown as Document,
+      MutationObserver: FakeObserver as unknown as typeof MutationObserver,
+    });
+    const guard = installNavigationGuard(h);
+    const chunk = element({ src: "/_next/static/chunks/app.js" });
+    const css = element({ nodeName: "LINK", rel: "stylesheet", sheet: null });
+    const polyfills = element({ src: "/_next/static/chunks/polyfills.js", noModule: true });
+    guard.start("/admin/calendar?month=2026-11", "push");
+    notify([{ addedNodes: [chunk, css, polyfills], removedNodes: [] }]);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(location.assign).not.toHaveBeenCalled();
+    chunk.fire("load");
+    notify([{ addedNodes: [], removedNodes: [chunk] }]); // webpack lo quita al terminar
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(location.assign).not.toHaveBeenCalled(); // la hoja de estilo sigue cargando
+    css.fire("error");
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(location.assign).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(location.assign).toHaveBeenCalledWith(`${ORIGIN}/admin/calendar?month=2026-11`);
   });
 });
