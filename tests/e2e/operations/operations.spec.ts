@@ -224,8 +224,7 @@ test.describe("Operaciones · tablero y orden de producción", { tag: ["@module:
     const row = page.getByRole("listitem").filter({ hasText: item.title });
     await (await ready(row.getByRole("button", { name: "Detalles" }))).click();
     await row.getByRole("button", { name: "Eliminar tarea" }).click();
-    await confirmAlert(page, "Eliminar");
-    await expect(toast(page, "Tarea eliminada")).toBeVisible();
+    await confirmAlert(page, "Eliminar", { toast: "Tarea eliminada" });
     await expect.poll(() => db.eventChecklistItem.count({ where: { id: item.id } })).toBe(0);
     expect(await auditCount(db, "checklist.item_deleted", item.id)).toBe(1);
     await page.reload();
@@ -366,8 +365,7 @@ test.describe("Operaciones · staff del evento", { tag: ["@module:operations"] }
     const page = await rolePage("owner");
     await page.goto(opsUrl(ev.id));
     await (await ready(page.getByRole("button", { name: `Quitar a ${lupita.name}` }))).click();
-    await confirmAlert(page, "Quitar");
-    await expect(toast(page, "Asignación eliminada")).toBeVisible();
+    await confirmAlert(page, "Quitar", { toast: "Asignación eliminada" });
     await expect.poll(() => db.staffAssignment.count({ where: { id: a.id } })).toBe(0);
     expect((await db.eventChecklistItem.findUniqueOrThrow({ where: { id: task.id } })).assigneeId).toBeNull();
     expect(await auditCount(db, "staff_assignment.deleted", a.id)).toBe(1);

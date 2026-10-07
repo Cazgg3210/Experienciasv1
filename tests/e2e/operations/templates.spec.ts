@@ -103,8 +103,7 @@ test.describe("Operaciones · plantillas de checklist", { tag: ["@module:operati
     await expect.poll(async () => (await db.checklistTemplateItem.findUnique({ where: { id: item.id } }))?.offsetMinutes).toBe(90);
 
     await page.getByRole("button", { name: `Eliminar ${title}` }).click();
-    await confirmAlert(page, "Eliminar");
-    await expect(toast(page, "Tarea eliminada")).toBeVisible();
+    await confirmAlert(page, "Eliminar", { toast: "Tarea eliminada" });
     await expect.poll(() => db.checklistTemplateItem.count({ where: { id: item.id } })).toBe(0);
     expect(await auditCount(db, "checklist_template.item_deleted", item.id)).toBe(1);
   });
@@ -137,8 +136,7 @@ test.describe("Operaciones · plantillas de checklist", { tag: ["@module:operati
     const page = await rolePage("owner");
     await page.goto(`/admin/operations/templates/${t.id}`);
     await (await ready(page.getByRole("button", { name: "Eliminar plantilla" }))).click();
-    await confirmAlert(page, "Eliminar");
-    await expect(toast(page, "Plantilla eliminada")).toBeVisible();
+    await confirmAlert(page, "Eliminar", { toast: "Plantilla eliminada" });
     await page.waitForURL("**/admin/operations/templates");
     expect(await db.checklistTemplate.count({ where: { id: t.id } })).toBe(0);
     expect(await db.checklistTemplateItem.count({ where: { templateId: t.id } })).toBe(0);

@@ -63,8 +63,7 @@ test.describe("Contenido · testimonios", { tag: ["@module:content"] }, () => {
     await expect.poll(async () => (await db.testimonial.findUnique({ where: { id: t.id } }))?.active).toBe(false);
     await expect(item().getByText("Oculto")).toBeVisible();
     await item().getByRole("button", { name: "Eliminar" }).click();
-    await confirmAlert(page, "Sí, eliminar");
-    await expect(toast(page, "Testimonio eliminado")).toBeVisible();
+    await confirmAlert(page, "Sí, eliminar", { toast: "Testimonio eliminado" });
     await expect.poll(() => db.testimonial.count({ where: { id: t.id } })).toBe(0);
     expect(await auditCount(db, "testimonial.updated", t.id)).toBe(2);
     expect(await auditCount(db, "testimonial.deleted", t.id)).toBe(1);
@@ -111,8 +110,7 @@ test.describe("Contenido · preguntas frecuentes", { tag: ["@module:content"] },
     await expect(toast(page, "Pregunta oculta")).toBeVisible();
     await expect.poll(async () => (await db.faq.findUnique({ where: { id: f.id } }))?.active).toBe(false);
     await item().getByRole("button", { name: "Eliminar" }).click();
-    await confirmAlert(page, "Sí, eliminar");
-    await expect(toast(page, "Pregunta eliminada")).toBeVisible();
+    await confirmAlert(page, "Sí, eliminar", { toast: "Pregunta eliminada" });
     await expect.poll(() => db.faq.count({ where: { id: f.id } })).toBe(0);
     expect(await auditCount(db, "faq.deleted", f.id)).toBe(1);
   });
@@ -162,8 +160,7 @@ test.describe("Contenido · galería", { tag: ["@module:content"] }, () => {
     await expect(toast(page, "Imagen destacada")).toBeVisible();
     await expect.poll(async () => (await db.mediaAsset.findUnique({ where: { id: asset.id } }))?.featured).toBe(true);
     await card.getByRole("button", { name: "Eliminar" }).click();
-    await confirmAlert(page, "Sí, eliminar");
-    await expect(toast(page, "Imagen eliminada")).toBeVisible();
+    await confirmAlert(page, "Sí, eliminar", { toast: "Imagen eliminada" });
     await expect.poll(() => db.mediaAsset.count({ where: { id: asset.id } })).toBe(0);
     expect(await auditCount(db, "media.deleted", asset.id)).toBe(1);
   });

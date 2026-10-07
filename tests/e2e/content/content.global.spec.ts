@@ -39,8 +39,7 @@ test.describe("Contenido · reflejo en el sitio y orden", { tag: ["@module:conte
       if (id) {
         await page.goto("/admin/content");
         await (await ready(page.getByRole("listitem").filter({ hasText: author }).getByRole("button", { name: "Eliminar" }))).click();
-        await confirmAlert(page, "Sí, eliminar");
-        await expect(toast(page, "Testimonio eliminado")).toBeVisible();
+        await confirmAlert(page, "Sí, eliminar", { toast: "Testimonio eliminado" });
       }
     }
   });
@@ -71,8 +70,7 @@ test.describe("Contenido · reflejo en el sitio y orden", { tag: ["@module:conte
       if (created) {
         await page.goto("/admin/content/faq");
         await (await ready(page.getByRole("listitem").filter({ hasText: question }).getByRole("button", { name: "Eliminar" }))).click();
-        await confirmAlert(page, "Sí, eliminar");
-        await expect(toast(page, "Pregunta eliminada")).toBeVisible();
+        await confirmAlert(page, "Sí, eliminar", { toast: "Pregunta eliminada" });
       }
     }
   });

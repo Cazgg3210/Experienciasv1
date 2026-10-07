@@ -253,16 +253,14 @@ test.describe("Ajustes · usuarios del equipo", { tag: ["@module:users", "@modul
     await page.goto("/admin/settings/users");
     const row = () => usersList(page).getByRole("listitem").filter({ hasText: t.email });
     await (await ready(row().getByRole("button", { name: "Desactivar" }))).click();
-    await confirmAlert(page, "Desactivar");
-    await expect(toast(page, "Cuenta desactivada")).toBeVisible();
+    await confirmAlert(page, "Desactivar", { toast: "Cuenta desactivada" });
     await expect.poll(async () => (await db.user.findUnique({ where: { id: t.user.id } }))?.active).toBe(false);
     expect(await auditCount(db, "user.deactivated", t.user.id)).toBe(1);
     await expect(row().getByText("Desactivada")).toBeVisible();
     const denied = await loginInFreshPage(anonPage, t.email, t.password);
     await expect(denied.getByText("Correo o contraseña incorrectos.")).toBeVisible();
     await row().getByRole("button", { name: "Reactivar" }).click();
-    await confirmAlert(page, "Reactivar");
-    await expect(toast(page, "Cuenta reactivada")).toBeVisible();
+    await confirmAlert(page, "Reactivar", { toast: "Cuenta reactivada" });
     await expect.poll(async () => (await db.user.findUnique({ where: { id: t.user.id } }))?.active).toBe(true);
     const ok = await loginInFreshPage(anonPage, t.email, t.password);
     await ok.waitForURL(/\/admin/);
@@ -336,8 +334,7 @@ test.describe("Ajustes · auditoría", { tag: ["@module:settings"] }, () => {
     await page.goto("/admin/settings/users");
     const row = usersList(page).getByRole("listitem").filter({ hasText: t.email });
     await (await ready(row.getByRole("button", { name: "Desactivar" }))).click();
-    await confirmAlert(page, "Desactivar");
-    await expect(toast(page, "Cuenta desactivada")).toBeVisible();
+    await confirmAlert(page, "Desactivar", { toast: "Cuenta desactivada" });
     await expect.poll(() => auditCount(db, "user.deactivated", t.user.id)).toBe(1);
     await page.goto(`/admin/settings/audit?entityId=${t.user.id}`);
     await expect(page.getByText("1 registro con los filtros aplicados")).toBeVisible();

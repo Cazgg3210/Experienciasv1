@@ -136,8 +136,10 @@ test.describe("Portal de staff · tareas", { tag: ["@module:staff"] }, () => {
     const page = await rolePage("staff");
     await page.goto(`/staff/events/${ev.id}`);
     const card = page.getByRole("listitem").filter({ hasText: item.title });
+    const markDone = await ready(card.getByRole("button", { name: "Marcar como hecha" }));
+    // Se registra justo antes del clic: la espera del refresh no incluye la hidratación (en WebKit, varios segundos).
     const refreshed = routerRefreshed(page, `/staff/events/${ev.id}`);
-    await (await ready(card.getByRole("button", { name: "Marcar como hecha" }))).click();
+    await markDone.click();
     await expect(toast(page, "¡Tarea hecha!")).toBeVisible();
     await expect.poll(async () => (await db.eventChecklistItem.findUnique({ where: { id: item.id } }))?.status).toBe("DONE");
     const done = await db.eventChecklistItem.findUniqueOrThrow({ where: { id: item.id } });

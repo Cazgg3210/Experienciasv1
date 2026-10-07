@@ -373,8 +373,7 @@ test.describe("Inventario · reservas por evento", { tag: ["@module:inventory"] 
     const page = await rolePage("owner");
     await page.goto(resUrl(ev.id));
     await (await ready(page.getByRole("button", { name: `Liberar reserva de ${item.name}` }))).click();
-    await confirmAlert(page, "Liberar");
-    await expect(toast(page, "Reserva liberada")).toBeVisible();
+    await confirmAlert(page, "Liberar", { toast: "Reserva liberada" });
     await expect.poll(async () => (await db.inventoryReservation.findUnique({ where: { id: r.id } }))?.status).toBe("CANCELLED");
     expect(await db.inventoryMovement.count({ where: { eventId: ev.id, inventoryItemId: item.id, type: "RELEASE", quantity: 3 } })).toBe(1);
     expect(await auditCount(db, "inventory.reservation_cancelled", r.id)).toBe(1);
@@ -391,8 +390,7 @@ test.describe("Inventario · reservas por evento", { tag: ["@module:inventory"] 
     const page = await rolePage("owner");
     await page.goto(resUrl(ev.id));
     await (await ready(page.getByRole("button", { name: "Entregar todo (2)" }))).click();
-    await confirmAlert(page, "Registrar salida");
-    await expect(toast(page, "Salida registrada para 2 artículos.")).toBeVisible();
+    await confirmAlert(page, "Registrar salida", { toast: "Salida registrada para 2 artículos." });
     await expect.poll(() => db.inventoryReservation.count({ where: { eventId: ev.id, status: "CHECKED_OUT" } })).toBe(2);
     expect(await db.inventoryMovement.count({ where: { eventId: ev.id, type: "CHECK_OUT" } })).toBe(2);
   });
@@ -408,8 +406,7 @@ test.describe("Inventario · reservas por evento", { tag: ["@module:inventory"] 
     await page.goto(resUrl(ev.id));
     await expect(page.getByRole("alert").filter({ hasText: "El evento está cancelado pero aún aparta piezas" })).toBeVisible();
     await (await ready(page.getByRole("button", { name: "Liberar todo (2)" }))).click();
-    await confirmAlert(page, "Liberar todo");
-    await expect(toast(page, "Se liberaron 2 reservas.")).toBeVisible();
+    await confirmAlert(page, "Liberar todo", { toast: "Se liberaron 2 reservas." });
     await expect.poll(() => db.inventoryReservation.count({ where: { eventId: ev.id, status: "CANCELLED" } })).toBe(2);
     expect(await auditCount(db, "inventory.reservations_released", ev.id)).toBe(1);
   });
@@ -426,8 +423,7 @@ test.describe("Inventario · reservas por evento", { tag: ["@module:inventory"] 
     const page = await rolePage("owner");
     await page.goto(resUrl(ev.id));
     await (await ready(page.getByRole("button", { name: "Recalcular desde requerimientos" }).first())).click();
-    await confirmAlert(page, "Recalcular");
-    await expect(toast(page, "Listo: 2 artículos reservados sin faltantes.")).toBeVisible();
+    await confirmAlert(page, "Recalcular", { toast: "Listo: 2 artículos reservados sin faltantes." });
     const rows = await db.inventoryReservation.findMany({ where: { eventId: ev.id } });
     const byItem = Object.fromEntries(rows.map((r) => [r.inventoryItemId, r]));
     expect(byItem[perGuest.id]).toMatchObject({ quantity: 9, status: "RESERVED" });
@@ -437,8 +433,7 @@ test.describe("Inventario · reservas por evento", { tag: ["@module:inventory"] 
     const movements = await db.inventoryMovement.count({ where: { eventId: ev.id } });
     await page.reload();
     await (await ready(page.getByRole("button", { name: "Recalcular desde requerimientos" }).first())).click();
-    await confirmAlert(page, "Recalcular");
-    await expect(toast(page, "Listo: 2 artículos reservados sin faltantes.")).toBeVisible();
+    await confirmAlert(page, "Recalcular", { toast: "Listo: 2 artículos reservados sin faltantes." });
     expect(await db.inventoryMovement.count({ where: { eventId: ev.id } })).toBe(movements);
   });
 

@@ -195,13 +195,18 @@ export async function createStaffUser(db: PrismaClient, opts: { password?: strin
   return { user, member, email, password };
 }
 
-/** Inicia sesión por la UI en una página nueva sin sesión (la vigila el guard de la prueba). */
+/**
+ * Inicia sesión por la UI en una página nueva sin sesión (la vigila el guard de la prueba). Espera a que React
+ * hidrate el formulario (componente cliente con useActionState) antes de escribir y enviar, como el resto de las
+ * pruebas: sin hidratar, el envío no pasa por la acción del cliente sino por el POST nativo del formulario.
+ */
 export async function loginInFreshPage(anonPage: () => Promise<Page>, email: string, password: string): Promise<Page> {
   const page = await anonPage();
   await page.goto("/login");
+  const submit = await ready(page.getByRole("button", { name: "Entrar" }));
   await page.getByLabel("Correo").fill(email);
   await page.getByLabel("Contraseña").fill(password);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await submit.click();
   return page;
 }
 
@@ -356,13 +361,22 @@ const HYDRATION_TIMEOUT_MS = 15_000;
  * activa) ocupa el hilo principal casi un segundo y sondear así le quitaba a React el tiempo para hidratar
  * la sección de la página (Suspense de loading.tsx, que React hidrata con prioridad baja): pasaba de ~8 s a
  * más de 30 s y `ready()` vencía (FIN-006, STF-021). Si React reemplaza el nodo, se vuelve a resolver.
+ *
+ * El tope es uno solo para todo: el nodo se resuelve primero (con lo que quede del tope) y la espera dentro de
+ * la página recibe sólo lo que sobra después de resolverlo, así que `ready()` nunca pasa de HYDRATION_TIMEOUT_MS.
  */
 export async function ready(locator: Locator): Promise<Locator> {
   await expect(locator).toBeVisible();
   const deadline = Date.now() + HYDRATION_TIMEOUT_MS;
+  const remaining = () => Math.max(0, deadline - Date.now());
   let state = "sin hidratar";
-  while (Date.now() < deadline) {
-    state = await locator
+  while (remaining() > 0) {
+    const handle = await locator.elementHandle({ timeout: Math.max(1, remaining()) }).catch(() => null);
+    if (!handle) {
+      state = "no se encontró el elemento";
+      break;
+    }
+    state = await handle
       .evaluate(
         (el, ms) =>
           new Promise<string>((resolve) => {
@@ -375,14 +389,14 @@ export async function ready(locator: Locator): Promise<Locator> {
             };
             check();
           }),
-        Math.max(0, deadline - Date.now()),
-        { timeout: Math.max(1, deadline - Date.now()) },
+        remaining(),
       )
-      .catch((error: Error) => `error: ${error.message.split("\n")[0]}`);
+      .catch((error: Error) => `error: ${error.message.split("\n")[0]}`)
+      .finally(() => handle.dispose().catch(() => {}));
     if (state === "hidratado") return locator;
     if (state === "sin hidratar") break;
     // Nodo reemplazado o contexto de ejecución destruido (re-render, navegación): se vuelve a resolver.
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, Math.min(100, remaining())));
   }
   expect(state, "elemento hidratado por React").toBe("hidratado");
   return locator;
