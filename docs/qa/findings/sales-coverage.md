@@ -61,6 +61,7 @@
 | CONF-021 | Configurador | la misma clienta (mismo teléfono) que vuelve a escribir no se duplica | Anónimo | P2 | ✅ `tests/e2e/configurator/server.spec.ts` (chromium) | PASS |
 | CONF-022 | Configurador | la clienta se reconoce entre canales por teléfono (configurador → diseñador IA / contacto) | Anónimo | P2 | ✅ `tests/e2e/configurator/server.spec.ts` (chromium) | FAIL (SAL-BUG-02) |
 | CONF-023 | Configurador | analítica del embudo: inicio y resumen se registran con el id de sesión | Anónimo | P3 | ✅ `tests/e2e/configurator/server.spec.ts` (chromium) | PASS |
+| CONF-024 | Configurador | resumen con líneas por persona («· N × $precio») sin texto atenuado bajo AA (axe sin color-contrast) | Anónimo | P2 | ✅ `tests/e2e/configurator/wizard.spec.ts` (chromium) | PASS (@regression BUG-009; ronda 1, carril 4, 5/5 con --repeat-each) |
 | AI-001 | Diseñador IA | generar una propuesta: concepto + estimado del motor real, guardada como AiDesign y medida | Anónimo | P1 | ✅ `tests/e2e/ai-designer/ai-designer.spec.ts` (chromium + mobile 390×844) | PASS |
 | AI-002 | Diseñador IA | «Quiero esta experiencia» crea un lead AI_DESIGNER ligado al diseño y la fundadora lo ve | Anónimo | P1 | ✅ `tests/e2e/ai-designer/ai-designer.spec.ts` (chromium + mobile 390×844) | PASS |
 | AI-003 | Diseñador IA | el formulario exige ocasión, perfil, presupuesto, vibra y zona (sin generar nada) | Anónimo | P1 | ✅ `tests/e2e/ai-designer/ai-designer.spec.ts` (chromium) | PASS |

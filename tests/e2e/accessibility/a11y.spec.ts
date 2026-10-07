@@ -17,7 +17,22 @@ import {
   toleratesStaleExperienceCache,
 } from "../critical/_helpers";
 
+/**
+ * axe mide el estado ESTABLE de la página. Tras la hidratación algunos controles pasan de deshabilitados a
+ * habilitados con una transición de opacidad (p. ej. «Enviar mensaje» en /contacto: `disabled:opacity-50` +
+ * `transition-all` de 150 ms); si axe corre en medio, mide un color intermedio (3.78:1 observado una vez con
+ * carga en paralelo) que nadie llega a leer. Se espera a que la red quede inactiva (cota corta: algunas páginas
+ * sondean) y a que no haya animaciones finitas en curso. Un contraste insuficiente real persiste y sigue fallando.
+ */
+async function settle(page: Page) {
+  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+  );
+}
+
 async function axeCheck(page: Page, testInfo: TestInfo) {
+  await settle(page);
   const { all, blocking } = await scanA11y(page, testInfo);
   const minor = all.filter((v) => !blocking.includes(v));
   if (minor.length) {
