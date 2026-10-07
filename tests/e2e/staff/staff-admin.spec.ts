@@ -109,8 +109,7 @@ test.describe("Staff · integrantes", { tag: ["@module:staff"] }, () => {
     const page = await rolePage("owner");
     await page.goto(`/admin/staff/${m.id}`);
     await (await ready(page.getByRole("button", { name: "Eliminar integrante" }))).click();
-    await confirmAlert(page, "Eliminar");
-    await expect(toast(page, "Integrante eliminado")).toBeVisible();
+    await confirmAlert(page, "Eliminar", { toast: "Integrante eliminado" });
     await page.waitForURL(/\/admin\/staff$/);
     expect(await db.staffMember.count({ where: { id: m.id } })).toBe(0);
     expect(await auditCount(db, "staff.deleted", m.id)).toBe(1);
@@ -206,16 +205,17 @@ test.describe("Staff · acceso al portal", { tag: ["@module:staff", "@auth"] }, 
     await expect(fresh.getByRole("heading", { level: 1, name: "Mis próximos eventos" })).toBeVisible();
   });
 
-  test("[STF-021] desactivar el acceso bloquea el login y la sesión abierta; reactivar lo devuelve", { tag: ["@P0", "@critical"] }, async ({ rolePage, anonPage, db, evidence }) => {
-    evidence("owner", "Detalle › Desactivar acceso / Reactivar acceso, con una sesión abierta de la cuenta");
+  // Desactivar y reactivar van en dos pruebas: juntas suman cuatro inicios de sesión en páginas nuevas y en WebKit
+  // rebasaban el límite de 90 s de una prueba (regresión final, carril 5). Cada una conserva todas sus validaciones.
+  test("[STF-021] desactivar el acceso bloquea el login y la sesión abierta", { tag: ["@P0", "@critical"] }, async ({ rolePage, anonPage, db, evidence }) => {
+    evidence("owner", "Detalle › Desactivar acceso, con una sesión abierta de la cuenta");
     const acct = await createStaffUser(db);
     const session = await loginInFreshPage(anonPage, acct.email, acct.password);
     await session.waitForURL(/\/staff/);
     const page = await rolePage("owner");
     await page.goto(`/admin/staff/${acct.member.id}`);
     await (await ready(page.getByRole("button", { name: "Desactivar acceso" }))).click();
-    await confirmAlert(page, "Desactivar");
-    await expect(toast(page, "Acceso desactivado")).toBeVisible();
+    await confirmAlert(page, "Desactivar", { toast: "Acceso desactivado" });
     await expect.poll(async () => (await db.user.findUnique({ where: { id: acct.user.id } }))?.active).toBe(false);
     expect(await auditCount(db, "user.deactivated", acct.user.id)).toBe(1);
     // La sesión abierta pierde acceso en el siguiente request
@@ -223,12 +223,21 @@ test.describe("Staff · acceso al portal", { tag: ["@module:staff", "@auth"] }, 
     await expect(session).toHaveURL(/\/login/);
     const denied = await loginInFreshPage(anonPage, acct.email, acct.password);
     await expect(denied.getByText("Correo o contraseña incorrectos.")).toBeVisible();
-    // Reactivar
     await page.reload();
+    await expect(page.getByRole("button", { name: "Reactivar acceso" }), "el detalle ofrece reactivar").toBeVisible();
+  });
+
+  test("[STF-026] reactivar un acceso desactivado lo devuelve: la cuenta vuelve a iniciar sesión", { tag: ["@P0", "@critical"] }, async ({ rolePage, anonPage, db, evidence }) => {
+    evidence("owner", "Detalle de un integrante con el acceso desactivado › Reactivar acceso › login de la cuenta");
+    const acct = await createStaffUser(db);
+    // Precondición: el acceso como lo deja «Desactivar acceso» (STF-021): inactivo y con sus sesiones revocadas.
+    await db.user.update({ where: { id: acct.user.id }, data: { active: false, sessionVersion: { increment: 1 } } });
+    const page = await rolePage("owner");
+    await page.goto(`/admin/staff/${acct.member.id}`);
     await (await ready(page.getByRole("button", { name: "Reactivar acceso" }))).click();
-    await confirmAlert(page, "Reactivar");
-    await expect(toast(page, "Acceso reactivado")).toBeVisible();
+    await confirmAlert(page, "Reactivar", { toast: "Acceso reactivado" });
     await expect.poll(async () => (await db.user.findUnique({ where: { id: acct.user.id } }))?.active).toBe(true);
+    expect(await auditCount(db, "user.activated", acct.user.id)).toBe(1);
     const back = await loginInFreshPage(anonPage, acct.email, acct.password);
     await back.waitForURL(/\/staff/);
   });

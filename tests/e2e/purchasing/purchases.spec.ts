@@ -15,6 +15,7 @@ import {
   FAKE_PNG,
   PNG_1PX,
   ready,
+  routerRefreshed,
   storageAvailable,
   swapInBody,
   toast,
@@ -86,13 +87,11 @@ test.describe("Compras · alta y ciclo de vida", { tag: ["@module:purchases"] },
     const page = await rolePage("owner");
     await page.goto(detail(p.id));
     await (await ready(page.getByRole("button", { name: "Marcar como ordenada" }))).click();
-    await confirmAlert(page, "Marcar ordenada");
-    await expect(toast(page, "Compra ordenada")).toBeVisible();
+    await confirmAlert(page, "Marcar ordenada", { toast: "Compra ordenada" });
     await expect.poll(async () => (await db.purchase.findUnique({ where: { id: p.id } }))?.status).toBe("ORDERED");
     expect((await db.purchase.findUniqueOrThrow({ where: { id: p.id } })).orderedAt).not.toBeNull();
     await page.getByRole("button", { name: "Volver a solicitada" }).click();
-    await confirmAlert(page, "Regresar");
-    await expect(toast(page, "Compra regresada a solicitada")).toBeVisible();
+    await confirmAlert(page, "Regresar", { toast: "Compra regresada a solicitada" });
     await expect.poll(async () => (await db.purchase.findUnique({ where: { id: p.id } }))?.status).toBe("REQUESTED");
     expect((await db.purchase.findUniqueOrThrow({ where: { id: p.id } })).orderedAt).toBeNull();
     expect(await auditCount(db, "purchase.status_changed", p.id)).toBe(2);
@@ -108,6 +107,7 @@ test.describe("Compras · alta y ciclo de vida", { tag: ["@module:purchases"] },
     const dialog = page.getByRole("dialog", { name: "Registrar recepción" });
     await dialog.getByRole("textbox", { name: "Monto real pagado" }).fill("1450.75");
     await expect(dialog.getByText(/\$250\.75 por encima de lo esperado/)).toBeVisible();
+    const refreshed = routerRefreshed(page, detail(p.id));
     await dialog.getByRole("button", { name: "Confirmar recepción" }).click();
     await expect(toast(page, "Compra recibida")).toBeVisible();
     await expect.poll(async () => (await db.purchase.findUnique({ where: { id: p.id } }))?.status).toBe("RECEIVED");
@@ -115,6 +115,9 @@ test.describe("Compras · alta y ciclo de vida", { tag: ["@module:purchases"] },
     expect(r.actualAmountCents).toBe(145_075);
     expect(r.receivedAt).not.toBeNull();
     expect(r.orderedAt, "recibir directo desde solicitada fija también la fecha de orden").not.toBeNull();
+    // Recibir llama router.refresh(): navegar con ese fetch RSC en vuelo hace que Firefox aborte el page.goto
+    // (NS_BINDING_ABORTED, mismo caso que OPS-010). Se espera a que el refresh termine.
+    await refreshed;
     await page.goto(`/admin/events/${ev.id}/financials`);
     await expect(page.getByText(p.concept)).toBeVisible();
     await expect(page.getByText("$1,450.75").first()).toBeVisible();
@@ -137,8 +140,7 @@ test.describe("Compras · alta y ciclo de vida", { tag: ["@module:purchases"] },
     expect(await auditCount(db, "purchase.cancelled", p.id)).toBe(1);
     await expect(page.getByText(/motivo: La terraza es techada E2E/)).toBeVisible();
     await page.getByRole("button", { name: "Reabrir compra" }).click();
-    await confirmAlert(page, "Reabrir");
-    await expect(toast(page, "Compra reabierta")).toBeVisible();
+    await confirmAlert(page, "Reabrir", { toast: "Compra reabierta" });
     await expect.poll(async () => (await db.purchase.findUnique({ where: { id: p.id } }))?.status).toBe("REQUESTED");
     expect((await db.purchase.findUniqueOrThrow({ where: { id: p.id } })).cancelledAt).toBeNull();
   });
@@ -225,8 +227,7 @@ test.describe("Compras · alta y ciclo de vida", { tag: ["@module:purchases"] },
     expect(await auditCount(db, "purchase.receipt_attached", p.id)).toBe(1);
     await expect(page.getByRole("link", { name: "Ver imagen" })).toBeVisible();
     await page.getByRole("button", { name: "Quitar" }).click();
-    await confirmAlert(page, "Quitar");
-    await expect(toast(page, "Comprobante quitado")).toBeVisible();
+    await confirmAlert(page, "Quitar", { toast: "Comprobante quitado" });
     await expect.poll(async () => (await db.purchase.findUnique({ where: { id: p.id } }))?.receiptMediaId).toBeNull();
   });
 

@@ -102,8 +102,7 @@ test.describe("Proveedores", { tag: ["@module:vendors"] }, () => {
     const page = await rolePage("owner");
     await page.goto(`/admin/vendors/${v.id}`);
     await (await ready(page.getByRole("button", { name: "Eliminar" }))).click();
-    await confirmAlert(page, "Eliminar proveedor");
-    await expect(toast(page, "Proveedor eliminado")).toBeVisible();
+    await confirmAlert(page, "Eliminar proveedor", { toast: "Proveedor eliminado" });
     await page.waitForURL(/\/admin\/vendors$/);
     expect(await db.vendor.count({ where: { id: v.id } })).toBe(0);
     expect(await auditCount(db, "vendor.deleted", v.id)).toBe(1);

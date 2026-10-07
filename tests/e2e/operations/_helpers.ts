@@ -343,18 +343,48 @@ export async function attachSale(
 // UI
 // -----------------------------------------------------------------------------
 
+/** Tope de la espera de hidratación de `ready()`: el mismo `expect.timeout` de playwright.config.ts. */
+const HYDRATION_TIMEOUT_MS = 15_000;
+
 /**
  * Espera a que React haya hidratado el elemento (tiene sus props de React) antes de interactuar.
  * Un fill/click hecho antes de la hidratación se pierde (react-hook-form no lo registra): es una
  * carrera de la prueba, no un bug de la app.
+ *
+ * La espera corre DENTRO de la página, en una sola llamada, en lugar de sondear desde la prueba con
+ * `expect.poll(locator.evaluate)`: en WebKit cada consulta del locator (rol + nombre accesible, con la traza
+ * activa) ocupa el hilo principal casi un segundo y sondear así le quitaba a React el tiempo para hidratar
+ * la sección de la página (Suspense de loading.tsx, que React hidrata con prioridad baja): pasaba de ~8 s a
+ * más de 30 s y `ready()` vencía (FIN-006, STF-021). Si React reemplaza el nodo, se vuelve a resolver.
  */
 export async function ready(locator: Locator): Promise<Locator> {
   await expect(locator).toBeVisible();
-  await expect
-    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$"))), {
-      message: "elemento hidratado por React",
-    })
-    .toBe(true);
+  const deadline = Date.now() + HYDRATION_TIMEOUT_MS;
+  let state = "sin hidratar";
+  while (Date.now() < deadline) {
+    state = await locator
+      .evaluate(
+        (el, ms) =>
+          new Promise<string>((resolve) => {
+            const until = performance.now() + ms;
+            const check = () => {
+              if (!el.isConnected) resolve("reemplazado");
+              else if (Object.keys(el).some((k) => k.startsWith("__reactProps$"))) resolve("hidratado");
+              else if (performance.now() >= until) resolve("sin hidratar");
+              else setTimeout(check, 50);
+            };
+            check();
+          }),
+        Math.max(0, deadline - Date.now()),
+        { timeout: Math.max(1, deadline - Date.now()) },
+      )
+      .catch((error: Error) => `error: ${error.message.split("\n")[0]}`);
+    if (state === "hidratado") return locator;
+    if (state === "sin hidratar") break;
+    // Nodo reemplazado o contexto de ejecución destruido (re-render, navegación): se vuelve a resolver.
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  expect(state, "elemento hidratado por React").toBe("hidratado");
   return locator;
 }
 
@@ -381,11 +411,17 @@ export function toast(page: Page, text: string | RegExp): Locator {
   return page.locator("[data-sonner-toast]").filter({ hasText: text }).first();
 }
 
-/** Confirma un ConfirmDialog (alertdialog) con su botón de confirmación. */
-export async function confirmAlert(page: Page, confirmLabel: string | RegExp): Promise<void> {
+/**
+ * Confirma un ConfirmDialog (alertdialog) con su botón de confirmación y espera a que se cierre.
+ * Con `toast`, valida ese aviso ANTES de esperar el cierre: sonner lo muestra 4 s desde que la acción
+ * responde, pero el diálogo puede tardar más en desaparecer (si el router.refresh() posterior lo desmonta, se
+ * va cuando ese render termina; en WebKit, varios segundos) y validarlo después lo perdía (FIN-006).
+ */
+export async function confirmAlert(page: Page, confirmLabel: string | RegExp, opts: { toast?: string | RegExp } = {}): Promise<void> {
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: confirmLabel }).click();
+  if (opts.toast !== undefined) await expect(toast(page, opts.toast)).toBeVisible();
   await expect(dialog).toBeHidden();
 }
 

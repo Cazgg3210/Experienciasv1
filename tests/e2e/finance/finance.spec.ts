@@ -97,8 +97,7 @@ test.describe("Finanzas · costos manuales", { tag: ["@module:finance"] }, () =>
     const page = await rolePage("owner");
     await page.goto(finUrl(ev.id));
     await (await ready(page.getByRole("button", { name: `Eliminar costo: ${cost.description}` }))).click();
-    await confirmAlert(page, "Eliminar");
-    await expect(toast(page, "Costo eliminado")).toBeVisible();
+    await confirmAlert(page, "Eliminar", { toast: "Costo eliminado" });
     await expect.poll(() => db.eventCost.count({ where: { id: cost.id } })).toBe(0);
     expect(await auditCount(db, "cost.deleted", cost.id)).toBe(1);
     await page.reload();
@@ -156,8 +155,7 @@ test.describe("Finanzas · rentabilidad y cierre", { tag: ["@module:finance"] },
     await page.getByRole("button", { name: "Cerrar evento" }).click();
     const alert = page.getByRole("alertdialog", { name: "¿Cerrar el evento?" });
     await expect(alert.getByText("Todo en orden: sin saldo pendiente ni compras por recibir.")).toBeVisible();
-    await confirmAlert(page, "Cerrar evento");
-    await expect(toast(page, "Evento cerrado. Enviamos el agradecimiento a la clienta.")).toBeVisible();
+    await confirmAlert(page, "Cerrar evento", { toast: "Evento cerrado. Enviamos el agradecimiento a la clienta." });
     await expect.poll(async () => (await db.event.findUnique({ where: { id: ev.id } }))?.closedAt).not.toBeNull();
     const closed = await db.event.findUniqueOrThrow({ where: { id: ev.id } });
     expect(closed.closedById).toBe(await userIdOf(db, "owner"));

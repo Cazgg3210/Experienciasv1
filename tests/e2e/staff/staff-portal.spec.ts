@@ -16,6 +16,7 @@ import {
   horizontalOverflow,
   PNG_1PX,
   ready,
+  routerRefreshed,
   staffMemberOf,
   storageAvailable,
   swapInBody,
@@ -135,12 +136,16 @@ test.describe("Portal de staff · tareas", { tag: ["@module:staff"] }, () => {
     const page = await rolePage("staff");
     await page.goto(`/staff/events/${ev.id}`);
     const card = page.getByRole("listitem").filter({ hasText: item.title });
+    const refreshed = routerRefreshed(page, `/staff/events/${ev.id}`);
     await (await ready(card.getByRole("button", { name: "Marcar como hecha" }))).click();
     await expect(toast(page, "¡Tarea hecha!")).toBeVisible();
     await expect.poll(async () => (await db.eventChecklistItem.findUnique({ where: { id: item.id } }))?.status).toBe("DONE");
     const done = await db.eventChecklistItem.findUniqueOrThrow({ where: { id: item.id } });
     expect(done.completedById).toBe(lupitaUser);
     expect(done.completedAt).not.toBeNull();
+    // La tarjeta llama router.refresh() al guardar: recargar con ese fetch RSC en vuelo hace que Firefox aborte la
+    // recarga (NS_BINDING_ABORTED, mismo caso que OPS-010). Se espera a que el refresh termine.
+    await refreshed;
     await page.reload();
     await expect(page.getByRole("listitem").filter({ hasText: item.title }).getByRole("button", { name: "Reabrir" })).toBeVisible();
 
