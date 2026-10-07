@@ -2,10 +2,11 @@
 
 - **Fecha:** auditoría 2026-10-06 · estado final 2026-10-07
 - **Auditoría inicial:** commit `f26b1a1` (FULL; sin cambios de código de la app durante la auditoría). La infraestructura del gate (ENV-01, ENV-02) se corrigió en `8020b91`.
-- **Correcciones verificadas en main:** `8020b91..b47437b` (61 commits)
-  - Ronda 1 (16 bugs, cada uno en un worktree aislado con revisión adversarial): merges `d144ce7`, `be74647`, `880e40b`, `3964907`, `a1ece90` y `41db385`, más `86b60de` (contratos de integración devops/CSRF y sello del build E2E con archivos sin seguimiento).
+- **Correcciones verificadas en main:** `8020b91..754e2c6`
+  - Ronda 1 (16 bugs en 6 worktrees aislados, agrupados por área — sesión y login · pagos y cancelación · clientas y leads · invitadas · navegación · UI, accesibilidad y menores —, cada uno con revisión adversarial): merges `d144ce7`, `be74647`, `880e40b`, `3964907`, `a1ece90` y `41db385`, más `86b60de` (contratos de integración devops/CSRF y sello del build E2E con archivos sin seguimiento).
   - Endurecimiento (menores de las revisiones; BUG-017, BUG-018, BUG-020, BUG-022, BUG-023 y la parte de la cápsula de BUG-021): merges `f8797e0`, `f0cb1b1`, `e21eb66` y `c3ba279`.
   - Formularios antes de hidratar: `e2f3699` (el resto de BUG-021), `d96a82a` (BUG-019) y `b47437b` (ajuste de tiempos de CONF-025).
+  - Inestabilidades cross-browser y BUG-024: `4b79477`…`e423125`, `539672d` (menores de la última revisión) y `754e2c6` (CRIT-007, INV-007, OPS-002, API-062 y STF-014: sólo pruebas).
 - **Modo:** FULL (6 paquetes: acceso y seguridad · venta pública · comercial admin · eventos y experiencia · operación y back-office · transversal)
 - **Entorno:** TEST — build de producción local (`.next-e2e`, `next start`, Next 15.5.27), proveedores mock (pagos, email, WhatsApp, IA), S3 local (RustFS `:9000`), Windows 11.
   - Auditoría: 6 carriles paralelos (`E2E_LANE=1..6`, servidores `:3201`–`:3206`, bases `ivonne_rosa_e2e_l1`…`_l6` re-sembradas en cada invocación; suites especiales `global` y `ratelimit` en `:3209`). Navegadores: Chromium, mobile-chrome y WebKit; Firefox BLOCKED (ENV-02).
@@ -13,8 +14,8 @@
   - Regresión final: carriles en secuencia (ENV-03), con Firefox.
 - **Fuentes:** `docs/qa/findings/{access,sales,commercial,events,operations,transversal}.md` (31 hallazgos provisionales y sus secciones «Resolution/Fix/Corrección/Seguimiento»), mapa `docs/qa/.bug-map.json` y los journals de los workflows de corrección (ronda 1 `wf_8b97ab93-ecc`, endurecimiento `wf_4e68bc69-ce5`, formularios `wf_df44b95a-fe8` y `wf_06aaa044-1a2`). La evidencia citada como `test-results/l<n>-evidence/…` está en el worktree de cada corrección (`.claude/worktrees/wf_…/`, no versionada).
 
-> **Estado final.** Los **23 bugs** (16 de la auditoría y 7 encontrados y corregidos durante las correcciones) están **Verified**: la prueba de reproducción falló antes de corregir y pasa después (repeticiones con `--retries=0`), y la regresión relacionada está en verde. BUG-006 queda **Verified (mitigado)**: el defecto está en el React que trae Next 15.5 y la app lo esquiva hasta actualizar a Next ≥ 16.3.0. **Bugs abiertos: 0.**
-> Regresión intermedia: 1 286 de 1 298 PASS. Regresión final, secuencial y con todos los navegadores: carriles 1, 2, 3 y 6 al 100 %. En los carriles 4 y 5 quedan inestabilidades de Firefox/WebKit (última corrida registrada: EVT-005, PUR-002, PUR-005 y STF-003 en Firefox; FIN-006 y STF-021 en WebKit) que se están corrigiendo en paralelo y todavía no están clasificadas; si alguna resulta un defecto de la app se registrará como bug nuevo. El veredicto lo calcula `scripts/quality-gate.mjs`, no este documento.
+> **Estado final.** Los **24 bugs** (16 de la auditoría y 8 encontrados y corregidos durante las correcciones) están **Verified**: la prueba de reproducción falló antes de corregir y pasa después (repeticiones con `--retries=0`), y la regresión relacionada está en verde. BUG-006 queda **Verified (mitigado)**: el defecto está en el React que trae Next 15.5 y la app lo esquiva hasta actualizar a Next ≥ 16.3.0. **Bugs abiertos: 0.**
+> Regresión intermedia: 1 286 de 1 298 PASS. **Regresión final** (secuencial, Chromium + mobile-chrome + Firefox y WebKit en `@P0`, más las suites global y ratelimit): **1 377 / 1 377 PASS, 0 FLAKY — 🟢 READY** (`docs/qa/runs/20261007-2318-full/`). Las inestabilidades de Firefox/WebKit de los carriles 4 y 5 se clasificaron: EVT-005 era BUG-024 (app, corregido); las demás eran TEST BUG o ENVIRONMENT (ENV-04); FIN-006 en WebKit sigue documentado como inestabilidad de entorno. El veredicto lo calcula `scripts/quality-gate.mjs`, no este documento; el detalle está en `E2E_TEST_REPORT.md`.
 
 ## Resumen por severidad
 

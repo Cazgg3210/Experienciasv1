@@ -42,7 +42,7 @@ Las divergencias van en **negrita** con su BUG. Las que ya se corrigieron llevan
   - Las rutas por token con un token inexistente responden HTTP 404 real (NAV-034).
   - Ningún formulario por token se envía por GET antes de hidratar (GST-028, PORT-023…025).
 - **Controles que pasaron:** escalada OWNER→SUPER_ADMIN, IDOR de staff, tokens, CSRF, webhooks y sesión (§5.2).
-- **Impacto en el gate:** no hay bugs de permisos abiertos. En la regresión final, la única prueba de autorización que no pasó es **STF-021 en WebKit** (carril 5): la desactivación de staff con sesión abierta. Se agotó el tiempo al pulsar «Entrar» en `/login` antes de llegar a la comprobación de autorización. En Chromium y Firefox pasa. Es una de las inestabilidades de WebKit del carril 5 que se están corrigiendo. El veredicto oficial lo calcula `scripts/quality-gate.mjs`.
+- **Impacto en el gate:** no hay bugs de permisos abiertos. En la regresión final las **377 ejecuciones de autorización (`@permissions`) pasan** en los tres motores (gate 🟢 READY, `docs/qa/runs/20261007-2318-full/`). STF-021 en WebKit, que antes vencía al pulsar «Entrar» antes de hidratar, se corrigió en la prueba (`c6cfaea`: espera la hidratación; el login antes de hidratar sigue cubierto por las pruebas de AUTH). El veredicto oficial lo calcula `scripts/quality-gate.mjs`.
 
 ---
 
@@ -278,7 +278,7 @@ Cada celda es el código HTTP, sin seguir redirects, con la sesión del rol (`te
 | Revocación al administrar la cuenta | restablecer la **propia** contraseña (Ajustes › Usuarios, o la propia ficha en Staff) | — | — | ✅ / ✅: aviso «Se cerrarán todas tus sesiones, incluida ésta»; la cookie actual se borra y la UI va a `/login`; la cookie vieja queda revocada; auditoría `self: true` | — | AUTH-037, AUTH-064 | PASS |
 | Revocación al cerrar sesión | una cookie ya revocada se usa contra `/api/auth/signout` mientras hay una sesión nueva | — | — | 🔒 / 🔒 la sesión nueva sigue vigente (comparar e incrementar) | — | AUTH-038 | PASS |
 
-³ En la regresión final, STF-021 pasó en Chromium y Firefox y falló en WebKit: se agotó el tiempo al pulsar «Entrar» en `/login` antes de llegar a la comprobación de autorización. Es una de las inestabilidades de WebKit del carril 5 que se están corrigiendo. AUTH-027 cubre el mismo control y pasa en los 3 motores.
+³ En una corrida previa STF-021 falló en WebKit (vencía al pulsar «Entrar» antes de hidratar; TEST BUG corregido en `c6cfaea`). En la regresión final pasa en los 3 motores, igual que AUTH-027, que cubre el mismo control.
 
 ### 3.3 Sesión y autenticación
 
@@ -472,5 +472,5 @@ Columna «Auditoría»: corrida de `f26b1a1`. Columna «Regresión final»: corr
 | 2 · Ventas (`sales-coverage.md`) | QPUB-006…010, QPUB-013, CONF-014, CONF-015, CONF-017, CONF-021, AI-009, PAY-004, PAY-007…017, PAY-021, PAY-023…025, PUB-048 | PASS (PAY-021 FAIL → BUG-002, de ciclo de vida, no de permisos) | 140/140 PASS. PAY-021 y PAY-023…025 (BUG-002 ✔), CONF-021 y PUB-048 en PASS |
 | 3 · Comercial (`commercial-coverage.md`) | QUO-014, QUO-027, LEAD-022, CUST-011, CUST-012, CAT-020 | PASS | 135/135 PASS |
 | 4 · Eventos (`events-coverage.md`) | GST-003, GST-005, GST-006, GST-010, GST-013, GST-014, GST-016…018, GST-021, GST-023…025, GST-028, EVT-031, EVT-034, MEM-004, MEM-011, MEM-012, MEM-015…017, MEM-020, PORT-003, PORT-005, PORT-013, PORT-015, PORT-023…025 | PASS · **GST-014 FAIL → BUG-003** | Las de autorización, todas en PASS: GST-014 en Chromium, Firefox y WebKit (BUG-003 ✔); GST-024 en la suite `ratelimit`. Sólo quedan inestabilidades ajenas a permisos: EVT-005 flaky en Firefox, y MEM-021 en WebKit omitida por NOT APPLICABLE |
-| 5 · Operaciones (`operations-coverage.md`) | STF-001…009, STF-018…021, STF-023, SET-013…018, SET-022, FIN-011 (+ integración de `deleteStaffMember`) | PASS | STF-021 falló en WebKit (³ en §3.2; Chromium y Firefox PASS). El resto de las pruebas de autorización del carril, en PASS. Inestabilidades de Firefox y WebKit en corrección |
+| 5 · Operaciones (`operations-coverage.md`) | STF-001…009, STF-018…021, STF-023, SET-013…018, SET-022, FIN-011 (+ integración de `deleteStaffMember`) | PASS | Todas en PASS en la regresión final, en los 3 motores (STF-021: ver ³ en §3.2) |
 | 6 · Transversal (`transversal-coverage.md`) | CRIT-005, CRIT-009, CRIT-011, CRIT-012, CRIT-013, CRIT-014, SMK-035 | PASS · **CRIT-014 FAIL → BUG-001** (Chromium y WebKit) · Firefox BLOCKED (ENV-02) | 171/171 PASS. CRIT-014 en Chromium, Firefox y WebKit y CRIT-012 en los 4 proyectos (BUG-001 ✔). Firefox ya corre (ENV-02 superado) |

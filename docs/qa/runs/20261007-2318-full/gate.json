@@ -1,0 +1,648 @@
+{
+  "generatedAt": "2026-10-07T23:18:56.803Z",
+  "mode": "full",
+  "commit": "754e2c6",
+  "verdict": "🟢 READY",
+  "reasons": [],
+  "overall": {
+    "total": 1377,
+    "PASS": 1377,
+    "FAIL": 0,
+    "FLAKY": 0,
+    "BLOCKED": 0,
+    "NOT TESTED": 0,
+    "NOT APPLICABLE": 0,
+    "passRate": 100,
+    "coverage": 100
+  },
+  "criticalJourneys": {
+    "total": 239,
+    "PASS": 239,
+    "FAIL": 0,
+    "FLAKY": 0,
+    "BLOCKED": 0,
+    "NOT TESTED": 0,
+    "NOT APPLICABLE": 0,
+    "passRate": 100,
+    "coverage": 100
+  },
+  "byPriority": {
+    "P0": {
+      "total": 704,
+      "PASS": 704,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "P1": {
+      "total": 387,
+      "PASS": 387,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "P2": {
+      "total": 246,
+      "PASS": 246,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "P3": {
+      "total": 40,
+      "PASS": 40,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "UNTAGGED": {
+      "total": 0,
+      "PASS": 0,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": null,
+      "coverage": null
+    }
+  },
+  "permissions": {
+    "total": 377,
+    "PASS": 377,
+    "FAIL": 0,
+    "FLAKY": 0,
+    "BLOCKED": 0,
+    "NOT TESTED": 0,
+    "NOT APPLICABLE": 0,
+    "passRate": 100,
+    "coverage": 100
+  },
+  "byProject": {
+    "chromium": {
+      "total": 852,
+      "PASS": 852,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "firefox": {
+      "total": 224,
+      "PASS": 224,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "webkit": {
+      "total": 224,
+      "PASS": 224,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "mobile-chrome": {
+      "total": 41,
+      "PASS": 41,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "chromium-global": {
+      "total": 29,
+      "PASS": 29,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "chromium-ratelimit": {
+      "total": 7,
+      "PASS": 7,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    }
+  },
+  "byModule": {
+    "api": {
+      "total": 68,
+      "PASS": 68,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "auth": {
+      "total": 400,
+      "PASS": 400,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "payments": {
+      "total": 38,
+      "PASS": 38,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "configurator": {
+      "total": 44,
+      "PASS": 44,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "quotes": {
+      "total": 91,
+      "PASS": 91,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "navigation": {
+      "total": 26,
+      "PASS": 26,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "memory": {
+      "total": 65,
+      "PASS": 65,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "portal": {
+      "total": 81,
+      "PASS": 81,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "users": {
+      "total": 21,
+      "PASS": 21,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "staff": {
+      "total": 90,
+      "PASS": 90,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "ai": {
+      "total": 11,
+      "PASS": 11,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "public": {
+      "total": 79,
+      "PASS": 79,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "catalog": {
+      "total": 32,
+      "PASS": 32,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "customers": {
+      "total": 17,
+      "PASS": 17,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "leads": {
+      "total": 39,
+      "PASS": 39,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "calendar": {
+      "total": 16,
+      "PASS": 16,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "events": {
+      "total": 59,
+      "PASS": 59,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "guests": {
+      "total": 49,
+      "PASS": 49,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "content": {
+      "total": 14,
+      "PASS": 14,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "finance": {
+      "total": 22,
+      "PASS": 22,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "inventory": {
+      "total": 28,
+      "PASS": 28,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "notifications": {
+      "total": 7,
+      "PASS": 7,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "operations": {
+      "total": 34,
+      "PASS": 34,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "purchases": {
+      "total": 19,
+      "PASS": 19,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "vendors": {
+      "total": 6,
+      "PASS": 6,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "settings": {
+      "total": 18,
+      "PASS": 18,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    },
+    "analytics": {
+      "total": 3,
+      "PASS": 3,
+      "FAIL": 0,
+      "FLAKY": 0,
+      "BLOCKED": 0,
+      "NOT TESTED": 0,
+      "NOT APPLICABLE": 0,
+      "passRate": 100,
+      "coverage": 100
+    }
+  },
+  "bugs": {
+    "total": 24,
+    "open": 0,
+    "openBySeverity": {
+      "BLOCKER": 0,
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "list": [
+      {
+        "id": "BUG-001",
+        "title": "«Cerrar sesión» no es definitivo: las respuestas en vuelo re-emiten la cookie y no hay revocación en servidor",
+        "severity": "CRITICAL",
+        "status": "verified",
+        "module": "auth (logout) / middleware (Auth.js v5) — panel admin y portal staff"
+      },
+      {
+        "id": "BUG-002",
+        "title": "Un checkout de anticipo abierto se puede cobrar después de cancelar el evento",
+        "severity": "CRITICAL",
+        "status": "verified",
+        "module": "events / payments"
+      },
+      {
+        "id": "BUG-003",
+        "title": "Link general de invitación: escribir el nombre de otra invitada sobrescribe su RSVP y entrega su link personal",
+        "severity": "CRITICAL",
+        "status": "verified",
+        "module": "guests (RSVP público / micrositio)"
+      },
+      {
+        "id": "BUG-004",
+        "title": "La sesión no se invalida en el servidor: una cookie copiada antes del logout sigue dando acceso",
+        "severity": "HIGH",
+        "status": "verified",
+        "module": "auth (sesión)"
+      },
+      {
+        "id": "BUG-005",
+        "title": "`callbackUrl` con caracteres de control evade `safeCallback`",
+        "severity": "HIGH",
+        "status": "verified",
+        "module": "auth (login)"
+      },
+      {
+        "id": "BUG-006",
+        "title": "Navegaciones a la misma ruta y `router.refresh()` dentro de transiciones se quedan colgadas",
+        "severity": "HIGH",
+        "status": "verified (mitigado)",
+        "module": "transversal (App Router) — calendar, events, leads, customers, quotes, inventory (+ compras y proveedores vía `ListFilters`), content, notifications, settings, guests (RSVP)"
+      },
+      {
+        "id": "BUG-007",
+        "title": "Dos solicitudes simultáneas de checkout crean dos pagos PENDING del mismo anticipo",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "payments"
+      },
+      {
+        "id": "BUG-008",
+        "title": "La misma clienta se duplica porque el teléfono se guarda con formatos distintos",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "leads (`createInboundLead`) / customers / configurator / marketing (contacto) / ai-designer / quotes / seed"
+      },
+      {
+        "id": "BUG-009",
+        "title": "Contraste insuficiente (WCAG 1.4.3) en tonos warning/info, taupe y textos atenuados",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "UI compartida — `StatusBadge`, admin-shell, events/calendar (admin), finance, portal de la clienta, Memory Capsule, payments (layout `/pago/"
+      },
+      {
+        "id": "BUG-010",
+        "title": "Listas de definición (`<dl>`) inválidas en la propuesta pública y el micrositio",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "quotes (vista pública `/cotizacion/[token]`) · guests (micrositio `/e/[slug]/[token]`)"
+      },
+      {
+        "id": "BUG-011",
+        "title": "Portal staff: `aria-controls` de «Agregar nota» apunta a un id inexistente",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "staff (portal `/staff/events/[id]`, checklist)"
+      },
+      {
+        "id": "BUG-012",
+        "title": "El diálogo «Aceptar propuesta» no devuelve el foco al cerrarse",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "quotes (vista pública `/cotizacion/[token]`)"
+      },
+      {
+        "id": "BUG-013",
+        "title": "Soft-404: `/experiencias/[slug]` inexistente o inactivo responde HTTP 200",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "public (catálogo de experiencias)"
+      },
+      {
+        "id": "BUG-014",
+        "title": "Un lead capturado a mano con «Origen» ≠ «Captura manual» dispara los avisos de lead entrante",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "leads"
+      },
+      {
+        "id": "BUG-015",
+        "title": "El encabezado del evento no indica que el evento está cerrado",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "finance / events (encabezado compartido de las pestañas del evento)"
+      },
+      {
+        "id": "BUG-016",
+        "title": "Seed DEMO: notificaciones con enlaces a rutas inexistentes",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "notifications (bandeja mock) / seed"
+      },
+      {
+        "id": "BUG-017",
+        "title": "Una captura pública escribía el contacto de la visitante en una clienta existente: sus enlaces privados podían llegarle a otra persona",
+        "severity": "HIGH",
+        "status": "verified",
+        "module": "leads (`createInboundLead` › `findOrCreateCustomer`) / customers — capturas públicas (contacto, configurador, diseñador IA)"
+      },
+      {
+        "id": "BUG-018",
+        "title": "Eliminar una ficha de staff desactivaba la cuenta ligada sin aplicar las reglas de Usuarios",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "staff (`deleteStaffMember`) / users (reglas de activación)"
+      },
+      {
+        "id": "BUG-019",
+        "title": "Formularios públicos y por token se enviaban por GET antes de hidratar, con datos personales en la URL",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "guests (RSVP) · portal (acceso por correo, mensajes, opinión, dirección) · configurator («Siguiente»)"
+      },
+      {
+        "id": "BUG-020",
+        "title": "Firefox: error de hidratación React #418 cuando el chunk de `error.tsx` llega tarde (React descarta el HTML del servidor)",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "transversal — layouts con `error.tsx` hermano: `pago`, `(public)`, `admin` (`AdminShell`), `admin/catalog`, `admin/content`, `admin/events/[id]` y `admin/settings`"
+      },
+      {
+        "id": "BUG-021",
+        "title": "Lo escrito antes de hidratar se borraba en formularios públicos y del portal",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "memory-capsule (libro de visitas y subida) · marketing (contacto) · guests (RSVP) · portal (acceso, mensajes, opinión, dirección) · ai-designer"
+      },
+      {
+        "id": "BUG-022",
+        "title": "Restablecer la propia contraseña desde Staff revocaba la sesión en silencio",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "staff (`resetStaffPassword`, `/admin/staff/[id]`)"
+      },
+      {
+        "id": "BUG-023",
+        "title": "`GET /api/auth/session` re-emitía la cookie de sesión (latente)",
+        "severity": "LOW",
+        "status": "verified",
+        "module": "auth (`src/app/api/auth/[...nextauth]/route.ts`)"
+      },
+      {
+        "id": "BUG-024",
+        "title": "Firefox: etiquetas, descripciones y `aria-controls` desligados cuando el `useId` del cliente difiere del HTML del servidor",
+        "severity": "MEDIUM",
+        "status": "verified",
+        "module": "formularios compartidos (`Field`, `FieldGroup`, `ChipFrame`, `NpsScale`, `CustomerPicker`) y alta de evento"
+      }
+    ]
+  },
+  "failures": [],
+  "flaky": [],
+  "blocked": []
+}
