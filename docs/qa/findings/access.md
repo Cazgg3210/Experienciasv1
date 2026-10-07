@@ -178,6 +178,24 @@ En `safeCallback`: rechazar cualquier carácter de control o espacio (`/[\u0000-
 
 ---
 
+## Seguimiento de BUG-001 / BUG-004 / BUG-005 — hallazgos menores de la revisión adversarial (ronda 1, carril 4)
+
+| Hallazgo de la revisión | Clasificación | Estado | Cambio y prueba |
+|---|---|---|---|
+| La renovación del JWT (GET con un token de ≥ `updateAge`) no tenía prueba automatizada | TEST GAP | Corregido | `tests/e2e/auth/session-renewal.spec.ts` forja JWT con AUTH_SECRET (`tests/e2e/auth/_jwt.ts`, misma sal y algoritmo que Auth.js, `iat` de hace 2 h): [AUTH-053] GET de documento renueva (iat nuevo, mismos `uid`/rol/`sessionVersion`, la renovada autoriza y no se re-emite otra vez), [AUTH-054] GET RSC renueva, [AUTH-055] POST de Server Action no re-emite aunque la acción corre autenticada, [AUTH-056] JWT reciente no se re-emite, [AUTH-057] cookie inválida: se conserva el borrado, [AUTH-058] JWT antiguo pero revocado: aunque se renueve, sigue sin autorizar. |
+| `GET /api/auth/session` (fuera del matcher) re-emitía la cookie en cada llamada | APPLICATION BUG (latente; la app no usa el endpoint) | Corregido | `src/app/api/auth/[...nextauth]/route.ts` envuelve el GET de `/session` con `withoutSessionCookieRenewal` (nunca re-emite; los borrados se conservan). [AUTH-059] `@regression`; [API-050] sigue igual. |
+| Sin cobertura de integración de la revocación en servicios | TEST GAP | Corregido | `tests/integration/settings-notifications.test.ts` › «revocación de sesiones»: `resetUserPassword`, `setUserActive` (desactivar +1, reactivar 0), `changeUserRole`, intentos rechazados (contraseña débil, rol prohibido, actor STAFF) sin cambio, reset propio y `revokeSessionsOnSignOut` (token vigente, viejo, sin versión, malformado y dos cierres simultáneos: sólo uno incrementa). `tests/integration/operations-staff.test.ts`: `resetStaffPassword`, `setStaffAccessActive`, `deleteStaffMember` (+1 y `active: false`) e intentos rechazados. |
+| `resetStaffPassword` aplicado a una misma revocaba su sesión en silencio | APPLICATION BUG (UX/sesión) | Corregido | El servicio devuelve `self`; la acción hace `signOut({ redirect: false })` y la UI lleva a `/login` con el texto «Se cerrarán todas tus sesiones, incluida ésta» (igual que Ajustes › Usuarios); auditoría con `self: true`; el botón «Desactivar acceso» no se ofrece sobre la propia ficha. [AUTH-064] `@regression` + integración. |
+| AUTH-043..050 no ejercitaban la validación propia de `loginAction` (la página `/login` ya filtra el valor) | TEST BUG (cobertura) | Corregido | [AUTH-065]…[AUTH-072] (mismos 8 valores que AUTH-043…050; AUTH-071 = TAB, `@regression`): alteran el campo oculto `callbackUrl` antes de enviar el formulario y exigen que `x-action-redirect` sea del mismo origen y el destino esperado (inicio del rol `/admin`; `/%2F%2Fevil.example` es una ruta interna legítima y se conserva). Comprobado con una mutación temporal de `loginAction` a filtro por prefijo (evidencia: `test-results/l4-evidence/mutation-run.log`): AUTH-043…050 siguen pasando y la verificación del valor TAB (hoy AUTH-071) falla con `/` en lugar de `/admin`. Primero se escribió como una sola prueba con los 8 valores; en WebKit (≈ 25 s por login en este equipo) superaba los 90 s, así que se separó por valor. |
+| El cierre de sesión «falla abierto» si la base falla (Auth.js registra y borra la cookie) | OBSERVACIÓN (riesgo) | Mitigado | `revokeSessionsOnSignOut` registra `auth.logout_revocation_failed` con nivel error (alertable) y propaga el error. Prueba unitaria `src/features/auth/server/session-service.test.ts`. Hacer que el logout falle de verdad exigiría reemplazar el flujo `/api/auth/signout` de Auth.js: queda documentado. |
+| Cerrar sesión en un dispositivo cierra las sesiones de todos | REQUIREMENT AMBIGUITY | Documentado (decisión de producto) | Es el diseño de `sessionVersion`. Si se quiere cierre por dispositivo, revocar por `jti` (lista de denegación hasta `exp`) y dejar `sessionVersion` para reset/desactivación/rol. Requiere decisión del usuario; no se cambió. |
+
+**Fallas de navegador observadas y NO corregidas en este carril (preexistentes, ya en la regresión de l1).** Firefox: AUTH-044/045/046/049/050 y AUTH-027 fallan de forma intermitente por el guard de consola con `downloadable font: download failed … status=2152398850` (NS_BINDING_ABORTED: la redirección del login aborta la descarga de la fuente; ruido del navegador, ENVIRONMENT/TEST). La corrección natural es un `allow` justificado en el guard compartido (`tests/e2e/fixtures/guard.ts`), que no se editó desde un carril paralelo; las nuevas AUTH-065…072 lo declaran localmente. WebKit en Windows: AUTH-001…005 reportan la cookie como `SameSite=None` aunque el servidor envía `Lax` (ENVIRONMENT). Ninguna depende de estos cambios.
+
+**Hallazgo nuevo (corregido en el mismo carril).** `deleteStaffMember` desactiva y revoca la cuenta ligada a la ficha, pero no aplicaba las reglas de Usuarios: una OWNER podía desactivar a una SUPER_ADMIN (o a sí misma) eliminando la ficha de staff ligada a esa cuenta (reproducido 1/1 en integración). Tipo POTENTIAL SECURITY ISSUE, severidad MEDIUM. Ahora el servicio evalúa `checkLinkedAccountDeactivation` (mismas reglas que `setUserActive`, con el lock de super admins) dentro de la transacción y rechaza con FORBIDDEN/CONFLICT sin borrar nada; la página no ofrece «Eliminar integrante» sobre la propia ficha. Prueba de integración en `operations-staff.test.ts`.
+
+---
+
 ## ACC-BUG-04 — Soft-404 en el sitio público: `/experiencias/<slug inexistente>` responde HTTP 200
 
 **Severity:** LOW
@@ -216,6 +234,9 @@ Ninguno.
 
 ### Recommended fix
 Resolver la existencia del slug antes del límite de Suspense (quitar `loading.tsx` de ese segmento o mover la consulta + `notFound()` a un `layout.tsx` del segmento sin Suspense).
+
+### Seguimiento (ronda 1)
+Revisión del mismo patrón en las demás rutas públicas y por token, lista de soft-404 internos conocidos y contrato que impide reintroducirlo: ver `docs/qa/findings/sales.md` › SAL-BUG-07 › «Revisión del patrón en otras rutas». Pruebas: `tests/unit/route-not-found-contract.test.ts` y [NAV-034].
 
 ---
 

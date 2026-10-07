@@ -7,6 +7,8 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 
 > Actualización 2026-10-06 (corrección de BUG-001 / BUG-004 / BUG-005, carril 1): AUTH-025, AUTH-032 y AUTH-049 pasan como `@regression`; se agregaron AUTH-033…AUTH-038 (revocación de sesiones). Los totales de arriba son de la corrida de auditoría original.
 
+> Actualización ronda 1 (carril 4, hallazgos menores de las revisiones): nuevas AUTH-053…059 (renovación de la cookie con JWT forjados), AUTH-064 (auto-restablecimiento desde Staff), AUTH-065…072 (validación propia de `loginAction`) y NAV-034 (404 real en rutas públicas y por token). Corrida `E2E_LANE=4` de auth + navigation + permissions + api en chromium: 271/271 PASS; AUTH-053…059, AUTH-064…072 y NAV-034 con `--repeat-each=5 --retries=0`: 0 fallas.
+
 | ID | Módulo | Escenario | Rol | Priority | Automated | Result |
 |---|---|---|---|---|---|---|
 | API-001 | api | /api/health responde {status:ok} sin caché | Anónimo | P1 | ✅ tests/e2e/api/handlers.spec.ts | PASS |
@@ -98,16 +100,26 @@ Resultado REAL de la última corrida (reintentos = 1: una prueba que pasa sólo 
 | AUTH-049 | auth | callbackUrl malicioso "/\t/evil.example" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS (@regression BUG-005) |
 | AUTH-050 | auth | callbackUrl malicioso "http://localhost@evil.example/" no redirige fuera de la app | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
 | AUTH-051 | auth | el middleware conserva ruta + query en callbackUrl y no acepta hosts | Anónimo | P2 | ✅ tests/e2e/auth/callback.spec.ts | PASS |
+| AUTH-053 | auth | JWT con ≥ 1 h: un GET de documento renueva la cookie (iat nuevo, mismos datos) y la renovada autoriza | Owner | P1 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS (@regression BUG-001) |
+| AUTH-054 | auth | JWT con ≥ 1 h: un GET RSC (navegación del cliente) también renueva la cookie | Staff | P2 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS |
+| AUTH-055 | auth | JWT con ≥ 1 h: un POST de Server Action NO re-emite la cookie (la acción corre con esa sesión) | Owner | P1 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS (@regression BUG-001) |
+| AUTH-056 | auth | JWT reciente: un GET (documento y RSC) no re-emite la cookie | Owner | P2 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS |
+| AUTH-057 | auth | cookie de sesión inválida: el middleware conserva su borrado y manda a login | Anónimo | P2 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS |
+| AUTH-058 | auth | JWT con ≥ 1 h pero revocado: aunque un GET lo renueve, la cookie renovada sigue sin autorizar | Owner | P1 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS (@regression BUG-004) |
+| AUTH-059 | auth | GET /api/auth/session devuelve la sesión pero no re-emite la cookie | Owner | P2 | ✅ tests/e2e/auth/session-renewal.spec.ts | PASS (@regression BUG-001) |
 | AUTH-060 | auth | 8 intentos fallidos permitidos; el 9º se bloquea y ni la contraseña correcta entra | Anónimo | P0 | ✅ tests/e2e/auth/login.ratelimit.spec.ts (chromium-ratelimit) | PASS |
 | AUTH-061 | auth | el bloqueo es por cuenta: otra cuenta desde el mismo navegador entra normalmente | Anónimo | P1 | ✅ tests/e2e/auth/login.ratelimit.spec.ts (chromium-ratelimit) | PASS |
 | AUTH-062 | auth | correo inexistente también se limita con el mismo mensaje (sin enumeración por el limitador) | Anónimo | P1 | ✅ tests/e2e/auth/login.ratelimit.spec.ts (chromium-ratelimit) | PASS |
 | AUTH-063 | auth | variar mayúsculas/espacios del correo no evade el límite (misma cubeta normalizada) | Anónimo | P2 | ✅ tests/e2e/auth/login.ratelimit.spec.ts (chromium-ratelimit) | PASS |
+| AUTH-064 | auth | restablecer la propia contraseña desde Staff (fundadora con ficha) cierra la sesión y pide entrar con la nueva | Owner | P1 | ✅ tests/e2e/auth/session.spec.ts | PASS (@regression BUG-004) |
+| AUTH-065…072 | auth | loginAction descarta en el servidor cada callbackUrl malicioso de AUTH-043…050 aunque el formulario lo envíe | Owner | P0 | ✅ tests/e2e/auth/callback.spec.ts | PASS chromium/firefox/webkit (AUTH-071 @regression BUG-005) |
 | NAV-001 | navigation | ruta pública inexistente → 404 'Esta mesa no está puesta' con regreso al inicio | Anónimo | P2 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS |
 | NAV-002 | navigation | experiencia pública inexistente → contenido 404 y HTTP 404 (no soft-404) | Anónimo | P3 | ✅ tests/e2e/navigation/not-found.spec.ts | FAIL (ACC-BUG-04) |
 | NAV-003 | navigation | ruta inexistente dentro del panel (owner) → HTTP 404 con la página 404 general | Owner | P2 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS |
 | NAV-004 | navigation | detalle admin con id inexistente (lead, evento, cotización, clienta, compra) → 'No encontramos…' sin error | Owner | P2 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS |
 | NAV-005 | navigation | ruta inexistente en el portal staff → 404 y la navegación del portal sigue disponible | Staff | P3 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS |
 | NAV-006 | navigation | 404 de experiencia (token) ofrece salida y no muestra navegación de marketing | Clienta (token) | P3 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS |
+| NAV-034 | navigation | rutas públicas y por token con slug/token inexistente → HTTP 404 real (no soft-404) | Anónimo | P3 | ✅ tests/e2e/navigation/not-found.spec.ts | PASS (@regression BUG-013) |
 | NAV-010 | navigation | sitio público: todos los enlaces internos de las páginas públicas responden | Anónimo | P1 | ✅ tests/e2e/navigation/links.spec.ts | PASS |
 | NAV-011 | navigation | panel admin (owner): sidebar y enlaces de cada sección responden sin 404/500 | Owner | P1 | ✅ tests/e2e/navigation/links.spec.ts | PASS |
 | NAV-012 | navigation | secciones de detalle del panel (evento, cotización, lead, clienta, catálogo, configuración) sin enlaces rotos | Owner | P2 | ✅ tests/e2e/navigation/links.spec.ts | PASS |
