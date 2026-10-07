@@ -167,17 +167,29 @@ Esto explica cada síntoma:
 | 5. Suspense / `useTransition` pendiente | **Es el síntoma.** La transición queda suspendida por el ping perdido. |
 | 6. Artefacto de Playwright | **Descartada.** Se reproduce sin `page.route` ni init scripts. Con `next dev` no se reproduce (24/24 OK): en desarrollo no se usa el alias del prefetch y los tiempos del build de React son otros. |
 
-**Mitigación aplicada** (nivel app, sin dependencias nuevas ni cambios de versión): `src/lib/rsc-response-buffer.ts` y `src/instrumentation-client.ts`, que Next carga antes de hidratar. Envuelven `window.fetch` en dos partes:
+**Mitigación aplicada** (nivel app, sin dependencias nuevas ni cambios de versión). `src/instrumentation-client.ts`, que Next carga antes de hidratar, llama al instalador `src/components/navigation/navigation-guard.ts` (único módulo con efectos globales). La lógica pura está en `src/lib/rsc-response-buffer.ts` (partes A y B, en `window.fetch`) y `src/lib/navigation-guard.ts` (red de seguridad y recuperación, ver «Endurecimiento» abajo). `<NavigationGuardBridge />` (layout raíz) le entrega `router.refresh()`.
 - **A. Respuestas RSC completas.** Las respuestas `text/x-component` se entregan ya completas, conservando estado, cabeceras, `url` y `redirected`; el router usa estos dos últimos para detectar redirecciones (sesión vencida → `/login`). Con todo el payload disponible, Flight resuelve todas las filas antes de que React renderice y la carrera no puede ocurrir. Cubre navegaciones, prefetch, `router.refresh()` y Server Actions sin tocar cada componente.
 - **B. Lazy fetch obsoletos.** Next 15.5 aplica la respuesta del *lazy fetch* del layout-router como `SERVER_PATCH` sin comparar `previousTree`. Si mientras tanto empezó otra navegación a una ruta hermana, el parche reemplaza la ruta nueva por la vieja: URL nueva con contenido viejo. El defecto es de Next y ya existía, pero con (A) la ventana pasa de «primer byte» a «respuesta completa»; SET-001 lo hizo visible 3/3 tras la primera versión de la corrección. Con el traceo del router se confirmó que el parche de `/admin/settings` (clic en «Negocio») caía sobre `/admin/settings/pricing` («Precios y márgenes»).
   - **Corrección:** el hook oficial `onRouterTransitionStart` de `instrumentation-client` registra cada navegación. Si un *lazy fetch* (GET RSC con `refetch` debajo de la raíz) termina después de que empezó otra navegación a otra URL, se entrega un payload RSC válido sin datos (`f: []`, mismo buildId). Next lo aplica sin cambios, igual que cuando la ruta del parche ya no coincide.
   - **Límite:** si no reconoce el formato de la fila raíz, entrega la respuesta real (comportamiento original).
+  - **Límite (detección de obsolescencia):** sólo cuentan las navegaciones que empezaron *después* de emitir el lazy fetch. Ver «Endurecimiento › 3».
 - **Costo:** las navegaciones del cliente ya no pintan por partes. La carga inicial (HTML) sigue en streaming.
-- **Riesgo residual (de Next, no introducido):** un nodo cuyo lazy fetch quedó obsoleto conserva `lazyData` sin `rsc`. Volver a esa URL con atrás/adelante puede quedarse en el esqueleto de carga, igual que cuando Next descarta un parche por ruta distinta. Requiere dos navegaciones en menos que el tiempo de respuesta y luego «atrás».
-- **Pruebas unitarias:** `src/lib/rsc-response-buffer.test.ts` (18 casos).
+- **Efecto secundario de B (corregido; la primera versión de esta nota lo atribuía a Next y no era exacto):** Next 15.5 sólo descarta un parche cuando su ruta ya no coincide (`server-patch-reducer` devuelve `state` si `applyRouterStatePatchToTree` da `null`). B descarta también parches que sí coinciden (rutas hermanas o la misma URL), y el nodo de esa URL queda en el caché del router con `rsc = null` y `lazyData` ya resuelto. `restoreReducer` reutiliza `state.cache`, así que volver con Atrás/Adelante dejaba el layout-router en `use(unresolvedThenable)`: **esqueleto de carga infinito**. Reproducido con [SET-023] sobre `86b60de` (FAIL). Se corrige con la recuperación descrita en «Endurecimiento › 2».
+- **Pruebas unitarias:** `src/lib/rsc-response-buffer.test.ts` (20 casos), `src/lib/navigation-guard.test.ts` (13) y `src/components/navigation/navigation-guard.test.ts` (9).
 - **Validación previa de (A)** (misma función inyectada antes de compilarla en la app): con buffer, 32/32 OK (8 por escenario: calendario Siguiente→Anterior→Hoy, «Limpiar filtros» de eventos, búsqueda de inventario, `router.refresh()` + navegación). Sin buffer, 2/16.
 
-**Versión que lo arreglaría.** No verificada: no se actualizó (fuera de alcance sin aprobación). Hace falta un React canary posterior que no pierda pings síncronos durante el render (o que trate `resolved_model` como resuelto en el camino de *lazy*). Para retirar la mitigación, quitar la llamada en `src/instrumentation-client.ts` tras actualizar Next y comprobar que pasan CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022..024, NOT-002 y CRIT-004 con `--repeat-each=5 --retries=0`.
+**Versión que lo arregla (criterio de retiro; verificado el 2026-10-06).** La corrección es **facebook/react#36134** «Fix useDeferredValue getting stuck» (commit `c0d218f0f3e0`, 2026-03-24; cierra facebook/react#35821). Cambia sólo `pingSuspendedRoot` en `ReactFiberWorkLoop.js`: un ping que llega en plena fase de render con `RootSuspendedWithDelay` ya no se pierde, se registra en `workInProgressRootPingedLanes` y el carril se reintenta. Es justo el punto 3 de la causa raíz. Como el cambio está en el reconciliador y no en Flight, cubre también el disparador residual de los chunks de módulos cliente (`resolved_module`).
+
+| Paquete | React del App Router | ¿Trae #36134? |
+|---|---|---|
+| next 15.5.27 (la instalada; última 15.5, dist-tag `backport`) | `19.2.0-canary-0bdb9206-20250818` | No |
+| next 16.2.0 … 16.2.12 | `19.3.0-canary-3f0b9e61-20260317` | No (es anterior al commit) |
+| **next 16.3.0** … 16.3.8 | `19.3.0-canary-cbb046ab-20260731` | **Sí** |
+| next 16.4.0 (`latest`) | `19.3.0-canary-278794d7-20261002` | Sí |
+| react-dom 19.2.8 (última 19.2) | — | No |
+| react-dom 19.3.0 | — | Sí |
+
+Método: `react-builtin` del `package.json` de cada etiqueta de vercel/next.js y `pingSuspendedRoot` de `react-dom-client.production.js` publicado en npm (rama del render: `prepareFreshStack` **o** `workInProgressRootPingedLanes |= pingedLanes`, en lugar de no hacer nada). El App Router usa el React que Next trae incluido, así que subir sólo `react`/`react-dom` de la app a 19.3 no sirve con Next 15.5. **Criterio de retiro:** actualizar a Next ≥ 16.3.0. Es un cambio de versión mayor y queda a decisión del usuario (no se hizo). Después, quitar `installNavigationGuard` de `src/instrumentation-client.ts` y `<NavigationGuardBridge />` del layout raíz, y comprobar que pasan CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022..024, NOT-002, SET-001, SET-023/024 y CRIT-004 con `--repeat-each=5 --retries=0`.
 
 **Verificación tras la corrección:** ver «Registro de verificación BUG-006» abajo.
 
@@ -207,6 +219,42 @@ Esto explica cada síntoma:
 - CRIT-006 es una **dependencia de datos de la prueba**. Usa `findFirst({ role: "OWNER", email contains "ivonne" })`, que en la misma base también encuentra las fundadoras `…@e2e.ivonne-rosa.test` que crean las pruebas de auth. En una base recién sembrada: 3/3 PASS. No se modificó.
 
 Evidencia (no versionada): `test-results/l5-evidence/BUG-006/{before-fix,fix1,fix2,regression1,regression-extra}/`.
+
+#### Endurecimiento (revisión adversarial de navegación; carril 1, build de producción `:3201`, base `ivonne_rosa_e2e_l1`)
+
+Atiende los menores de la revisión adversarial de la mitigación («esqueleto infinito», disparador residual, obsolescencia por URL, `src/lib` impuro y criterio de retiro). Sobre `86b60de`.
+
+1. **Red de seguridad para navegaciones colgadas** (`src/lib/navigation-guard.ts`). Si un push/replace iniciado con `onRouterTransitionStart` hacia **otra** URL no se confirma, se recurre a `location.assign(url)` (o `location.replace` si era replace). «No se confirma» significa que la URL sigue siendo la del inicio, que no empezó otra navegación y que la red lleva **5 s en reposo**. «En reposo» significa sin peticiones RSC en curso (navegación, prefetch, refresh, Server Action; se cuentan hasta leer el cuerpo completo) y sin `<script src>` (salvo `noModule`, que no se descarga) ni hojas de estilo cargando en `<head>`, que es donde webpack agrega los chunks y React Float las hojas de estilo.
+   - **Plazo.** Un cuelgue es permanente: no hay nada pendiente que lo resuelva, así que cualquier plazo finito lo recupera. Con datos y chunks ya cargados, una navegación se confirma en milisegundos. 5 s de reposo dan más de 5 veces de margen, y la vigilancia se revisa cada segundo. El plazo no corre mientras algo carga, así que una página lenta no lo dispara. La URL que cambia a otra parte (redirección a `/login`) cuenta como confirmada.
+   - **Alcance.** No se vigilan navegaciones a la misma URL o que sólo cambian el hash (la URL no va a cambiar), ni Atrás/Adelante (el navegador ya cambió la URL), ni `router.refresh()` o Server Actions (no pasan por el hook). La vigilancia se cancela con otra navegación o en `pagehide`.
+   - **Reporte.** Se registra con `console.error("[navegación] La navegación a … no se confirmó …")`. Con la parte A no debería ocurrir nunca, y el guard de E2E lo convierte en fallo: la red de seguridad no puede ocultar una regresión de BUG-006 en CAL-002, EVT-038, LEAD-037 ni en el resto.
+   - **Disparador residual que cubre.** Chunks JS de componentes cliente (`resolved_module` en Flight) que terminan de cargar mientras React cede el hilo, y cualquier otro cuelgue no previsto.
+2. **Recuperación al volver con Atrás/Adelante** (parte B, ver «Efecto secundario de B»). Cada lazy fetch descartado se avisa (`onDiscard`) y se guarda su URL (`routerUrlKey`, máximo 50). Cuando `onRouterTransitionStart(url, "traverse")` apunta a una de ellas, se programa `router.refresh()` justo después del despacho (queda en la cola del router detrás de la restauración y reconstruye el caché desde la raíz) y se quita la URL. El router llega desde `<NavigationGuardBridge />` (`useRouter()` en el layout raíz). Si todavía no está montado, se hace una carga completa (`location.replace`). Se registra con `console.warn`, porque es esperado.
+   - **Con un enlace (push) no hace falta:** con `staleTimes.dynamic = 0` el prefetch «auto» ya está vencido y Next crea un nodo nuevo. Se verificó con [SET-024], que pasa también sobre `86b60de`. La URL se conserva por si luego se vuelve con Atrás.
+   - **Límite:** la recuperación se busca por URL (página). Un lazy fetch descartado de un *layout* (raro: el layout-router sólo pide segmentos sin datos, normalmente la página bajo `loading.tsx`) dejaría el nodo vacío para todas las URLs bajo ese layout. Ese caso no se recupera por URL; si la navegación no se confirma, la cubre la red de seguridad.
+3. **Obsolescencia por URL (tercer menor): no se implementó; se documenta el límite.** B sólo cuenta las navegaciones que empezaron *después* de emitir el lazy fetch. Si React renderiza un estado ya superado (time slicing en otro carril de transición) después de que empezó la navegación Y, el lazy fetch toma la marca de Y y no se descarta: se aplica el parche obsoleto, que es el comportamiento de Next sin mitigación (sin regresión). Comparar la URL del lazy fetch con el destino vigente no distingue ese caso de los legítimos en que la URL canónica difiere del destino pedido. Ejemplos: una redirección HTTP que `fetch` sigue (sesión vencida → `/login`, redirecciones de middleware) o el `redirect()` de una Server Action, que no pasa por `onRouterTransitionStart`. Descartar esos lazy fetch dejaría la página en el esqueleto de carga, una regresión peor que la ventana que se cerraría. La ventana requiere dos navegaciones dentro del mismo render.
+4. **`src/lib` sólo con funciones puras.**
+   - Las partes A y B y el registro de navegaciones están en `src/lib/rsc-response-buffer.ts`.
+   - La red de seguridad y la recuperación (entorno inyectado) están en `src/lib/navigation-guard.ts`.
+   - El instalador con efectos globales está en `src/components/navigation/navigation-guard.ts`: envuelve `window.fetch`, observa `<head>`, usa temporizadores y `location`, y define un símbolo en `window`.
+   - El puente con el router es `src/components/navigation/navigation-guard-bridge.tsx`.
+   - `src/instrumentation-client.ts` sólo instala y reenvía `onRouterTransitionStart(url, navigationType)`.
+5. **Criterio de retiro:** ver «Versión que lo arregla» arriba (facebook/react#36134; Next ≥ 16.3.0).
+
+**Nueva prueba:** [SET-023] `tests/e2e/settings/settings.spec.ts` (@regression). Reproduce «Negocio → Precios rápido → Atrás» de forma determinista: retiene el lazy fetch de `/admin/settings` hasta que la navegación a «Precios» terminó. Comprueba la página «Negocio» con su formulario, que no queda esqueleto, que no hubo recarga completa y que hubo una recuperación con `router.refresh()`. [SET-024] es el caso de control con el enlace.
+
+| Corrida | Resultado |
+|---|---|
+| [SET-023] sobre `86b60de` (sin recuperación) | **FAIL**: tras Atrás, URL `/admin/settings` con «Cargando…» indefinido (snapshot en `test-results/l1-evidence/SET-023-base/`). [SET-024]: PASS. |
+| [SET-001], [SET-023], [SET-024] con la corrección | 3/3 PASS (SET-023: recuperación con `router.refresh()`, sin recarga completa) |
+| Pruebas de BUG-006 en chromium, `--repeat-each=5 --retries=0` (CAL-002, EVT-038, LEAD-037, INV-025, GST-011, GST-012, GST-015, NOT-002, SET-001, CRIT-004, más SET-023 y SET-024) | **60/60 PASS** (en los dos builds: `be55029` y `d87814d`) |
+| GST-011 y CRIT-004 en firefox, webkit y mobile-chrome, `--repeat-each=5 --retries=0` | **30/30 PASS** (en los dos builds) |
+| Carpetas completas calendar, leads, events, guests, inventory, settings, notifications y smoke (chromium + mobile-chrome, config por defecto) | **187/187 PASS**, 0 flaky (180 chromium + 7 mobile-chrome; en los dos builds). Ninguna prueba disparó la red de seguridad: su `console.error` las habría hecho fallar. |
+| Suite global de esas carpetas (`availability.global`, `notifications.global`, `settings.global`) | **18/18 PASS** |
+| Unitarias / typecheck / lint | 884/884 · OK · OK |
+| Diagnóstico de la red de seguridad (spec temporal, ya eliminado) | Navegación sin confirmar (se omite el `pushState` de Next): carga completa a los 6,1 s con `console.error`. RSC retenida 12 s: navegación normal a los 12,2 s, sin recarga. `<script>` retenido 12 s: la red de seguridad esperó hasta los 17,4 s (12 s + 5 s de reposo). Build `be55029`. |
+
+Evidencia (no versionada): `test-results/l1-evidence/{SET-023-base,repeat-chromium,cross-browser,folders,diag-nav-guard}/` (build `be55029`) y `test-results/l1-evidence/final/{repeat,cross-browser,folders,global}/` (build `d87814d`).
 
 ---
 

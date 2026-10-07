@@ -135,6 +135,8 @@ Result: PASS / FAIL (bug) / FLAKY / BLOCKED / NOT TESTED. Las pruebas @mobile mu
 | SET-020 | Ajustes | filtros inválidos de la bitácora se ignoran sin romper la página | SuperAdmin | P3 | ✅ tests/e2e/settings/settings.spec.ts | PASS |
 | SET-021 | Ajustes | Integraciones muestra proveedores, webhooks, cron y prueba de mensajes | Owner | P2 | ✅ tests/e2e/settings/settings.spec.ts | PASS |
 | SET-022 | Usuarios / Ajustes | una usuaria STAFF creada y vinculada a su ficha ve su portal | SuperAdmin | P1 | ✅ tests/e2e/settings/settings.spec.ts | PASS |
+| SET-023 | Ajustes | volver a «Negocio» con Atrás tras saltar rápido a «Precios» muestra la página, no el esqueleto (BUG-006, @regression) | Owner | P2 | ✅ tests/e2e/settings/settings.spec.ts | PASS (FAIL en 86b60de) |
+| SET-024 | Ajustes | volver a «Negocio» con el enlace tras saltar rápido a «Precios» muestra la página (control de SET-023) | Owner | P2 | ✅ tests/e2e/settings/settings.spec.ts | PASS |
 | STF-001 | Staff | Lupita ve sólo sus eventos asignados (Sofía y Daniela, no Mariana) | Staff | P0 | ✅ tests/e2e/staff/staff-portal.spec.ts | PASS (chromium) · PASS (mobile-chrome) |
 | STF-002 | Staff | Carlos (staff2) ve sus eventos asignados y no los ajenos | Staff | P1 | ✅ tests/e2e/staff/staff-portal.spec.ts | PASS (chromium) · PASS (mobile-chrome) |
 | STF-003 | Staff | marcar una tarea como hecha persiste y la fundadora la ve completada por Lupita | Staff | P0 | ✅ tests/e2e/staff/staff-portal.spec.ts | PASS (chromium) · PASS (mobile-chrome) |

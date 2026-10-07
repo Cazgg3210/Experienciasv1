@@ -136,6 +136,8 @@ Páginas cubiertas: /admin/operations (+templates, +templates/[id]), /admin/even
 | SET-020 | Ajustes | /admin/settings/audit con parámetros basura | SuperAdmin | /admin/settings/audit con parámetros basura | filtros inválidos de la bitácora se ignoran sin romper la página | P3 |
 | SET-021 | Ajustes | /admin/settings/integrations | Owner | /admin/settings/integrations | Integraciones muestra proveedores, webhooks, cron y prueba de mensajes | P2 |
 | SET-022 | Usuarios / Ajustes | Usuarios | SuperAdmin | Nueva usuaria (Staff) vinculada → login /staff | una usuaria STAFF creada y vinculada a su ficha ve su portal | P1 |
+| SET-023 | Ajustes | /admin/settings | Owner | «Negocio» (respuesta lenta) → «Precios y márgenes» → Atrás | volver a «Negocio» con Atrás tras saltar rápido a «Precios» muestra la página, no el esqueleto | P2 |
+| SET-024 | Ajustes | /admin/settings | Owner | «Negocio» (respuesta lenta) → «Precios y márgenes» → enlace «Negocio» | volver a «Negocio» con el enlace tras saltar rápido a «Precios» muestra la página | P2 |
 | STF-001 | Staff | /staff | Staff | /staff | Lupita ve sólo sus eventos asignados (Sofía y Daniela, no Mariana) | P0 |
 | STF-002 | Staff | /staff | Staff | /staff | Carlos (staff2) ve sus eventos asignados y no los ajenos | P1 |
 | STF-003 | Staff | Portal | Staff | Marcar como hecha; owner revisa la orden de producción | marcar una tarea como hecha persiste y la fundadora la ve completada por Lupita | P0 |
