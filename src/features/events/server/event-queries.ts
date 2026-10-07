@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/db";
 import { dateOnly, localDateKey, toDateKey } from "@/lib/dates";
-import { phoneSearchDigits } from "@/lib/phone";
+import { customerPhoneSearchFilter } from "@/features/customers/server/customer-contact";
 import { balanceDueCents, netPaidCents } from "@/features/payments/domain/payment-status";
 import { effectiveDateRange, sortDirection, type EventFilters } from "../domain/event-filters";
 
@@ -11,7 +11,7 @@ const DAY_MS = 86_400_000;
 
 export const EVENTS_PAGE_SIZE = 20;
 
-function buildWhere(filters: EventFilters): Prisma.EventWhereInput {
+function buildWhere(filters: EventFilters, phoneFilter: Prisma.CustomerWhereInput | null): Prisma.EventWhereInput {
   const today = localDateKey();
   const yesterday = toDateKey(new Date(dateOnly(today).getTime() - DAY_MS));
   const range = effectiveDateRange(filters, today, yesterday);
@@ -34,6 +34,8 @@ function buildWhere(filters: EventFilters): Prisma.EventWhereInput {
       { customer: { name: contains } },
       { customer: { email: contains } },
       { customer: { phone: { contains: filters.q } } },
+      // Teléfono en cualquier formato ("55 1234 5678", "+52 1 55…", filas antiguas con separadores).
+      ...(phoneFilter ? [{ customer: phoneFilter }] : []),
     ];
   }
   return where;
@@ -43,7 +45,7 @@ export type EventListRow = Awaited<ReturnType<typeof listEvents>>["rows"][number
 
 /** Listado paginado de eventos con invitadas confirmadas y saldo pendiente. */
 export async function listEvents(filters: EventFilters, page: number, pageSize = EVENTS_PAGE_SIZE) {
-  const where = buildWhere(filters);
+  const where = buildWhere(filters, filters.q ? await customerPhoneSearchFilter(prisma, filters.q) : null);
   const dir = sortDirection(filters.period);
   const [total, events] = await Promise.all([
     prisma.event.count({ where }),
@@ -231,13 +233,13 @@ export type EventDetail = NonNullable<Awaited<ReturnType<typeof getEventDetail>>
 export async function searchCustomers(q: string) {
   const term = q.trim();
   if (term.length < 2) return [];
-  const digits = phoneSearchDigits(term);
+  const phoneFilter = await customerPhoneSearchFilter(prisma, term);
   return prisma.customer.findMany({
     where: {
       OR: [
         { name: { contains: term, mode: "insensitive" } },
         { email: { contains: term, mode: "insensitive" } },
-        ...(digits.length >= 4 ? [{ phone: { contains: digits } }, { whatsapp: { contains: digits } }] : []),
+        ...(phoneFilter ? [phoneFilter] : []),
       ],
     },
     orderBy: { updatedAt: "desc" },

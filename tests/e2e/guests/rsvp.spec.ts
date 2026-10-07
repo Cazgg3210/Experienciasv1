@@ -197,23 +197,79 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     const audits = await db.auditLog.findMany({ where: { action: "guest.possible_duplicate", entityId: { in: created.map((g) => g.id) } } });
     expect(audits.map((a) => (a.after as { matchedGuestIds?: string[] } | null)?.matchedGuestIds)).toEqual([[victim.id], [victim.id]]);
 
-    // El equipo ve los auto-registros marcados (la original no)
+    // El equipo ve los auto-registros marcados (la original no) y con quién coincide cada uno.
+    // Las filas se ubican por la celda con el nombre EXACTO: el aviso «Coincide con «…»» de las marcadas
+    // también contiene el nombre de la original.
     const owner = await rolePage("owner");
     await owner.goto(`/admin/events/${ev.id}/guests`);
     await expect(owner.getByText("2 invitadas que se registraron con el link general coinciden", { exact: false })).toBeVisible();
     const table = owner.getByRole("table", { name: "Invitadas del evento" });
     await expect(table.getByText("Posible duplicado")).toHaveCount(2);
-    await expect(table.getByRole("row", { name: new RegExp(victim.name) })).not.toContainText("Posible duplicado");
-    await expect(table.getByRole("row", { name: /Alguien Más/ })).toContainText("Posible duplicado");
+    const adminRow = (name: string) => table.getByRole("row").filter({ has: owner.getByText(name, { exact: true }) });
+    await expect(adminRow(victim.name)).toHaveCount(1);
+    await expect(adminRow(victim.name)).not.toContainText("Posible duplicado");
+    for (const name of [victim.name.toUpperCase(), "Alguien Más"]) {
+      await expect(adminRow(name)).toContainText("Posible duplicado");
+      await expect(adminRow(name)).toContainText(`Coincide con «${victim.name}»`);
+    }
 
     // La anfitriona también, con la indicación de qué hacer
     const host = await anonPage();
     await host.goto(ev.portalPath);
     const list = host.getByRole("list", { name: "Lista de invitadas" });
     await expect(list.getByText("Posible duplicado")).toHaveCount(2);
-    await expect(list.getByRole("listitem").filter({ hasText: "Alguien Más" })).toContainText("Si es la misma persona, escríbenos y dejamos un solo registro.");
-    // RegExp (sensible a mayúsculas): el registro en MAYÚSCULAS es el duplicado, no la original
-    await expect(list.getByRole("listitem").filter({ hasText: new RegExp(victim.name) })).not.toContainText("Posible duplicado");
+    const hostItem = (name: string) => list.getByRole("listitem").filter({ has: host.getByText(name, { exact: true }) });
+    // La original respondió (no es un pendiente que la anfitriona pueda quitar): se le pide escribirnos.
+    await expect(hostItem("Alguien Más")).toContainText(
+      `Coincide con «${victim.name}» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.`,
+    );
+    // Nombre exacto (sensible a mayúsculas): el registro en MAYÚSCULAS es el duplicado, no la original
+    await expect(hostItem(victim.name)).toHaveCount(1);
+    await expect(hostItem(victim.name)).not.toContainText("Posible duplicado");
+  });
+
+  test("[GST-025] amiga agregada por la anfitriona que responde con el link general: el portal le dice que quite el pendiente y el admin con quién coincide", { tag: ["@P2", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
+    evidence("clienta", "Portal: amiga pendiente → la amiga responde con el link general → «quita el registro pendiente» → Quitar de la lista");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 (revisión: flujo legítimo de la anfitriona y marca con contexto)" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const friendName = `Lucía Vega ${uniq("Dup")}`;
+    const friend = await createGuestFixture(db, ev, { name: friendName, email: uniqEmail("lucia"), source: "HOST" }); // pendiente
+    const page = await anonPage();
+    const section = await openRsvp(page, ev.invitePath);
+    await section.getByRole("textbox", { name: "Tu nombre" }).fill(friendName);
+    await section.getByText("¡Sí, ahí estaré!").click();
+    await section.getByRole("button", { name: "Enviar mi respuesta" }).click();
+    await expect.poll(() => db.eventGuest.count({ where: { eventId: ev.id, source: "SELF_RSVP", name: friendName } })).toBe(1);
+    const answered = await db.eventGuest.findFirstOrThrow({ where: { eventId: ev.id, source: "SELF_RSVP", name: friendName } });
+    expect(await db.eventGuest.findUniqueOrThrow({ where: { id: friend.id } }), "el registro de la anfitriona no cambia").toMatchObject({ rsvpStatus: "PENDING" });
+    expect(await db.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: answered.id } })).toBe(1);
+
+    // Admin: la marca dice con quién coincide
+    const owner = await rolePage("owner");
+    await owner.goto(`/admin/events/${ev.id}/guests`);
+    const table = owner.getByRole("table", { name: "Invitadas del evento" });
+    await expect(table.getByText("Posible duplicado")).toHaveCount(1);
+    await expect(table.getByText(`Coincide con «${friendName}»`)).toHaveCount(1);
+
+    // Portal: la anfitriona sabe que puede quitar ella misma el registro pendiente
+    const host = await anonPage();
+    await host.goto(ev.portalPath);
+    const list = host.getByRole("list", { name: "Lista de invitadas" });
+    await expect(list.getByText("Posible duplicado")).toHaveCount(1);
+    await expect(list).toContainText(
+      `Coincide con «${friendName}» de tu lista. Si es la misma persona, quita el registro pendiente de «${friendName}» para dejar uno solo.`,
+    );
+    const remove = list.getByRole("button", { name: `Quitar a ${friendName} de la lista` });
+    await expect(remove).toHaveCount(1); // sólo el pendiente que ella agregó (no el auto-registro)
+    await waitHydrated(remove);
+    await remove.click();
+    await host.getByRole("alertdialog", { name: `¿Quitar a ${friendName}?` }).getByRole("button", { name: "Quitar de la lista" }).click();
+    await expect(host.getByText(`${friendName} ya no está en tu lista`)).toBeVisible();
+    expect(await db.eventGuest.count({ where: { id: friend.id } })).toBe(0);
+    await expect(list.getByText("Posible duplicado")).toHaveCount(0);
+    await host.reload();
+    await expect(host.getByRole("list", { name: "Lista de invitadas" }).getByText(friendName, { exact: true })).toHaveCount(1);
+    await expect(host.getByRole("list", { name: "Lista de invitadas" }).getByText("Posible duplicado")).toHaveCount(0);
   });
 
   test("[GST-015] mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar", { tag: ["@P1", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {

@@ -8,7 +8,8 @@ import { logger } from "@/lib/logger";
 import { track } from "@/server/analytics";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
-import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { findCustomerByContact, lockCustomerContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { contactUpdateForExisting, unsavedContactNote } from "@/features/customers/domain/contact-merge";
 import type { SessionUser } from "@/server/auth/session";
 import { notifiesInboundLead, type LeadIntakeChannel } from "../domain/lead-workflow";
 
@@ -53,23 +54,30 @@ function normEmail(email?: string | null) {
   return e ? e : null;
 }
 
+/**
+ * Busca (regla única `findCustomerByContact`) o crea a la clienta, serializado por correo/teléfono para que
+ * dos capturas simultáneas no creen dos clientas. A una clienta que ya existía sólo se le completan datos de
+ * contacto si los capturó el equipo; desde el sitio nunca (ver `contactUpdateForExisting`): lo distinto se
+ * devuelve en `unsavedNote` para el timeline del lead.
+ */
 async function findOrCreateCustomer(
   tx: Prisma.TransactionClient,
   input: { name: string; email: string | null; phone: string | null; source: LeadSource; marketingOptIn?: boolean },
-) {
-  const customer = await findCustomerByContact(tx, { email: input.email, phone: input.phone });
-  if (customer) {
-    return tx.customer.update({
+  channel: LeadIntakeChannel,
+): Promise<{ customer: { id: string }; unsavedNote: string | null }> {
+  await lockCustomerContact(tx, input);
+  const match = await findCustomerByContact(tx, { email: input.email, phone: input.phone });
+  if (match) {
+    const { customer } = match;
+    const update = contactUpdateForExisting(channel, customer, { email: input.email, phone: input.phone });
+    const updated = await tx.customer.update({
       where: { id: customer.id },
-      data: {
-        phone: customer.phone ?? input.phone,
-        whatsapp: customer.whatsapp ?? input.phone,
-        email: customer.email ?? input.email,
-        marketingOptIn: customer.marketingOptIn || !!input.marketingOptIn,
-      },
+      data: { ...update.fill, marketingOptIn: customer.marketingOptIn || !!input.marketingOptIn },
+      select: { id: true },
     });
+    return { customer: updated, unsavedNote: unsavedContactNote(update.unsaved) };
   }
-  return tx.customer.create({
+  const created = await tx.customer.create({
     data: {
       name: input.name,
       email: input.email,
@@ -79,7 +87,9 @@ async function findOrCreateCustomer(
       referralCode: generateReferralCode(input.name),
       marketingOptIn: !!input.marketingOptIn,
     },
+    select: { id: true },
   });
+  return { customer: created, unsavedNote: null };
 }
 
 /**
@@ -108,13 +118,11 @@ export async function createInboundLead(
     .join(", ");
 
   const created = await prisma.$transaction(async (tx) => {
-    const customer = await findOrCreateCustomer(tx, {
-      name: input.name.trim(),
-      email,
-      phone,
-      source: input.source,
-      marketingOptIn: input.marketingOptIn,
-    });
+    const { customer, unsavedNote } = await findOrCreateCustomer(
+      tx,
+      { name: input.name.trim(), email, phone, source: input.source, marketingOptIn: input.marketingOptIn },
+      ctx.channel,
+    );
 
     let lead: { id: string; code: string } | null = null;
     for (let attempt = 0; attempt < 4 && !lead; attempt++) {
@@ -164,7 +172,7 @@ export async function createInboundLead(
         type: "CREATED",
         toStatus: "NEW",
         actorId: ctx.actor?.id ?? null,
-        message: `Lead recibido vía ${input.source}${flags ? ` — ${flags}` : ""}.`,
+        message: `Lead recibido vía ${input.source}${flags ? ` — ${flags}` : ""}.${unsavedNote ? ` ${unsavedNote}` : ""}`,
       },
     });
 

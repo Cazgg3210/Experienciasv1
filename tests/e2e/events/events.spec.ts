@@ -77,6 +77,32 @@ test.describe("Eventos · listado y detalle", { tag: ["@module:events"] }, () =>
     expect(outcomes.filter((o) => !o.includes("→ OK")), outcomes.join("\n")).toEqual([]);
   });
 
+  test("[EVT-039] buscar por el teléfono de la clienta en Eventos y Cotizaciones encuentra su evento en cualquier formato", { tag: ["@P2", "@regression"] }, async ({ rolePage, db, evidence }) => {
+    evidence("owner", "Eventos / Cotizaciones › Buscar «+52 1 55…», «(55) 1234-5678» y «55 1234 5678»");
+    test.info().annotations.push({ type: "regression", description: "revisión BUG-008: búsqueda por teléfono tolerante a formatos" });
+    const national = uniqPhone();
+    // Una clienta con el teléfono guardado con separadores (dato anterior a la forma canónica) y otra canónica.
+    const legacy = await createCustomer(db, { name: uniq("Tel Formato"), phone: `${national.slice(0, 2)} ${national.slice(2, 6)} ${national.slice(6)}` });
+    const canonicalNational = uniqPhone();
+    const canonical = await createCustomer(db, { name: uniq("Tel Canónico"), phone: `+52${canonicalNational}` });
+    const evLegacy = await createEventFixture(db, { status: "CONFIRMED", customer: legacy, booking: { totalCents: 1_000_000, depositCents: 500_000 } });
+    const evCanonical = await createEventFixture(db, { status: "CONFIRMED", customer: canonical, booking: { totalCents: 1_000_000, depositCents: 500_000 } });
+    const quoteOf = async (eventId: string) => (await db.event.findUniqueOrThrow({ where: { id: eventId }, select: { quote: { select: { code: true } } } })).quote!.code;
+    const [qLegacy, qCanonical] = await Promise.all([quoteOf(evLegacy.id), quoteOf(evCanonical.id)]);
+    const page = await rolePage("owner");
+    const cases: Array<[string, typeof evLegacy, string]> = [
+      [`+52 1 ${national}`, evLegacy, qLegacy],
+      [`(${national.slice(0, 2)}) ${national.slice(2, 6)}-${national.slice(6)}`, evLegacy, qLegacy],
+      [`${canonicalNational.slice(0, 2)} ${canonicalNational.slice(2, 6)} ${canonicalNational.slice(6)}`, evCanonical, qCanonical],
+    ];
+    for (const [q, ev, quoteCode] of cases) {
+      await page.goto(`/admin/events?q=${encodeURIComponent(q)}`);
+      await expect(page.getByRole("table", { name: "Listado de eventos" }).getByRole("link", { name: ev.title }), q).toBeVisible();
+      await page.goto(`/admin/quotes?q=${encodeURIComponent(q)}`);
+      await expect(page.getByRole("table", { name: "Listado de cotizaciones" }).getByRole("link", { name: quoteCode }), q).toBeVisible();
+    }
+  });
+
   test("[EVT-002] periodo «Pasados» lista eventos completados y no los futuros", { tag: ["@P2"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "Eventos › periodo Pasados");
     const past = await createEventFixture(db, { status: "COMPLETED", title: `Pasado ${uniq("E2E")}` });

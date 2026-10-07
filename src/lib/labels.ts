@@ -239,6 +239,10 @@ export const RSVP_STATUS_TONES: Record<RsvpStatus, Tone> = {
   MAYBE: "info",
 };
 
+/** Marca de una invitada auto-registrada que coincide con otra de la lista (admin y portal de la anfitriona). */
+export const GUEST_POSSIBLE_DUPLICATE_LABEL = "Posible duplicado";
+export const GUEST_POSSIBLE_DUPLICATE_TONE: Tone = "neutral";
+
 export const DIETARY_LABELS: Record<DietaryRestriction, string> = {
   VEGETARIAN: "Vegetariana",
   VEGAN: "Vegana",

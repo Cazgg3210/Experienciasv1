@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma, type LeadSource } from "@prisma/client";
 import { prisma } from "@/db";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
-import { phoneSearchDigits, samePhone } from "@/lib/phone";
+import { samePhone } from "@/lib/phone";
 import { audit } from "@/server/audit";
 import { can, type Permission } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
@@ -15,7 +15,7 @@ import {
   totalPaidByCustomer,
 } from "../domain/customer-rules";
 import type { UpdateCustomerInput } from "../schemas";
-import { phoneForStorage } from "./customer-contact";
+import { customerPhoneSearchFilter, phoneForStorage } from "./customer-contact";
 
 type Ctx = { ip?: string | null };
 
@@ -55,7 +55,7 @@ export type CustomerListItem = {
   createdAt: Date;
 };
 
-function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhereInput {
+async function customerSearchWhere(q: string | null | undefined): Promise<Prisma.CustomerWhereInput> {
   const query = q?.trim().slice(0, 100);
   if (!query) return {};
   const or: Prisma.CustomerWhereInput[] = [
@@ -66,12 +66,10 @@ function customerSearchWhere(q: string | null | undefined): Prisma.CustomerWhere
     { instagram: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
     { referralCode: { contains: query, mode: "insensitive" } },
   ];
-  // Un teléfono completo (+52, 521, con espacios…) se busca por su número nacional: encuentra la forma
-  // canónica "+52…" y las que quedaron en 10 dígitos.
-  const digits = phoneSearchDigits(query);
-  if (digits.length >= 4 && digits !== query) {
-    or.push({ phone: { contains: digits } }, { whatsapp: { contains: digits } });
-  }
+  // Teléfono en cualquier formato: un número completo (+52, 521, con espacios…) se busca por su número
+  // nacional y encuentra la forma canónica "+52…", los 10 dígitos y las filas antiguas con separadores.
+  const phoneFilter = await customerPhoneSearchFilter(prisma, query);
+  if (phoneFilter) or.push(phoneFilter);
   return { OR: or };
 }
 
@@ -81,7 +79,7 @@ export async function listCustomers(
 ): Promise<{ items: CustomerListItem[]; total: number; page: number; pageSize: number }> {
   assertCan(actor, "customers:read");
   const pageSize = Math.min(Math.max(opts.pageSize ?? CUSTOMERS_PAGE_SIZE, 1), 200);
-  const where = customerSearchWhere(opts.q);
+  const where = await customerSearchWhere(opts.q);
   const total = await prisma.customer.count({ where });
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(opts.page ?? 1, 1), lastPage);

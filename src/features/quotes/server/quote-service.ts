@@ -15,7 +15,8 @@ import { can } from "@/server/auth/permissions";
 import type { SessionUser } from "@/server/auth/session";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify, notifyCustomer } from "@/features/notifications/server/notification-service";
-import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { findCustomerByContact, lockCustomerContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { contactUpdateForExisting } from "@/features/customers/domain/contact-merge";
 import { leadStatusMachine, type LeadStatus } from "@/features/leads/domain/lead-status";
 import { calculateFromLines, QuoteEngineError, type QuoteResult } from "../domain/quote-engine";
 import { quoteStatusMachine, isQuoteExpired } from "../domain/quote-status";
@@ -158,13 +159,14 @@ async function resolveCustomer(tx: Tx, input: CreateQuoteData): Promise<{ id: st
   const nc = quickCustomerSchema.parse(input.newCustomer ?? {});
   const email = emptyToNull(nc.email)?.toLowerCase() ?? null;
   const phone = phoneForStorage(nc.phone, "newCustomer.phone");
-  // Misma regla que la captura de leads: si ya existe (por correo o por teléfono) se reutiliza.
-  const existing = await findCustomerByContact(tx, { email, phone });
-  if (existing) {
-    const fill = {
-      ...(!existing.phone && phone ? { phone, whatsapp: phone } : {}),
-      ...(!existing.email && email ? { email } : {}),
-    };
+  // Misma regla que la captura de leads: si ya existe (por correo, o por teléfono sin otro correo) se
+  // reutiliza y se le completan los datos que falten (los capturó el equipo). Una clienta encontrada por
+  // teléfono que tiene OTRO correo es otra persona: se crea la nueva (nunca se liga la cotización a otra).
+  await lockCustomerContact(tx, { email, phone });
+  const match = await findCustomerByContact(tx, { email, phone });
+  if (match) {
+    const existing = match.customer;
+    const { fill } = contactUpdateForExisting("team", existing, { email, phone });
     if (Object.keys(fill).length) await tx.customer.update({ where: { id: existing.id }, data: fill });
     return { id: existing.id, name: existing.name };
   }

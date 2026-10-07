@@ -9,7 +9,13 @@ import { StatusBadge } from "@/components/data/status-badge";
 import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { handleActionResult } from "@/components/forms/action-result";
-import { DIETARY_LABELS, RSVP_STATUS_LABELS, RSVP_STATUS_TONES } from "@/lib/labels";
+import {
+  DIETARY_LABELS,
+  GUEST_POSSIBLE_DUPLICATE_LABEL,
+  GUEST_POSSIBLE_DUPLICATE_TONE,
+  RSVP_STATUS_LABELS,
+  RSVP_STATUS_TONES,
+} from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { removeHostGuestAction } from "@/features/guests/server/actions";
 import { copyText } from "./clipboard";
@@ -30,6 +36,8 @@ export type GuestRow = {
   canRemove: boolean;
   /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
   possibleDuplicate: boolean;
+  /** Con quién coincide y qué hacer (p. ej. quitar el registro pendiente que agregó la anfitriona). */
+  duplicateHint: string | null;
 };
 
 /** Botón que abre el diálogo "Agregar invitada" (estado compartido con la barra inferior). */
@@ -157,13 +165,11 @@ function GuestItem({
           <p className="font-medium break-words">{guest.name}</p>
           <StatusBadge tone={RSVP_STATUS_TONES[guest.rsvpStatus]}>{RSVP_STATUS_LABELS[guest.rsvpStatus]}</StatusBadge>
           {guest.sourceLabel ? <span className="text-muted-foreground text-xs">{guest.sourceLabel}</span> : null}
-          {guest.possibleDuplicate ? <StatusBadge tone="neutral">Posible duplicado</StatusBadge> : null}
+          {guest.possibleDuplicate ? (
+            <StatusBadge tone={GUEST_POSSIBLE_DUPLICATE_TONE}>{GUEST_POSSIBLE_DUPLICATE_LABEL}</StatusBadge>
+          ) : null}
         </div>
-        {guest.possibleDuplicate ? (
-          <p className="text-sm">
-            Coincide con otra invitada de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.
-          </p>
-        ) : null}
+        {guest.possibleDuplicate && guest.duplicateHint ? <p className="text-sm">{guest.duplicateHint}</p> : null}
         {details.length ? <p className="text-muted-foreground text-sm">{details.join(" · ")}</p> : null}
         {guest.dietaryNotes ? <p className="text-muted-foreground text-sm">Nota: {guest.dietaryNotes}</p> : null}
         {guest.comment ? <p className="text-sm italic">“{guest.comment}”</p> : null}

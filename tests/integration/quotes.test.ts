@@ -235,6 +235,35 @@ describe("Cotizaciones — creación", () => {
     expect(c.email).toBe(email);
     expect(c.phone).toBe("+525598765432"); // forma canónica única del teléfono (BUG-008)
   });
+
+  it("«Clienta nueva» con el teléfono de otra clienta que tiene OTRO correo: crea la nueva (no liga la cotización a otra persona)", async () => {
+    const date = await openDate();
+    const national = `55${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
+    const existing = await prisma.customer.create({
+      data: { name: "Clienta Con Correo", email: `previa.${uid()}@example.test`, phone: `+52${national}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const email = `otra.${uid()}@example.test`;
+    const q = await createQuote(
+      owner,
+      createInput({ customerMode: "new", customerId: null, newCustomer: { name: "Otra Persona", email, phone: national }, eventDate: date }),
+    );
+    const quote = await prisma.quote.findUniqueOrThrow({ where: { id: q.id }, include: { customer: true } });
+    expect(quote.customerId).not.toBe(existing.id);
+    expect(quote.customer).toMatchObject({ name: "Otra Persona", email, phone: `+52${national}` });
+    expect(await prisma.customer.findUniqueOrThrow({ where: { id: existing.id } }), "la clienta existente no cambia").toEqual(existing);
+
+    // Sin correo, o con una clienta sin correo, el teléfono sí la reconoce (y se completa lo que falta).
+    const noEmail = await prisma.customer.create({
+      data: { name: "Sin Correo", phone: `+52${national.slice(0, 2)}${national.slice(2).split("").reverse().join("")}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const filled = `completa.${uid()}@example.test`;
+    const q2 = await createQuote(
+      owner,
+      createInput({ customerMode: "new", customerId: null, newCustomer: { name: "Sin Correo", email: filled, phone: noEmail.phone! }, eventDate: date }),
+    );
+    expect((await prisma.quote.findUniqueOrThrow({ where: { id: q2.id } })).customerId).toBe(noEmail.id);
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: noEmail.id } })).email).toBe(filled);
+  });
 });
 
 describe("Cotizaciones — editor", () => {

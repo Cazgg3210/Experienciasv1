@@ -101,6 +101,24 @@ export async function submitRsvp(
         data: { ...data, eventId: event.id, token: generateToken(), source: "SELF_RSVP" },
         select: guestSelect,
       });
+      if (duplicateIds.length) {
+        // Rastro para el equipo: alguien respondió con el link general con el nombre o email de otra
+        // invitada. Va dentro de la transacción: se confirma junto con la invitada (o no queda ninguno) y ya
+        // no es una escritura aparte, con su propia conexión, después de la transacción. La diferencia de
+        // tiempo entre «coincide» y «no coincide» queda en un INSERT sobre la conexión ya abierta (además
+        // del límite de 10 respuestas por IP cada 10 min, del cupo de 60 y de que cada sondeo deja un
+        // registro marcado visible para la anfitriona).
+        await audit(
+          {
+            action: "guest.possible_duplicate",
+            entityType: "EventGuest",
+            entityId: guest.id,
+            after: { eventId: event.id, name: guest.name, matchedGuestIds: duplicateIds },
+            ip: ctx.ip ?? null,
+          },
+          tx,
+        );
+      }
     }
 
     const previous = await tx.eventMessage.findFirst({
@@ -134,16 +152,6 @@ export async function submitRsvp(
   });
 
   const possibleDuplicate = duplicateIds.length > 0;
-  if (possibleDuplicate) {
-    // Rastro para el equipo: alguien respondió con el link general con el nombre o email de otra invitada.
-    await audit({
-      action: "guest.possible_duplicate",
-      entityType: "EventGuest",
-      entityId: guest.id,
-      after: { eventId: event.id, name: guest.name, matchedGuestIds: duplicateIds },
-      ip: ctx.ip ?? null,
-    });
-  }
 
   await track("RSVP_SUBMIT", {
     eventId: event.id,

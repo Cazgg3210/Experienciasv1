@@ -4,7 +4,7 @@ import { prisma } from "@/db";
 import { logger } from "@/lib/logger";
 import { isEnabled } from "@/lib/flags";
 import { getEmailProvider, getWhatsAppProvider } from "@/server/providers";
-import { normalizeMxPhone } from "@/server/providers/whatsapp/links";
+import { whatsappDigits } from "@/server/providers/whatsapp/links";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { renderNotification, type NotificationData } from "../domain/templates";
 
@@ -51,7 +51,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     };
 
     if (input.channel === "WHATSAPP") {
-      const to = normalizeMxPhone(input.to);
+      const to = whatsappDigits(input.to);
       const provider = getWhatsAppProvider();
       const enabled = await isEnabled("WHATSAPP_ENABLED");
       const log = await prisma.notificationLog.create({

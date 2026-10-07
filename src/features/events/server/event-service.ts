@@ -19,7 +19,8 @@ import {
   voidOpenCheckoutsForCancelledBooking,
 } from "@/features/payments/server/payment-service";
 import { getSettings } from "@/features/settings/server/settings-service";
-import { findCustomerByContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { findCustomerByContact, lockCustomerContact, phoneForStorage } from "@/features/customers/server/customer-contact";
+import { contactUpdateForExisting } from "@/features/customers/domain/contact-merge";
 import { CAPACITY_STATUSES, eventStatusMachine } from "../domain/event-status";
 import {
   ScheduleError,
@@ -246,31 +247,33 @@ export async function createManualEvent(
   throw new ConflictError("No pudimos generar el código del evento. Intenta de nuevo.");
 }
 
+/**
+ * «Clienta nueva» del alta manual de evento: misma regla que leads y cotizaciones (`findCustomerByContact`,
+ * serializada por correo/teléfono). Si ya existe se le completan los datos que falten (los capturó el
+ * equipo); una clienta con el mismo teléfono pero OTRO correo es otra persona y se crea la nueva.
+ */
 async function findOrCreateCustomer(input: { name: string; email: string | null; phone: string | null }) {
-  const customer = await findCustomerByContact(prisma, { email: input.email, phone: input.phone });
-  if (customer) {
-    await prisma.customer.update({
-      where: { id: customer.id },
+  return prisma.$transaction(async (tx) => {
+    await lockCustomerContact(tx, input);
+    const match = await findCustomerByContact(tx, { email: input.email, phone: input.phone });
+    if (match) {
+      const { fill } = contactUpdateForExisting("team", match.customer, { email: input.email, phone: input.phone });
+      if (Object.keys(fill).length) await tx.customer.update({ where: { id: match.customer.id }, data: fill });
+      return match.customer.id;
+    }
+    const created = await tx.customer.create({
       data: {
-        phone: customer.phone ?? input.phone,
-        whatsapp: customer.whatsapp ?? input.phone,
-        email: customer.email ?? input.email,
+        name: input.name.trim(),
+        email: input.email,
+        phone: input.phone,
+        whatsapp: input.phone,
+        source: "MANUAL",
+        referralCode: generateReferralCode(input.name),
       },
+      select: { id: true },
     });
-    return customer.id;
-  }
-  const created = await prisma.customer.create({
-    data: {
-      name: input.name.trim(),
-      email: input.email,
-      phone: input.phone,
-      whatsapp: input.phone,
-      source: "MANUAL",
-      referralCode: generateReferralCode(input.name),
-    },
-    select: { id: true },
+    return created.id;
   });
-  return created.id;
 }
 
 // -----------------------------------------------------------------------------

@@ -8,7 +8,10 @@ import {
   maskEmail,
   normalizeName,
   parseContact,
+  duplicateNamesLabel,
+  hostDuplicateHint,
   possibleDuplicateIds,
+  possibleDuplicateMatches,
   rsvpStats,
   sortDietary,
 } from "./rsvp";
@@ -64,7 +67,7 @@ describe("findPossibleDuplicates (sólo para marcar; nunca re-identifica — BUG
 describe("possibleDuplicateIds", () => {
   const at = (minute: number) => new Date(Date.UTC(2026, 9, 1, 12, minute));
 
-  it("marca sólo los auto-registros posteriores que coinciden por nombre o email", () => {
+  it("marca los auto-registros que coinciden por nombre o email con otra invitada", () => {
     const flagged = possibleDuplicateIds([
       { id: "host", name: "Camila Ruiz", email: "camila@example.com", source: "HOST", createdAt: at(0) },
       { id: "self-name", name: "camila ruiz", email: null, source: "SELF_RSVP", createdAt: at(5) },
@@ -74,21 +77,30 @@ describe("possibleDuplicateIds", () => {
     expect([...flagged].sort()).toEqual(["self-email", "self-name"]);
   });
 
-  it("la primera en registrarse y las agregadas por anfitriona o equipo nunca se marcan", () => {
+  it("las agregadas por anfitriona o equipo nunca se marcan, aunque coincidan", () => {
+    const flagged = possibleDuplicateIds([
+      { id: "host-a", name: "Paula Mena", email: null, source: "HOST", createdAt: at(0) },
+      { id: "admin-b", name: "paula mena", email: null, source: "ADMIN", createdAt: at(1) },
+    ]);
+    expect(flagged.size).toBe(0);
+  });
+
+  it("dos auto-registros que coinciden se marcan los DOS: el orden de llegada no prueba cuál es la original", () => {
+    // Alguien se registra con el nombre de una invitada antes que ella: no queda como «la original».
+    const flagged = possibleDuplicateIds([
+      { id: "b", name: "Lu Díaz", email: null, source: "SELF_RSVP", createdAt: at(9) },
+      { id: "a", name: "Lu Diaz", email: null, source: "SELF_RSVP", createdAt: at(1) },
+    ]);
+    expect([...flagged].sort()).toEqual(["a", "b"]);
+  });
+
+  it("un auto-registro se marca también si la coincidencia la agregaron DESPUÉS la anfitriona o el equipo", () => {
     const flagged = possibleDuplicateIds([
       { id: "self-first", name: "Paula Mena", email: null, source: "SELF_RSVP", createdAt: at(0) },
       { id: "admin-later", name: "Paula Mena", email: null, source: "ADMIN", createdAt: at(1) },
       { id: "self-later", name: "Paula Mena", email: null, source: "SELF_RSVP", createdAt: at(2) },
     ]);
-    expect([...flagged]).toEqual(["self-later"]);
-  });
-
-  it("ordena por fecha de alta aunque la lista llegue desordenada", () => {
-    const flagged = possibleDuplicateIds([
-      { id: "b", name: "Lu Díaz", email: null, source: "SELF_RSVP", createdAt: at(9) },
-      { id: "a", name: "Lu Diaz", email: null, source: "SELF_RSVP", createdAt: at(1) },
-    ]);
-    expect([...flagged]).toEqual(["b"]);
+    expect([...flagged].sort()).toEqual(["self-first", "self-later"]);
   });
 
   it("sin coincidencias no marca a nadie", () => {
@@ -99,6 +111,43 @@ describe("possibleDuplicateIds", () => {
         { id: "b", name: "Bea", email: null, source: "SELF_RSVP", createdAt: at(1) },
       ]).size,
     ).toBe(0);
+  });
+});
+
+describe("possibleDuplicateMatches (con quién coincide cada posible duplicado)", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 1, 12, minute));
+
+  it("devuelve las coincidencias de cada marcada en orden de alta, sin incluirse a sí misma", () => {
+    const matches = possibleDuplicateMatches([
+      { id: "self-2", name: "Ana Paz", email: null, source: "SELF_RSVP", createdAt: at(5) },
+      { id: "host", name: "Ana Paz", email: "ana@example.com", source: "HOST", createdAt: at(0) },
+      { id: "self-1", name: "Otra", email: "ANA@example.com", source: "SELF_RSVP", createdAt: at(3) },
+    ]);
+    expect([...matches.keys()].sort()).toEqual(["self-1", "self-2"]);
+    expect(matches.get("self-1")!.map((g) => g.id)).toEqual(["host"]);
+    expect(matches.get("self-2")!.map((g) => g.id)).toEqual(["host"]);
+    expect(matches.has("host")).toBe(false);
+  });
+});
+
+describe("textos de posible duplicado", () => {
+  it("lista los nombres con comillas latinas", () => {
+    expect(duplicateNamesLabel(["Ana"])).toBe("«Ana»");
+    expect(duplicateNamesLabel(["Ana", "Bety"])).toBe("«Ana» y «Bety»");
+    expect(duplicateNamesLabel(["Ana", "Bety", "Caro"])).toBe("«Ana», «Bety» y «Caro»");
+  });
+
+  it("si la coincidencia es una invitada pendiente que agregó la anfitriona, le dice que la quite", () => {
+    expect(hostDuplicateHint([{ name: "Ana Paz", removable: true }])).toBe(
+      "Coincide con «Ana Paz» de tu lista. Si es la misma persona, quita el registro pendiente de «Ana Paz» para dejar uno solo.",
+    );
+  });
+
+  it("si no la puede quitar ella, le pide que nos escriba", () => {
+    expect(hostDuplicateHint([{ name: "Ana Paz", removable: false }])).toBe(
+      "Coincide con «Ana Paz» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.",
+    );
+    expect(hostDuplicateHint([])).toBe("");
   });
 });
 

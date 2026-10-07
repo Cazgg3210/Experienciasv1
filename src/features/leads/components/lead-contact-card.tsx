@@ -1,7 +1,7 @@
 import { Mail, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/data/copy-button";
-import { normalizeMxPhone, whatsappLink } from "@/server/providers/whatsapp/links";
+import { whatsappDigits, whatsappLink } from "@/server/providers/whatsapp/links";
 import { formatDateTime, formatLongDate } from "@/lib/dates";
 import type { Occasion } from "@prisma/client";
 import { buildEmailBody, buildEmailSubject, buildWhatsappMessage, mailtoLink, telLink } from "../domain/lead-workflow";
@@ -37,7 +37,7 @@ export function LeadContactCard({
     experienceName: lead.experienceName,
   };
   // Sólo con un número válido para wa.me (si no, el enlace abriría WhatsApp sin destinataria)
-  const wa = normalizeMxPhone(lead.phone) ? whatsappLink(lead.phone, buildWhatsappMessage(ctx)) : null;
+  const wa = whatsappDigits(lead.phone) ? whatsappLink(lead.phone, buildWhatsappMessage(ctx)) : null;
   const mail = lead.email ? mailtoLink(lead.email, buildEmailSubject(ctx), buildEmailBody(ctx)) : null;
 
   return (

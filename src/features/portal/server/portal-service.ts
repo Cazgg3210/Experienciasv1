@@ -10,7 +10,14 @@ import { whatsappLink } from "@/server/providers/whatsapp/links";
 import { getSettings } from "@/features/settings/server/settings-service";
 import { notify } from "@/features/notifications/server/notification-service";
 import { netPaidCents } from "@/features/payments/domain/payment-status";
-import { firstName, possibleDuplicateIds, rsvpStats, type RsvpStats } from "@/features/guests/domain/rsvp";
+import {
+  canHostRemoveGuest,
+  firstName,
+  hostDuplicateHint,
+  possibleDuplicateMatches,
+  rsvpStats,
+  type RsvpStats,
+} from "@/features/guests/domain/rsvp";
 import {
   PORTAL_ACCESS_LOOKBACK_DAYS,
   PORTAL_ACCESS_NEUTRAL_MESSAGE,
@@ -134,6 +141,8 @@ export type PortalGuest = {
   canRemove: boolean;
   /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
   possibleDuplicate: boolean;
+  /** Con quién coincide y qué puede hacer la anfitriona (null si no es un posible duplicado). */
+  duplicateHint: string | null;
 };
 
 export type PortalMessage = {
@@ -312,7 +321,7 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
     city: event.city,
   };
 
-  const duplicates = possibleDuplicateIds(event.guests);
+  const duplicates = possibleDuplicateMatches(event.guests);
   const guests: PortalGuest[] = event.guests.map((g) => {
     const url = appUrl(`/e/${event.micrositeSlug}/${g.token}`);
     const text = buildGuestInvitationText({ ...invitationBase, guestName: g.name, url });
@@ -331,8 +340,11 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       respondedAt: g.respondedAt,
       inviteUrl: url,
       whatsappUrl: whatsappLink(g.phone, text),
-      canRemove: g.source === "HOST" && g.rsvpStatus === "PENDING",
+      canRemove: canHostRemoveGuest(g),
       possibleDuplicate: duplicates.has(g.id),
+      duplicateHint: duplicates.has(g.id)
+        ? hostDuplicateHint(duplicates.get(g.id)!.map((m) => ({ name: m.name, removable: canHostRemoveGuest(m) })))
+        : null,
     };
   });
 

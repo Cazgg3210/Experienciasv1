@@ -44,10 +44,24 @@ Grupos mayores a `maxStandardGuests` (12) se aceptan como **consulta especial**.
 
 - **Teléfono canónico** (`@/lib/phone` → `normalizePhone`): se guarda en E.164 — `+52` + 10 dígitos para México
   (se aceptan 10 dígitos, `+52`, `52`, el prefijo legado `521` y espacios/guiones/puntos/paréntesis) y `+lada…` para
-  otros países. Toda escritura de clientas y leads usa esta forma; los esquemas Zod validan con la misma función.
-- **Busca o crea clienta** (`findCustomerByContact`): primero por correo y luego por teléfono, comparando sólo dígitos
-  contra las formas del mismo número (reconoce datos guardados antes de la forma canónica). La usan la captura de
-  leads (`createInboundLead`), el alta manual de evento y la cotización con «Clienta nueva».
+  otros países (11 a 15 dígitos). El número nacional empieza del 2 al 9; una lada `52` sólo vale con su longitud
+  mexicana y con `+` al inicio siempre viene la lada (`+` + 10 dígitos no es un número nacional). Toda escritura de
+  clientas y leads usa esta forma; los esquemas Zod validan con la misma función, y los enlaces wa.me y los avisos por
+  WhatsApp usan la misma regla (`whatsappDigits` = forma canónica sin `+`). Un teléfono guardado antes con un
+  formato que esta regla rechaza (p. ej. `044…`, `+52` con dígitos de más o de menos) hay que corregirlo al editar el
+  perfil o el lead: es un dato que tampoco funcionaría para WhatsApp.
+- **Busca o crea clienta** (`findCustomerByContact`): primero por correo y luego por teléfono o WhatsApp (forma
+  canónica exacta y, como respaldo, sólo dígitos contra las formas del mismo número para datos guardados antes de la
+  forma canónica). Si se escribió un correo, el teléfono sólo reconoce a una clienta **sin** correo: el mismo teléfono
+  con otro correo es otra persona (dos clientas pueden compartir teléfono) y se crea la nueva. Se serializa por correo
+  y número (`lockCustomerContact`), así dos capturas simultáneas no crean dos clientas. La usan la captura de leads
+  (`createInboundLead`), el alta manual de evento y la cotización con «Clienta nueva».
+- **Datos de contacto de una clienta que ya existía** (`contactUpdateForExisting`): lo que captura el equipo completa
+  los campos vacíos (nunca sobrescribe). Lo que llega por el sitio público **nunca** se agrega a su perfil —cualquiera
+  puede escribir el teléfono o el correo de otra persona y recibiría sus enlaces de cotización, portal y pagos—: queda
+  en el lead y el timeline del lead pide confirmarlo con ella antes de actualizar el perfil.
+- **Búsqueda por teléfono** en Clientas, Eventos, Cotizaciones y los selectores de clienta: tolera formatos ("+52 1 55…",
+  "(55) 1234-5678") y encuentra también filas guardadas antes de la forma canónica (`customerPhoneSearchFilter`).
 - **Avisos de lead entrante** («Recibimos tu solicitud» a la clienta y «Nuevo lead» al equipo): sólo cuando el lead
   entra por un canal público (configurador, diseñador IA, contacto). Una captura del equipo en el panel no avisa,
   sea cual sea su origen comercial (Instagram, WhatsApp, recomendación…).
@@ -80,6 +94,23 @@ por persona o fijos) reportando faltantes por fecha.
 `Payment.kind`: DEPOSIT, BALANCE, FULL, REFUND. Pagado neto = Σ(PAID/PARTIAL_REFUND/REFUNDED − reembolsado) de pagos
 no-REFUND. Saldo = total − pagado neto (nunca negativo). El anticipo está cubierto cuando pagado neto ≥ anticipo requerido.
 Pagos manuales (efectivo, transferencia, terminal) y reembolsos quedan auditados.
+
+**Checkout en línea** (`startCheckout`): se serializa por reserva con el candado de la reserva, pero nunca lo retiene
+durante la llamada a la pasarela: (1) con el candado se reserva el pago (`PENDING` sin `checkoutUrl`), (2) sin
+transacción la pasarela abre la sesión, (3) con el candado se publica la URL sólo si el pago sigue reservado y la reserva
+no está cancelada. Una solicitud simultánea del mismo cobro espera y reutiliza esa URL; una cancelación a la mitad anula
+el lugar reservado y la sesión que abrió la pasarela se expira sin entregarse. Al cancelar un evento, sus checkouts
+abiertos pasan a `FAILED` «Evento cancelado.» y se pide a la pasarela expirar sus sesiones (best-effort); un cobro que
+la pasarela confirme de todos modos queda `PAID` con «Reembolso requerido» y aviso al equipo.
+
+## Invitadas: posibles duplicados
+
+El link general nunca re-identifica a una invitada (BUG-003). Un auto-registro (`SELF_RSVP`) que coincide por nombre o
+email con otra invitada de la lista —registrada antes o después— se marca «Posible duplicado» con el nombre de la
+coincidencia; si dos auto-registros coinciden se marcan los dos (el orden de llegada no prueba cuál es la original).
+Las invitadas que agregaron la anfitriona o el equipo no se marcan. Si la coincidencia es una invitada pendiente que la
+anfitriona agregó, el portal le indica que quite ese registro; los recordatorios no se omiten automáticamente (quien
+conozca el nombre de una invitada podría silenciarlos).
 
 ## Costeo real y cierre
 

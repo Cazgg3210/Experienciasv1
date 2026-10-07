@@ -231,6 +231,34 @@ test.describe("Contacto", { tag: ["@module:public"] }, () => {
   );
 
   test(
+    "[PUB-048] con el teléfono de una clienta registrada el mensaje se liga a ella, pero su perfil no toma el correo escrito (sus enlaces no se desvían)",
+    { tag: ["@P1", "@regression", "@permissions"] },
+    async ({ db, request, baseURL, rolePage, evidence }) => {
+      evidence("anonimo", "submitContactForm con el teléfono de otra clienta (sin correo) y un correo ajeno; owner revisa el lead");
+      test.info().annotations.push({ type: "regression", description: "revisión BUG-008: una captura pública no completa el contacto de una clienta existente" });
+      const phone = uniqPhone();
+      const victim = await db.customer.create({
+        data: { name: `Clienta ${uniq("SinCorreo")}`, phone: `+52${phone}`, referralCode: uniq("IR").toUpperCase(), source: "MANUAL" },
+      });
+      const p = { ...validPayload(), phone: `${phone.slice(0, 2)} ${phone.slice(2, 6)} ${phone.slice(6)}`, email: uniqEmail("ajeno") };
+      const res = okData(await callAction<{ code: string }>(request, baseURL!, "submitContactForm", p, "/contacto"));
+      const lead = await db.lead.findUniqueOrThrow({ where: { code: res.code } });
+      expect(lead.customerId, "se reconoce a la clienta por su teléfono (no se duplica)").toBe(victim.id);
+      expect(lead.email).toBe(p.email);
+      expect(await db.customer.findUniqueOrThrow({ where: { id: victim.id } }), "el perfil no cambia").toMatchObject({
+        email: null,
+        phone: `+52${phone}`,
+        whatsapp: null,
+      });
+      // El equipo ve en el timeline que el correo no se agregó al perfil y debe confirmarlo
+      const owner = await rolePage("owner");
+      await owner.goto(`/admin/leads/${lead.id}`);
+      await expect(owner.getByText(`correo ${p.email}`, { exact: false })).toBeVisible();
+      await expect(owner.getByText("No se agregaron a su perfil", { exact: false })).toBeVisible();
+    },
+  );
+
+  test(
     "[PUB-047] texto con HTML/script se muestra escapado en la confirmación y en el panel (sin ejecutar)",
     { tag: ["@P2", "@negative"] },
     async ({ page, db, rolePage, evidence }) => {

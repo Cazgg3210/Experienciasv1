@@ -169,6 +169,13 @@ async function notificationCount(eventId: string, type: "PAYMENT_RECEIVED" | "BO
  *  - run(fn): ejecuta algo dentro de esa transacción (p. ej. cambiar el pago) antes de soltarla.
  *  - release(): confirma la transacción y suelta el candado.
  */
+/** Promesa que la prueba resuelve a mano (p. ej. una pasarela que tarda en responder). */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
 async function holdRowLock(table: "Booking" | "Payment", id: string) {
   type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
   let release!: () => void;
@@ -301,6 +308,84 @@ describe("startCheckout", () => {
     expect(results.filter((r) => !r.reused)).toHaveLength(1);
     expect(await prisma.payment.count({ where: { bookingId: booking.id } })).toBe(1);
     expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(1);
+  });
+
+  it("la pasarela se llama FUERA del candado: la reserva no queda bloqueada y otra solicitud espera y reutiliza la misma URL", async () => {
+    const { booking, event } = await makeFixture();
+    const gate = deferred();
+    const original = MockPaymentProvider.prototype.createCheckout;
+    const create = vi.spyOn(MockPaymentProvider.prototype, "createCheckout").mockImplementation(async function (
+      this: MockPaymentProvider,
+      input,
+    ) {
+      await gate.promise;
+      return original.call(this, input);
+    });
+    try {
+      const first = startCheckout(booking.id, "DEPOSIT");
+      await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+      // Mientras la pasarela responde, nadie retiene el candado de la reserva (NOWAIT falla si lo hubiera).
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${booking.id} FOR UPDATE NOWAIT`;
+      });
+      // El lugar quedó reservado (PENDING sin URL) antes de llamar a la pasarela.
+      expect(await prisma.payment.findMany({ where: { bookingId: booking.id }, select: { status: true, checkoutUrl: true } })).toEqual([
+        { status: "PENDING", checkoutUrl: null },
+      ]);
+      const second = startCheckout(booking.id, "DEPOSIT");
+      gate.resolve();
+      const [a, b] = await Promise.all([first, second]);
+      expect(a.reused).toBe(false);
+      expect(b).toEqual({ url: a.url, paymentId: a.paymentId, reused: true });
+      expect(create, "un solo cobro abierto en la pasarela").toHaveBeenCalledTimes(1);
+      expect(await prisma.payment.count({ where: { bookingId: booking.id } })).toBe(1);
+      expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(1);
+    } finally {
+      gate.resolve();
+      create.mockRestore();
+    }
+  });
+
+  it("si la pasarela falla, el intento queda FAILED y responde CHECKOUT_FAILED; el siguiente intento abre uno nuevo", async () => {
+    const { booking, event } = await makeFixture();
+    const create = vi.spyOn(MockPaymentProvider.prototype, "createCheckout").mockRejectedValueOnce(new Error("pasarela caída (prueba)"));
+    try {
+      await expect(startCheckout(booking.id, "DEPOSIT")).rejects.toMatchObject({ code: "CHECKOUT_FAILED" });
+      expect(await prisma.payment.findMany({ where: { bookingId: booking.id }, select: { status: true, failureReason: true, checkoutUrl: true } })).toEqual([
+        { status: "FAILED", failureReason: "No se pudo abrir la pasarela de pago.", checkoutUrl: null },
+      ]);
+      expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(0);
+      const retry = await startCheckout(booking.id, "DEPOSIT");
+      expect(retry.reused).toBe(false);
+      expect(await prisma.payment.findUniqueOrThrow({ where: { id: retry.paymentId } })).toMatchObject({ status: "PENDING", checkoutUrl: retry.url });
+    } finally {
+      create.mockRestore();
+    }
+  });
+
+  it("un lugar reservado que quedó sin URL más allá de la ventana de apertura se da por fallido y se abre otro", async () => {
+    const { booking } = await makeFixture();
+    const abandoned = await prisma.payment.create({
+      data: {
+        bookingId: booking.id,
+        kind: "DEPOSIT",
+        status: "PENDING",
+        method: "ONLINE",
+        provider: "mock",
+        amountCents: DEPOSIT,
+        currency: "MXN",
+        idempotencyKey: `${booking.id}:DEPOSIT:${uid()}`,
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const res = await startCheckout(booking.id, "DEPOSIT");
+    expect(res.reused).toBe(false);
+    expect(res.paymentId).not.toBe(abandoned.id);
+    expect(await prisma.payment.findUniqueOrThrow({ where: { id: abandoned.id } })).toMatchObject({
+      status: "FAILED",
+      failureReason: "No se pudo abrir la pasarela de pago.",
+    });
+    expect(await prisma.payment.count({ where: { bookingId: booking.id, status: "PENDING" } })).toBe(1);
   });
 
   it("rechaza eventos cancelados y pagos deshabilitados", async () => {
@@ -971,6 +1056,47 @@ describe("Cancelación del evento con checkouts abiertos", () => {
       data: { status: "PAID", eventCancelled: true, collectedAfterCancellation: false },
     });
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })).notes).toBeNull();
+  });
+
+  it("cancelar mientras la pasarela abre la sesión: la cancelación no la espera, el enlace nunca se entrega y esa sesión se expira", async () => {
+    const owner = await testOwner();
+    const { booking, event } = await makeFixture();
+    const gate = deferred();
+    const original = MockPaymentProvider.prototype.createCheckout;
+    const sessions: string[] = [];
+    const create = vi.spyOn(MockPaymentProvider.prototype, "createCheckout").mockImplementation(async function (
+      this: MockPaymentProvider,
+      input,
+    ) {
+      await gate.promise;
+      const session = await original.call(this, input);
+      sessions.push(session.checkoutId);
+      return session;
+    });
+    const expire = vi.spyOn(MockPaymentProvider.prototype, "expireCheckout");
+    try {
+      const checkout = startCheckout(booking.id, "DEPOSIT").catch((e: unknown) => e);
+      await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+      // La cancelación termina aunque la pasarela no haya respondido (no hay candado retenido).
+      const r = await cancelEvent({ eventId: event.id, reason: "Cancelación mientras se abre el pago (prueba)", notifyCustomer: false }, owner);
+      expect(r.status).toBe("cancelled");
+      const voided = await prisma.payment.findFirstOrThrow({ where: { bookingId: booking.id } });
+      expect(voided).toMatchObject({ status: "FAILED", failureReason: "Evento cancelado.", checkoutUrl: null });
+      expect(expire, "aún no hay sesión que expirar").not.toHaveBeenCalled();
+
+      gate.resolve();
+      expect(await checkout).toMatchObject({ code: "EVENT_CANCELLED" });
+      const after = await prisma.payment.findUniqueOrThrow({ where: { id: voided.id } });
+      expect(after).toMatchObject({ status: "FAILED", failureReason: "Evento cancelado.", checkoutUrl: null, providerCheckoutId: null });
+      expect(sessions).toHaveLength(1);
+      expect(expire, "la sesión que abrió la pasarela tarde se expira").toHaveBeenCalledWith(sessions[0]);
+      expect(await prisma.analyticsEvent.count({ where: { eventId: event.id, type: "START_PAYMENT" } })).toBe(0);
+      expect(await prisma.payment.count({ where: { bookingId: booking.id, status: "PENDING" } })).toBe(0);
+    } finally {
+      gate.resolve();
+      create.mockRestore();
+      expire.mockRestore();
+    }
   });
 
   it("cancelación y checkout simultáneos nunca dejan un pago pendiente en una reserva cancelada", async () => {

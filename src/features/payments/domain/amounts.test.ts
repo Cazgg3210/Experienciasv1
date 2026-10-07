@@ -4,6 +4,7 @@ import {
   REFUND_REQUIRED_NOTE_PREFIX,
   checkoutAmountCents,
   checkoutLinkState,
+  checkoutOpeningState,
   estimateFeeCents,
   isBookingCancelled,
   isCollectedPaymentStatus,
@@ -94,6 +95,36 @@ describe("isReusablePendingCheckout", () => {
     expect(isReusablePendingCheckout({ ...base, checkoutUrl: null }, wanted, now)).toBe(false);
     expect(isReusablePendingCheckout({ ...base, provider: "stripe" }, wanted, now)).toBe(false);
     expect(isReusablePendingCheckout({ ...base, createdAt: new Date(now.getTime() - 61 * 60_000) }, wanted, now)).toBe(false);
+  });
+});
+
+describe("checkoutOpeningState (pago reservado mientras la pasarela abre la sesión)", () => {
+  const now = new Date("2026-10-01T18:00:00Z");
+  const WINDOW = 20_000;
+  const reserved = {
+    kind: "DEPOSIT",
+    status: "PENDING",
+    amountCents: 500_000,
+    provider: "mock",
+    checkoutUrl: null,
+    createdAt: new Date(now.getTime() - 3_000),
+  };
+  const wanted = { kind: "DEPOSIT" as const, amountCents: 500_000, provider: "mock" };
+  it("mismo cobro reservado hace poco y sin URL: otra solicitud lo está abriendo (esperar y reutilizar)", () => {
+    expect(checkoutOpeningState(reserved, wanted, now, WINDOW)).toBe("opening");
+  });
+  it("sin URL más allá de la ventana: abandonado (de cualquier tipo, monto o proveedor)", () => {
+    const old = { ...reserved, createdAt: new Date(now.getTime() - WINDOW) };
+    expect(checkoutOpeningState(old, wanted, now, WINDOW)).toBe("abandoned");
+    expect(checkoutOpeningState({ ...old, kind: "BALANCE", amountCents: 1, provider: "stripe" }, wanted, now, WINDOW)).toBe("abandoned");
+  });
+  it("no aplica: ya publicado, otro estado, otro cobro vigente o filas que no son de checkout", () => {
+    expect(checkoutOpeningState({ ...reserved, checkoutUrl: "http://x/pago/mock/cs" }, wanted, now, WINDOW)).toBeNull();
+    expect(checkoutOpeningState({ ...reserved, status: "FAILED" }, wanted, now, WINDOW)).toBeNull();
+    expect(checkoutOpeningState({ ...reserved, kind: "BALANCE" }, wanted, now, WINDOW)).toBeNull();
+    expect(checkoutOpeningState({ ...reserved, amountCents: 100 }, wanted, now, WINDOW)).toBeNull();
+    expect(checkoutOpeningState({ ...reserved, provider: "stripe" }, wanted, now, WINDOW)).toBeNull();
+    expect(checkoutOpeningState({ ...reserved, kind: "REFUND", createdAt: new Date(0) }, wanted, now, WINDOW)).toBeNull();
   });
 });
 

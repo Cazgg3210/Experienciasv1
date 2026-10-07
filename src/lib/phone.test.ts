@@ -47,9 +47,29 @@ describe("normalizePhone (forma canónica E.164)", () => {
     ["+52 55 1234 5678 ext 2"],
     ["0445512345678"], // prefijo de marcación, no lada
     ["1234567890123456"], // 16 dígitos
+    // Lada de México (52) con longitud equivocada: no se cuela como "internacional"
+    ["+52 55 1234 567"], // 52 + 9
+    ["+52 55 1234 56789"], // 52 + 11
+    ["52551234567"],
+    ["5255123456789"], // 13 dígitos sin el 1 de celular
+    ["52 1 55 1234 567"], // 521 + 9: no es 52 + "1551234567"
+    ["+52 1 55 1234 56789"], // 521 + 11
+    // "+" siempre trae lada: "+" + 10 dígitos no es un número nacional
+    ["+1 415 555 012"],
+    ["+55 1234 5678"],
+    // El número nacional de México empieza del 2 al 9
+    ["0123456789"],
+    ["1234567890"],
+    ["+52 01 234 5678"],
   ])("inválido o vacío: %s → null", (input) => {
     expect(normalizePhone(input as string | null | undefined)).toBeNull();
     expect(isValidPhone(input as string | null | undefined)).toBe(false);
+  });
+
+  it("una lada internacional que no es 52 conserva cualquier longitud válida (11 a 15)", () => {
+    expect(normalizePhone("+34 91 234 56 78")).toBe("+34912345678");
+    expect(normalizePhone("+44 20 7946 0958")).toBe("+442079460958");
+    expect(normalizePhone("+1 415 555 0123")).toBe("+14155550123");
   });
 });
 
@@ -63,6 +83,9 @@ describe("mxNationalNumber", () => {
     expect(mxNationalNumber("+1 415 555 0123")).toBeNull();
     expect(mxNationalNumber("12345")).toBeNull();
     expect(mxNationalNumber(null)).toBeNull();
+    expect(mxNationalNumber("+1 415 555 012")).toBeNull(); // "+" + 10 dígitos: trae lada, no es nacional
+    expect(mxNationalNumber("52 1 55 1234 567")).toBeNull(); // 521 + 9 dígitos
+    expect(mxNationalNumber("1555123456")).toBeNull(); // ninguna lada mexicana empieza con 1
   });
 });
 

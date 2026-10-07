@@ -29,6 +29,9 @@ import {
   updateCustomer,
 } from "@/features/customers/server/customer-service";
 import { submitContactRequest } from "@/features/marketing/server/contact-service";
+import { listEvents } from "@/features/events/server/event-queries";
+import { parseEventFilters } from "@/features/events/domain/event-filters";
+import { listQuotes } from "@/features/quotes/server/quote-queries";
 import { contactFormSchema } from "@/features/marketing/schemas";
 import { testOwner, testStaff, uid } from "./helpers";
 
@@ -736,5 +739,172 @@ describe("revisión: concurrencia, zonas, rango de registro y snapshot", () => {
     expect(forStaff.estimate!.internal).toBeNull();
     expect(forStaff.estimate!.internalWarnings).toEqual([]);
     expect(forStaff.estimate!.warnings).toEqual(["Grupo grande"]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// REVISIÓN BUG-008: reutilizar clientas por contacto sin filtrar datos ni pisar información
+// -----------------------------------------------------------------------------
+
+describe("reutilización de clientas por contacto y búsqueda por teléfono", () => {
+  const contact = (data: { name: string; phone: string; email?: string }) =>
+    submitContactRequest(
+      contactFormSchema.parse({
+        occasion: "BIRTHDAY",
+        message: "Hola, quiero cotizar una experiencia.",
+        consent: true,
+        email: `${uid("contacto")}@example.test`,
+        ...data,
+      }),
+    );
+
+  it("captura pública: a una clienta encontrada por teléfono NO se le agrega el correo que escribió la visitante", async () => {
+    // Quien conoce el teléfono de una clienta registrada sin correo no puede quedarse con sus enlaces
+    // (cotización, portal, pagos) poniendo su propio correo en el sitio.
+    const national = newPhone();
+    const victim = await prisma.customer.create({
+      data: { name: "Clienta Sin Correo", phone: `+52${national}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const intruder = `${uid("intrusa")}@example.test`;
+    const res = await contact({ name: "Otra Persona", phone: national, email: intruder });
+    expect(res.leadId).toBeTruthy();
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: res.leadId! }, include: { activities: true } });
+    expect(lead.customerId, "el lead se liga a la clienta (no se duplica)").toBe(victim.id);
+    expect(lead.email, "el correo escrito queda en el lead").toBe(intruder);
+    const after = await prisma.customer.findUniqueOrThrow({ where: { id: victim.id } });
+    expect(after).toMatchObject({ email: null, phone: `+52${national}`, whatsapp: null, name: "Clienta Sin Correo" });
+    const created = lead.activities.find((a) => a.type === "CREATED");
+    expect(created?.message).toContain(`correo ${intruder}`);
+    expect(created?.message).toContain("No se agregaron a su perfil");
+
+    // Tampoco un teléfono a una clienta encontrada por su correo (avisos por WhatsApp).
+    const byEmail = await prisma.customer.create({
+      data: { name: "Clienta Sin Tel", email: `${uid("sintel")}@example.test`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const res2 = await contact({ name: "Clienta Sin Tel", phone: newPhone(), email: byEmail.email! });
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: res2.leadId! } })).customerId).toBe(byEmail.id);
+    expect(await prisma.customer.findUniqueOrThrow({ where: { id: byEmail.id } })).toMatchObject({ phone: null, whatsapp: null });
+  });
+
+  it("captura del equipo: sí completa el correo o el teléfono que le faltaban a la clienta", async () => {
+    const owner = await testOwner();
+    const national = newPhone();
+    const c = await prisma.customer.create({
+      data: { name: "Clienta Incompleta", phone: `+52${national}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const email = `${uid("equipo")}@example.test`;
+    const res = await createManualLead(owner, { name: "Clienta Incompleta", phone: national, email, occasion: "BIRTHDAY", source: "WHATSAPP" });
+    expect(res.customerId).toBe(c.id);
+    expect(await prisma.customer.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ email, whatsapp: `+52${national}` });
+  });
+
+  it("mismo teléfono con OTRO correo es otra persona: se crea una clienta nueva y la existente no cambia", async () => {
+    const owner = await testOwner();
+    const national = newPhone();
+    const mom = await prisma.customer.create({
+      data: { name: "Mamá", email: `${uid("mama")}@example.test`, phone: `+52${national}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const daughterEmail = `${uid("hija")}@example.test`;
+    const viaSite = await contact({ name: "Hija", phone: national, email: daughterEmail });
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: viaSite.leadId! }, include: { customer: true } });
+    expect(lead.customerId).not.toBe(mom.id);
+    expect(lead.customer).toMatchObject({ name: "Hija", email: daughterEmail, phone: `+52${national}` });
+    const viaPanel = await createManualLead(owner, {
+      name: "Hija",
+      phone: national,
+      email: daughterEmail.toUpperCase(),
+      occasion: "BIRTHDAY",
+      source: "MANUAL",
+    });
+    expect(viaPanel.customerId, "con su propio correo se reconoce a la hija").toBe(lead.customerId);
+    expect(await prisma.customer.findUniqueOrThrow({ where: { id: mom.id } })).toEqual(mom);
+  });
+
+  it("reconoce a la clienta por su WhatsApp (aunque no tenga teléfono) y en cualquier formato guardado", async () => {
+    const national = newPhone();
+    const c = await prisma.customer.create({
+      data: {
+        name: "Sólo WhatsApp",
+        whatsapp: `${national.slice(0, 2)} ${national.slice(2, 6)}-${national.slice(6)}`,
+        referralCode: uid("IR-").toUpperCase(),
+      },
+    });
+    const res = await contact({ name: "Sólo WhatsApp", phone: `+52 1 ${national}` });
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: res.leadId! } })).customerId).toBe(c.id);
+  });
+
+  it("capturas simultáneas con el mismo contacto nuevo crean UNA sola clienta (sin fallar por el correo único)", async () => {
+    // Sitio: mismo correo y teléfono nuevos (doble envío, dos pestañas).
+    const national = newPhone();
+    const email = `${uid("doble")}@example.test`;
+    const results = await Promise.all([1, 2, 3].map((i) => contact({ name: `Simultánea ${i}`, phone: national, email })));
+    const leads = await prisma.lead.findMany({ where: { id: { in: results.map((r) => r.leadId!) } } });
+    expect(leads).toHaveLength(3);
+    expect(new Set(leads.map((l) => l.customerId)).size).toBe(1);
+    expect(await prisma.customer.count({ where: { OR: [{ email }, { phone: `+52${national}` }] } })).toBe(1);
+
+    // Panel: sólo teléfono (sin correo), tres capturas a la vez.
+    const owner = await testOwner();
+    const other = newPhone();
+    const manual = await Promise.all(
+      [1, 2, 3].map((i) => createManualLead(owner, { name: `Sólo Tel ${i}`, phone: other, occasion: "BIRTHDAY", source: "WHATSAPP" })),
+    );
+    expect(new Set(manual.map((r) => r.customerId)).size).toBe(1);
+    expect(await prisma.customer.count({ where: { phone: `+52${other}` } })).toBe(1);
+  });
+
+  it("la búsqueda por teléfono de clientas, eventos y cotizaciones tolera formatos (y filas antiguas con separadores)", async () => {
+    const owner = await testOwner();
+    const national = newPhone();
+    const spaced = `${national.slice(0, 2)} ${national.slice(2, 6)} ${national.slice(6)}`;
+    const legacy = await prisma.customer.create({
+      data: { name: `Formato ${uid()}`, phone: spaced, referralCode: uid("IR-").toUpperCase() },
+    });
+    const canonicalNational = newPhone();
+    const canonical = await prisma.customer.create({
+      data: { name: `Canónica ${uid()}`, phone: `+52${canonicalNational}`, referralCode: uid("IR-").toUpperCase() },
+    });
+    const dayKey = localDateKey(new Date(Date.now() + 40 * DAY));
+    const startsAt = zonedDateTime(dayKey, "11:00");
+    const makeEvent = (customerId: string) =>
+      prisma.event.create({
+        data: {
+          code: uid("EV-").toUpperCase(),
+          title: "Evento búsqueda",
+          status: "INQUIRY",
+          customerId,
+          eventDate: dateOnly(dayKey),
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 3 * 60 * 60 * 1000),
+          guestCount: 8,
+          micrositeSlug: `busca-${uid()}`.toLowerCase(),
+          inviteToken: generateToken(),
+          portalToken: generateToken(),
+          colors: [],
+        },
+      });
+    const makeQuote = (customerId: string) =>
+      prisma.quote.create({
+        data: { code: uid("Q-").toUpperCase(), publicToken: generateToken(), status: "DRAFT", customerId, title: "Cotización búsqueda", guestCount: 8 },
+      });
+    const [evLegacy, evCanonical] = await Promise.all([makeEvent(legacy.id), makeEvent(canonical.id)]);
+    const [qLegacy, qCanonical] = await Promise.all([makeQuote(legacy.id), makeQuote(canonical.id)]);
+
+    const eventIds = async (q: string) => (await listEvents(parseEventFilters({ q, period: "all" }), 1, 200)).rows.map((r) => r.id);
+    const quoteIds = async (q: string) => (await listQuotes({ q })).rows.map((r) => r.id);
+    const customerIds = async (q: string) => (await listCustomers(owner, { q, pageSize: 200 })).items.map((c) => c.id);
+
+    for (const q of [national, `+52 1 ${spaced}`, `(${national.slice(0, 2)}) ${national.slice(2, 6)}-${national.slice(6)}`]) {
+      expect(await customerIds(q), q).toContain(legacy.id);
+      expect(await eventIds(q), q).toContain(evLegacy.id);
+      expect(await quoteIds(q), q).toContain(qLegacy.id);
+    }
+    for (const q of [`${canonicalNational.slice(0, 2)} ${canonicalNational.slice(2, 6)} ${canonicalNational.slice(6)}`, `+52 1 ${canonicalNational}`]) {
+      expect(await customerIds(q), q).toContain(canonical.id);
+      expect(await eventIds(q), q).toContain(evCanonical.id);
+      expect(await quoteIds(q), q).toContain(qCanonical.id);
+    }
+    // Un folio con dígitos no se interpreta como teléfono
+    expect(await eventIds(`EV-${national.slice(2, 6)}`)).not.toContain(evLegacy.id);
   });
 });

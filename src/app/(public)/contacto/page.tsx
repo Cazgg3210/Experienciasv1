@@ -7,7 +7,7 @@ import { ContactForm } from "@/features/marketing/components/contact-form";
 import { PageIntro } from "@/features/marketing/components/page-intro";
 import { getSiteSettings } from "@/features/marketing/server/queries";
 import { pageMetadata } from "@/features/marketing/seo";
-import { normalizeMxPhone, whatsappLink } from "@/server/providers/whatsapp/links";
+import { whatsappDigits, whatsappLink } from "@/server/providers/whatsapp/links";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +52,7 @@ export default async function ContactPage() {
         </section>
 
         <section aria-label="Formulario de contacto" className="lg:col-span-7 lg:col-start-6 lg:row-span-2 lg:row-start-1">
-          <ContactForm minDate={localDateKey()} waNumber={normalizeMxPhone(business.whatsappNumber) ?? business.whatsappNumber} />
+          <ContactForm minDate={localDateKey()} waNumber={whatsappDigits(business.whatsappNumber) ?? business.whatsappNumber} />
         </section>
 
         <aside aria-label="Otros medios de contacto" className="lg:col-span-5 lg:row-start-2 lg:self-start">

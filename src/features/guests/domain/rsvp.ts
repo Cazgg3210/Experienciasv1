@@ -67,18 +67,56 @@ export function findPossibleDuplicates<G extends DuplicateCandidate>(
 export type DuplicateFlagGuest = DuplicateCandidate & { source: GuestSource; createdAt: Date };
 
 /**
- * Ids de las invitadas que se registraron solas con el link general (SELF_RSVP) y coinciden por
- * nombre o email con otra invitada registrada ANTES. El portal y el admin las muestran como
- * «Posible duplicado»; la primera en registrarse y las que agregó la anfitriona o el equipo nunca se marcan.
+ * Posibles duplicados de la lista (criterio para la anfitriona y el equipo):
+ *  - Se marca cada invitada que se registró SOLA con el link general (SELF_RSVP) y coincide por nombre o
+ *    email con OTRA invitada de la lista, registrada antes O después que ella. Nadie probó ser quien dice
+ *    (BUG-003), así que el orden de llegada no decide cuál es «la original»: si alguien se registra con el
+ *    nombre de una invitada antes que ella, se marcan las dos y quien revisa decide.
+ *  - Las que agregó la anfitriona o el equipo (HOST/ADMIN) nunca se marcan: las capturó alguien de
+ *    confianza. Pero sí cuentan como coincidencia de un auto-registro, aunque se hayan agregado después.
+ * Devuelve, por cada invitada marcada, las invitadas con que coincide (en orden de alta) para mostrar
+ * «Coincide con: …» y que nadie quite el registro equivocado.
  */
-export function possibleDuplicateIds(guests: DuplicateFlagGuest[]): Set<string> {
+export function possibleDuplicateMatches<G extends DuplicateFlagGuest>(guests: G[]): Map<string, G[]> {
   const ordered = [...guests].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
-  const flagged = new Set<string>();
-  ordered.forEach((g, i) => {
-    if (g.source !== "SELF_RSVP" || i === 0) return;
-    if (findPossibleDuplicates(ordered.slice(0, i), g).length > 0) flagged.add(g.id);
-  });
-  return flagged;
+  const matches = new Map<string, G[]>();
+  for (const g of ordered) {
+    if (g.source !== "SELF_RSVP") continue;
+    const found = findPossibleDuplicates(
+      ordered.filter((o) => o.id !== g.id),
+      g,
+    );
+    if (found.length) matches.set(g.id, found);
+  }
+  return matches;
+}
+
+/** Ids de las invitadas marcadas como «Posible duplicado» (ver `possibleDuplicateMatches`). */
+export function possibleDuplicateIds(guests: DuplicateFlagGuest[]): Set<string> {
+  return new Set(possibleDuplicateMatches(guests).keys());
+}
+
+/** «Ana», «Bety» y «Caro»: nombres de las coincidencias para el aviso de posible duplicado. */
+export function duplicateNamesLabel(names: string[]): string {
+  const quoted = names.map((n) => `«${n}»`);
+  if (quoted.length <= 1) return quoted.join("");
+  return `${quoted.slice(0, -1).join(", ")} y ${quoted[quoted.length - 1]}`;
+}
+
+/**
+ * Indicación para la anfitriona en su portal junto a un posible duplicado. Si la coincidencia es una
+ * invitada que ella misma agregó y sigue pendiente (la puede quitar desde su lista: `canHostRemoveGuest`),
+ * se le dice que la quite; si no, que nos escriba para dejar un solo registro.
+ */
+export function hostDuplicateHint(matches: Array<{ name: string; removable: boolean }>): string {
+  if (!matches.length) return "";
+  const who = duplicateNamesLabel(matches.map((m) => m.name));
+  const removable = matches.filter((m) => m.removable);
+  if (removable.length) {
+    const pending = duplicateNamesLabel(removable.map((m) => m.name));
+    return `Coincide con ${who} de tu lista. Si es la misma persona, quita ${removable.length === 1 ? `el registro pendiente de ${pending}` : `los registros pendientes de ${pending}`} para dejar uno solo.`;
+  }
+  return `Coincide con ${who} de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.`;
 }
 
 export type RsvpStats = {

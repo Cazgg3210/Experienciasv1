@@ -78,6 +78,7 @@ export function PortalDashboardView({ data }: { data: PortalDashboard }) {
     whatsappUrl: g.whatsappUrl,
     canRemove: g.canRemove,
     possibleDuplicate: g.possibleDuplicate,
+    duplicateHint: g.duplicateHint,
   }));
 
   return (

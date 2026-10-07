@@ -12,10 +12,17 @@ import { handleActionResult } from "@/components/forms/action-result";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DIETARY_LABELS, RSVP_STATUS_LABELS, RSVP_STATUS_TONES } from "@/lib/labels";
+import {
+  DIETARY_LABELS,
+  GUEST_POSSIBLE_DUPLICATE_LABEL,
+  GUEST_POSSIBLE_DUPLICATE_TONE,
+  RSVP_STATUS_LABELS,
+  RSVP_STATUS_TONES,
+} from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { deleteGuestAction } from "../server/actions";
 import { GUEST_SOURCE_LABELS } from "../domain/guest-summary";
+import { duplicateNamesLabel } from "@/features/guests/domain/rsvp";
 import { GuestFormDialog, type GuestFormValues } from "./guest-form-dialog";
 import { inputSizeClass } from "./form-styles";
 
@@ -31,8 +38,11 @@ export type GuestRow = {
   dietaryNotes: string | null;
   comment: string | null;
   source: GuestSource;
-  /** Auto-registro con el link general que coincide (nombre o email) con otra invitada */
-  possibleDuplicate: boolean;
+  /**
+   * Auto-registro con el link general que coincide (nombre o email) con otra invitada: nombres de las
+   * invitadas con que coincide (vacío si no es un posible duplicado).
+   */
+  duplicateOf: string[];
   respondedAtLabel: string | null;
   rsvpUrl: string;
   whatsappUrl: string | null;
@@ -47,11 +57,14 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "NOT_ATTENDING", label: "No asisten" },
 ];
 
-function DuplicateBadge({ className }: { className?: string }) {
+/** «Posible duplicado» + con quién coincide, para decidir qué registro quitar sin equivocarse. */
+function DuplicateNotice({ names, className }: { names: string[]; className?: string }) {
+  if (!names.length) return null;
   return (
-    <StatusBadge tone="neutral" className={className}>
-      Posible duplicado
-    </StatusBadge>
+    <span className={cn("flex flex-col items-start gap-0.5", className)}>
+      <StatusBadge tone={GUEST_POSSIBLE_DUPLICATE_TONE}>{GUEST_POSSIBLE_DUPLICATE_LABEL}</StatusBadge>
+      <span className="text-muted-foreground text-xs font-normal">Coincide con {duplicateNamesLabel(names)}</span>
+    </span>
   );
 }
 
@@ -95,7 +108,7 @@ export function GuestsTable({
     return c;
   }, [guests]);
 
-  const duplicates = guests.filter((g) => g.possibleDuplicate).length;
+  const duplicates = guests.filter((g) => g.duplicateOf.length > 0).length;
 
   const visible = guests.filter((g) => {
     if (filter !== "ALL" && g.rsvpStatus !== filter) return false;
@@ -199,7 +212,8 @@ export function GuestsTable({
               {duplicates === 1
                 ? "1 invitada que se registró con el link general coincide con otra de la lista (mismo nombre o email) y está marcada"
                 : `${duplicates} invitadas que se registraron con el link general coinciden con otras de la lista (mismo nombre o email) y están marcadas`}{" "}
-              como «Posible duplicado». Revisa si es la misma persona y quita el registro que sobre.
+              como «{GUEST_POSSIBLE_DUPLICATE_LABEL}» (cada una dice con quién coincide). Revisa si es la misma persona y
+              quita el registro que sobre.
             </p>
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -269,8 +283,8 @@ export function GuestsTable({
                     {visible.map((g) => (
                       <TableRow key={g.id} className="align-top">
                         <TableCell className="font-medium whitespace-normal">
-                          {g.name}
-                          {g.possibleDuplicate ? <DuplicateBadge className="mt-1 flex w-fit" /> : null}
+                          <span className="block">{g.name}</span>
+                          <DuplicateNotice names={g.duplicateOf} className="mt-1" />
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs whitespace-normal">
                           {g.phone ? <div>{g.phone}</div> : null}
@@ -315,7 +329,7 @@ export function GuestsTable({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{g.name}</p>
-                        {g.possibleDuplicate ? <DuplicateBadge className="my-1 flex w-fit" /> : null}
+                        <DuplicateNotice names={g.duplicateOf} className="my-1" />
                         <p className="text-muted-foreground truncate text-xs">
                           {[g.phone, g.email].filter(Boolean).join(" · ") || "Sin contacto"}
                         </p>
