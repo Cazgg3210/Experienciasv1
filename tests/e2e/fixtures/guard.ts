@@ -14,6 +14,11 @@ export type GuardEntry = { kind: "console" | "pageerror" | "requestfailed" | "ht
 const BENIGN: RegExp[] = [
   /net::ERR_ABORTED/i, // prefetch/RSC cancelado al navegar
   /NS_BINDING_ABORTED/i, // equivalente en Firefox
+  // Firefox registra como error de consola la descarga de una fuente propia (woff2 de next/font en
+  // /_next/static/media) que la navegación siguiente canceló; status=2152398850 es 0x804B0002 = NS_BINDING_ABORTED
+  // (AUTH-046/047: login → redirección → page.goto inmediato). Sólo ese código y esas fuentes: cualquier otro
+  // fallo de fuente (404, CORS, otro origen) sigue siendo un error.
+  /downloadable font: download failed \(font-family: [^)]*\): status=2152398850 source: \S+\/_next\/static\/media\/[\w.-]+\.woff2/i,
   /Load request cancelled/i, // WebKit
   // WebKit al cancelar prefetch/RSC por navegación (no son errores de la app; Chromium los reporta como ERR_ABORTED):
   /due to access control checks/i,
