@@ -119,6 +119,8 @@ Notas operativas (aprendidas en la primera corrida FULL):
 - El scratchpad es compartido entre agentes: usa una subcarpeta por carril (`scratchpad/l<n>/`) y carpetas nuevas por extracción; nunca `rm -rf` con rutas relativas o globs (dispara confirmaciones al usuario).
 - La caché de datos de Next en E2E es sólo en memoria (`NEXT_ISR_FLUSH_TO_DISK=false` en el servidor E2E) y `fetch-cache` se limpia al arrancar: los carriles no se contaminan entre sí.
 - Firefox: si no arranca desde `%LOCALAPPDATA%` (error "configuración en paralelo"/`spawn UNKNOWN`), copia `ms-playwright/firefox-<ver>/firefox` a otra unidad y define `E2E_FIREFOX_EXECUTABLE` en `.env`. Un navegador que no arranca cuenta como BLOCKED (entorno), no como FAIL.
+- **Límite de paralelismo en esta máquina (Windows + Docker Desktop/WSL):** 6 carriles × 3 workers con cross-browser saturan la red de Docker/WSL. Síntomas: `Can't reach database server at localhost:5432` intermitente, timeouts generalizados y corridas 5–10× más lentas. Es un ENVIRONMENT ISSUE: no se reporta como bug. Para la corrida que alimenta el gate, usa como máximo 3 carriles a la vez, o corre los carriles uno tras otro con `E2E_WORKERS=4`. Si aparece el síntoma, repite el carril afectado solo antes de clasificar ninguna falla.
+- **Cada commit reconstruye el build E2E** (el sello incluye `git HEAD`), aunque sólo cambien pruebas. Haz el primer build antes de lanzar carriles, o deja que el candado de build haga esperar al resto.
 - Next 15.5 agrega un anunciador de rutas con `role="alert"`: acota `getByRole("alert")` a `page.getByRole("main")` o usa el texto.
 
 ## Checkpoints

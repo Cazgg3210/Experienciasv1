@@ -1,44 +1,70 @@
 # BUG REPORT — Ivonne & Rosa (auditoría FULL E2E)
 
-- **Fecha:** 2026-10-06
-- **Commit auditado:** `f26b1a1` (FULL inicial; sin cambios de código de la app durante la auditoría)
+- **Fecha:** auditoría 2026-10-06 · estado final 2026-10-07
+- **Auditoría inicial:** commit `f26b1a1` (FULL; sin cambios de código de la app durante la auditoría). La infraestructura del gate (ENV-01, ENV-02) se corrigió en `8020b91`.
+- **Correcciones verificadas en main:** `8020b91..b47437b` (61 commits)
+  - Ronda 1 (16 bugs, cada uno en un worktree aislado con revisión adversarial): merges `d144ce7`, `be74647`, `880e40b`, `3964907`, `a1ece90` y `41db385`, más `86b60de` (contratos de integración devops/CSRF y sello del build E2E con archivos sin seguimiento).
+  - Endurecimiento (menores de las revisiones; BUG-017, BUG-018, BUG-020, BUG-022, BUG-023 y la parte de la cápsula de BUG-021): merges `f8797e0`, `f0cb1b1`, `e21eb66` y `c3ba279`.
+  - Formularios antes de hidratar: `e2f3699` (el resto de BUG-021), `d96a82a` (BUG-019) y `b47437b` (ajuste de tiempos de CONF-025).
 - **Modo:** FULL (6 paquetes: acceso y seguridad · venta pública · comercial admin · eventos y experiencia · operación y back-office · transversal)
-- **Entorno:** TEST — 6 carriles paralelos (`E2E_LANE=1..6`, servidores `:3201`–`:3206`, bases `ivonne_rosa_e2e_l1`…`_l6` re-sembradas en cada invocación; suites especiales `global` y `ratelimit` en `:3209`), build de producción local (`.next-e2e`, `next start`, Next 15.5.27), proveedores mock (pagos, email, WhatsApp, IA), S3 local (RustFS `:9000`), Windows 11. Navegadores: Chromium, mobile-chrome (Pixel 7) y WebKit; Firefox BLOCKED (ENV-02).
-- **Fuentes:** `docs/qa/findings/{access,sales,commercial,events,operations,transversal}.md` (31 hallazgos provisionales) y el mapa de IDs `docs/qa/.bug-map.json`.
+- **Entorno:** TEST — build de producción local (`.next-e2e`, `next start`, Next 15.5.27), proveedores mock (pagos, email, WhatsApp, IA), S3 local (RustFS `:9000`), Windows 11.
+  - Auditoría: 6 carriles paralelos (`E2E_LANE=1..6`, servidores `:3201`–`:3206`, bases `ivonne_rosa_e2e_l1`…`_l6` re-sembradas en cada invocación; suites especiales `global` y `ratelimit` en `:3209`). Navegadores: Chromium, mobile-chrome y WebKit; Firefox BLOCKED (ENV-02).
+  - Correcciones: cada worktree usó su propio carril; la verificación de formularios usó además los carriles 7 y 8.
+  - Regresión final: carriles en secuencia (ENV-03), con Firefox.
+- **Fuentes:** `docs/qa/findings/{access,sales,commercial,events,operations,transversal}.md` (31 hallazgos provisionales y sus secciones «Resolution/Fix/Corrección/Seguimiento»), mapa `docs/qa/.bug-map.json` y los journals de los workflows de corrección (ronda 1 `wf_8b97ab93-ecc`, endurecimiento `wf_4e68bc69-ce5`, formularios `wf_df44b95a-fe8` y `wf_06aaa044-1a2`). La evidencia citada como `test-results/l<n>-evidence/…` está en el worktree de cada corrección (`.claude/worktrees/wf_…/`, no versionada).
 
-> **Nota:** Las correcciones están en curso; el estado se actualizará tras la verificación.
+> **Estado final.** Los **23 bugs** (16 de la auditoría y 7 encontrados y corregidos durante las correcciones) están **Verified**: la prueba de reproducción falló antes de corregir y pasa después (repeticiones con `--retries=0`), y la regresión relacionada está en verde. BUG-006 queda **Verified (mitigado)**: el defecto está en el React que trae Next 15.5 y la app lo esquiva hasta actualizar a Next ≥ 16.3.0. **Bugs abiertos: 0.**
+> Regresión intermedia: 1 286 de 1 298 PASS. Regresión final, secuencial y con todos los navegadores: carriles 1, 2, 3 y 6 al 100 %. En los carriles 4 y 5 quedan inestabilidades de Firefox/WebKit (última corrida registrada: EVT-005, PUR-002, PUR-005 y STF-003 en Firefox; FIN-006 y STF-021 en WebKit) que se están corrigiendo en paralelo y todavía no están clasificadas; si alguna resulta un defecto de la app se registrará como bug nuevo. El veredicto lo calcula `scripts/quality-gate.mjs`, no este documento.
 
 ## Resumen por severidad
 
-| Severidad | Cantidad | Bugs |
-|---|---|---|
-| BLOCKER | 0 | — |
-| CRITICAL | 3 | BUG-001, BUG-002, BUG-003 |
-| HIGH | 3 | BUG-004, BUG-005, BUG-006 |
-| MEDIUM | 5 | BUG-007, BUG-008, BUG-009, BUG-010, BUG-011 |
-| LOW | 5 | BUG-012, BUG-013, BUG-014, BUG-015, BUG-016 |
-| **Total** | **16** | 31 IDs provisionales de 6 carriles, deduplicados (ver «Mapa de IDs provisionales») |
+| Severidad | Encontrados | Abiertos | Bugs |
+|---|---|---|---|
+| BLOCKER | 0 | 0 | — |
+| CRITICAL | 3 | 0 | BUG-001, BUG-002, BUG-003 |
+| HIGH | 4 | 0 | BUG-004, BUG-005, BUG-006 (mitigado), BUG-017 |
+| MEDIUM | 8 | 0 | BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-018, BUG-019, BUG-020 |
+| LOW | 8 | 0 | BUG-012, BUG-013, BUG-014, BUG-015, BUG-016, BUG-021, BUG-022, BUG-023 |
+| **Total** | **23** | **0** | 16 de la auditoría (31 IDs provisionales de 6 carriles, deduplicados) + 7 nuevos (BUG-017…BUG-023) |
 
-| BUG | Severidad | Prioridad | Estado | Título | Módulo |
-|---|---|---|---|---|---|
-| BUG-001 | CRITICAL | P0 | Open | «Cerrar sesión» no es definitivo: las respuestas en vuelo re-emiten la cookie y no hay revocación en servidor | auth |
-| BUG-002 | CRITICAL | P0 | Open | Un checkout de anticipo abierto se puede cobrar después de cancelar el evento | events / payments |
-| BUG-003 | CRITICAL | P0 | Open | Link general de invitación: el nombre de otra invitada sobrescribe su RSVP y entrega su link personal | guests |
-| BUG-004 | HIGH | P1 | Open | Una cookie copiada antes del logout sigue dando acceso | auth |
-| BUG-005 | HIGH | P1 | Open | `callbackUrl` con caracteres de control evade `safeCallback` | auth |
-| BUG-006 | HIGH | P0 | Open | Navegación a la misma ruta / `router.refresh()` colgada (filtros, paginación, calendario, contenido, bandeja, RSVP) | transversal (App Router) |
-| BUG-007 | MEDIUM | P2 | Open | Checkout concurrente crea dos pagos PENDING | payments |
-| BUG-008 | MEDIUM | P2 | Open | Teléfonos con formatos distintos duplican a la clienta | leads / customers |
-| BUG-009 | MEDIUM | P2 | Open | Contraste insuficiente (warning/info, taupe, atenuados) | UI compartida |
-| BUG-010 | MEDIUM | P2 | Open | `<dl>` inválidas en propuesta pública y micrositio | quotes / guests |
-| BUG-011 | MEDIUM | P2 | Open | `aria-controls` de «Agregar nota» apunta a un id inexistente | staff |
-| BUG-012 | LOW | P3 | Open | El diálogo «Aceptar propuesta» no devuelve el foco | quotes |
-| BUG-013 | LOW | P3 | Open | Soft-404 en `/experiencias/[slug]` | public |
-| BUG-014 | LOW | P3 | Open | Lead manual con «Origen» ≠ «Captura manual» envía avisos | leads |
-| BUG-015 | LOW | P3 | Open | El encabezado del evento no muestra «Cerrado» | finance / events |
-| BUG-016 | LOW | P3 | Open | Seed DEMO con enlaces a `/…/eventos/…` (404) | notifications / seed |
+| BUG | Severidad | Prioridad | Estado | Título | Módulo | Corrección |
+|---|---|---|---|---|---|---|
+| BUG-001 | CRITICAL | P0 | Verified | «Cerrar sesión» no es definitivo: las respuestas en vuelo re-emiten la cookie y no hay revocación en servidor | auth | `b24c695`, `28fb8d3` |
+| BUG-002 | CRITICAL | P0 | Verified | Un checkout de anticipo abierto se puede cobrar después de cancelar el evento | events / payments | `78573ad`, `568d92d`, `445645c` |
+| BUG-003 | CRITICAL | P0 | Verified | Link general de invitación: el nombre de otra invitada sobrescribe su RSVP y entrega su link personal | guests | `e8165ae`, `760e7d2` |
+| BUG-004 | HIGH | P1 | Verified | Una cookie copiada antes del logout sigue dando acceso | auth | `b24c695`, `28fb8d3`, `ebb5fac` |
+| BUG-005 | HIGH | P1 | Verified | `callbackUrl` con caracteres de control evade `safeCallback` | auth | `ee67039`, `28fb8d3` |
+| BUG-006 | HIGH | P0 | Verified (mitigado) | Navegación a la misma ruta / `router.refresh()` colgada (filtros, paginación, calendario, contenido, bandeja, RSVP) | transversal (App Router) | `5fc2435`, `b15324a`, `be55029`, `d87814d` |
+| BUG-007 | MEDIUM | P2 | Verified | Checkout concurrente crea dos pagos PENDING | payments | `0f4ef49`, `568d92d`, `445645c` |
+| BUG-008 | MEDIUM | P2 | Verified | Teléfonos con formatos distintos duplican a la clienta | leads / customers | `75085d4`, `fcef8a7`, `fe9f23a` |
+| BUG-009 | MEDIUM | P2 | Verified | Contraste insuficiente (warning/info, taupe, atenuados) | UI compartida | `cf3e12d`, `50d2903` |
+| BUG-010 | MEDIUM | P2 | Verified | `<dl>` inválidas en propuesta pública y micrositio | quotes / guests | `7173e13` |
+| BUG-011 | MEDIUM | P2 | Verified | `aria-controls` de «Agregar nota» apunta a un id inexistente | staff | `e813c1c` |
+| BUG-012 | LOW | P3 | Verified | El diálogo «Aceptar propuesta» no devuelve el foco | quotes | `f35fb04` |
+| BUG-013 | LOW | P3 | Verified | Soft-404 en `/experiencias/[slug]` | public | `a8ca093`, `4a7a780` |
+| BUG-014 | LOW | P3 | Verified | Lead manual con «Origen» ≠ «Captura manual» envía avisos | leads | `cf05a32` |
+| BUG-015 | LOW | P3 | Verified | El encabezado del evento no muestra «Cerrado» | finance / events | `d38e91e` |
+| BUG-016 | LOW | P3 | Verified | Seed DEMO con enlaces a `/…/eventos/…` (404) | notifications / seed | `af52434` |
+| BUG-017 | HIGH | P1 | Verified | Una captura pública escribía el contacto de la visitante en una clienta existente (sus enlaces privados podían llegarle a otra persona) | leads / customers | `fe9f23a` |
+| BUG-018 | MEDIUM | P1 | Verified | Eliminar una ficha de staff desactivaba la cuenta ligada sin las reglas de Usuarios | staff / users | `ebb5fac` |
+| BUG-019 | MEDIUM | P1 | Verified | Formularios públicos y por token enviables por GET antes de hidratar, con datos personales en la URL | guests / portal / configurator | `d96a82a`, `b47437b` |
+| BUG-020 | MEDIUM | P1 | Verified | Firefox: error de hidratación React #418 cuando el chunk de `error.tsx` llega tarde | layouts (transversal) | `a3309b7` |
+| BUG-021 | LOW | P2 | Verified | Lo escrito antes de hidratar se borraba en formularios públicos y del portal | memory / marketing / guests / portal / ai-designer | `0e35e58`, `e2f3699` |
+| BUG-022 | LOW | P3 | Verified | Restablecer la propia contraseña desde Staff revocaba la sesión en silencio | staff | `ebb5fac` |
+| BUG-023 | LOW | P3 | Verified | `GET /api/auth/session` re-emitía la cookie de sesión (latente) | auth | `28fb8d3` |
 
-**Criterios de consolidación.** Cuando dos carriles vieron el mismo defecto se conserva la severidad más alta justificada por la regla del gate (seguridad o datos de terceros ⇒ CRITICAL; cobro indebido ⇒ CRITICAL). Reclasificaciones respecto a los IDs provisionales: SAL-BUG-03 (HIGH) y TRV-BUG-06 (HIGH) suben a CRITICAL al fusionarse con EVX-BUG-01 y ACC-BUG-01; COM-BUG-03 y OPX-BUG-02 (MEDIUM) se integran en BUG-006 (HIGH); SAL-BUG-04 (LOW) se integra en BUG-009 (MEDIUM); EVX-BUG-05 y TRV-BUG-04 (LOW) se integran en BUG-010 (MEDIUM). La parte de contraste de OPX-BUG-05 se documenta en BUG-009; el ID se asigna a BUG-011 según el mapa.
+**Criterios de consolidación (auditoría).** Cuando dos carriles vieron el mismo defecto se conserva la severidad más alta justificada por la regla del gate (seguridad o datos de terceros ⇒ CRITICAL; cobro indebido ⇒ CRITICAL). Reclasificaciones respecto a los IDs provisionales: SAL-BUG-03 (HIGH) y TRV-BUG-06 (HIGH) suben a CRITICAL al fusionarse con EVX-BUG-01 y ACC-BUG-01; COM-BUG-03 y OPX-BUG-02 (MEDIUM) se integran en BUG-006 (HIGH); SAL-BUG-04 (LOW) se integra en BUG-009 (MEDIUM); EVX-BUG-05 y TRV-BUG-04 (LOW) se integran en BUG-010 (MEDIUM). La parte de contraste de OPX-BUG-05 se documenta en BUG-009; el ID se asigna a BUG-011 según el mapa.
+
+**Criterios para los bugs nuevos (BUG-017…BUG-023).** Se registran como bug propio los defectos reales que ya existían en `f26b1a1` o que una corrección introdujo y que tienen causa raíz distinta de su bug padre; los que una corrección introdujo y su revisión detectó dentro del mismo mecanismo se documentan en el «Fix» del bug padre. Así:
+- **Bugs propios:** la fuga de contacto en capturas públicas (BUG-017, existía en `f26b1a1`; la búsqueda tolerante de BUG-008 sólo la ampliaba), `deleteStaffMember` (BUG-018), el envío por GET (BUG-019), el #418 de Firefox (BUG-020), el borrado antes de hidratar (BUG-021, antes sólo una observación), el auto-reset de Staff (BUG-022, lo introdujo la corrección de BUG-004 pero en otro flujo) y `/api/auth/session` (BUG-023).
+- **Dentro del bug padre:**
+  - BUG-002: la carrera webhook↔cancelación que introdujo su primera corrección, y las sesiones de proveedores reales pagables tras cancelar (ya descritas en el «Actual result» original).
+  - BUG-007: el candado retenido durante la llamada al proveedor.
+  - BUG-008: `normalizePhone` con longitudes equivocadas, el normalizador duplicado, las búsquedas por teléfono y la carrera de capturas simultáneas.
+  - BUG-003: el criterio de «Posible duplicado», el canal lateral de tiempo y el flujo de la anfitriona.
+  - BUG-006: el esqueleto infinito al volver con Atrás, que introdujo su primera mitigación.
+  - BUG-009: el contraste restante.
+  - BUG-013: el contrato del 404.
 
 ---
 
@@ -46,7 +72,7 @@
 
 **Severity:** CRITICAL
 **Priority:** P0
-**Status:** Open
+**Status:** Verified
 **Type:** POTENTIAL SECURITY ISSUE (gestión de sesión / logout)
 **Module:** auth (logout) / middleware (Auth.js v5) — panel admin y portal staff
 **Role:** cualquier rol del equipo (SUPER_ADMIN, OWNER, STAFF); reproducido con OWNER (carril 1) y STAFF (carril 6)
@@ -120,13 +146,50 @@ Sesión 100 % stateless (`src/auth.config.ts:12`: `strategy: "jwt"`, `maxAge` 12
 2. Mitigación parcial inmediata: no re-emitir la cookie en respuestas de prefetch/RSC (o subir `session.updateAge`) y hacer el logout con navegación completa a un endpoint de servidor que responda `Clear-Site-Data: "cookies"` y redirija a `/login`.
 3. Mantener [AUTH-032] y [CRIT-014] como pruebas `@regression`. La misma revocación resuelve BUG-004.
 
+### Fix
+
+**Causa raíz final.** Sesión JWT 100 % stateless y re-emisión de `Set-Cookie: authjs.session-token` por el envoltorio `auth()` del middleware en **cada** respuesta autenticada, incluidos los prefetch RSC y las Server Actions. Una respuesta en vuelo que llegaba después de `POST /api/auth/signout` volvía a escribir la cookie borrada y, sin estado en el servidor, esa cookie era plenamente válida.
+
+**Corrección.**
+1. **Revocación en servidor.** Se agregó `User.sessionVersion Int @default(0)` con la migración aditiva `prisma/migrations/20261006140000_user_session_version` (`ADD COLUMN … NOT NULL DEFAULT 0`). Los JWT emitidos antes del despliegue cuentan como versión 0, así que nadie pierde la sesión al desplegar.
+   - `authorize` guarda la versión en el JWT y `getCurrentUser` (`src/server/auth/session.ts`) la compara con la base.
+   - El logout incrementa la versión desde el evento `events.signOut` de Auth.js (`src/auth.ts`). Ese evento corre en `/api/auth/signout`, el endpoint que ya usan los botones de `admin-shell` y `staff-shell`.
+   - El incremento es un comparar-e-incrementar atómico (`src/features/auth/server/session-service.ts`): una cookie ya revocada no puede cerrar sesiones más nuevas.
+2. **Fin de la «resurrección».** `src/middleware.ts` ya no deja pasar la re-emisión de la cookie. Sólo renueva el JWT en `GET` cuando tiene al menos `session.updateAge` (1 h), y conserva los borrados. Las reglas puras están en `src/features/auth/domain/session.ts`, con pruebas unitarias.
+3. **Desviación del diseño sugerido.** No se usó una Server Action de logout: su POST pasa por el middleware, Next re-renderiza la página con la cookie vieja y la navegación suave dejaría payloads privados en el caché del router (lo que vigila [AUTH-021]).
+4. **Endurecimiento** (revisión adversarial):
+   - `revokeSessionsOnSignOut` registra `auth.logout_revocation_failed` con nivel error y propaga el error.
+   - La renovación tiene cobertura automatizada con JWT forjados (`tests/e2e/auth/session-renewal.spec.ts`).
+   - `GET /api/auth/session` dejó de re-emitir la cookie (BUG-023).
+
+**Commits.** `b24c695` (merge `d144ce7`); endurecimiento `28fb8d3` (merge `c3ba279`).
+
+**Pruebas @regression.**
+- [AUTH-032] tests/e2e/auth/session.spec.ts.
+- [CRIT-014] y [CRIT-012] tests/e2e/critical/access.spec.ts.
+- [AUTH-053], [AUTH-054], [AUTH-055], [AUTH-056] y [AUTH-058] tests/e2e/auth/session-renewal.spec.ts. [AUTH-057] cubre la cookie inválida, sin etiqueta.
+- CRIT-009/011/012/014 usan ahora cuentas propias porque el logout revoca todas las sesiones de la cuenta.
+- En CRIT-014, la precondición «el servidor re-emite la cookie» pasó a ser el assert de la corrección. Además verifica que la cookie anterior al logout, si reapareciera, ya no abre el portal.
+
+**Verificación.**
+- **Antes** (carril 1): AUTH-032 y CRIT-014 FAIL. CRIT-012 pasó en esa corrida porque su carrera es probabilística. Evidencia en `test-results/l1-evidence/BUG-001/`.
+- **Después:** AUTH-032, CRIT-014 y CRIT-012 pasan 3/3 con `--repeat-each=3 --retries=0` en Chromium. También pasan 3/3 CRIT-014 y AUTH-032 en WebKit y CRIT-012 en mobile-chrome. La repetición cross-browser dio 47/47.
+- **Regresión del carril 1** (auth, permissions, critical/access, staff-admin y settings): 228 PASS y 2 FLAKY ajenos. SET-001 corresponde a BUG-006; SET-017 era un TEST BUG, corregido en `96bf311` y luego 3/3. Suite global 14/14 y ratelimit 9/9.
+- **Endurecimiento** (carril 4): AUTH-053…059 pasan 5/5 con `--repeat-each=5 --retries=0`. Una mutación del middleware sin renovación hace fallar AUTH-053/054.
+
+**Riesgos residuales y decisiones.**
+- **Decisión de producto pendiente:** cerrar sesión revoca **todas las sesiones de la cuenta en todos los dispositivos**, porque la versión es por usuaria. Si Rosa cierra sesión en el celular, también pierde la de la laptop y lo que no haya guardado. Ningún texto de la UI lo avisa. La alternativa por dispositivo es revocar por `jti`/`sid` con una lista de revocadas hasta `exp` y dejar `sessionVersion` para reset, desactivación y cambio de rol. Requiere un cambio de esquema y la decisión del usuario.
+- **El logout «falla abierto» si la base falla.** Auth.js registra el error y borra la cookie de todos modos. Ahora queda un log de error alertable, pero una cookie copiada seguiría válida hasta 12 h. Hacer que el logout falle exigiría reemplazar el flujo `/api/auth/signout` de Auth.js.
+- **Renovación deslizante con granularidad de 1 h** (hasta 12 h de inactividad). Un GET con un JWT de 1 h o más todavía puede re-escribir la cookie después del logout, pero esa cookie ya está revocada en el servidor.
+- **Cuentas DEMO en E2E:** ya no sirven para probar el logout, porque sus sesiones compartidas (`storageState`) morirían.
+
 ---
 
 ## BUG-002 — Un checkout de anticipo abierto se puede cobrar después de cancelar el evento
 
 **Severity:** CRITICAL
 **Priority:** P0
-**Status:** Open
+**Status:** Verified
 **Type:** APPLICATION BUG (integridad de cobros / corrupción de datos financieros)
 **Module:** events / payments
 **Role:** OWNER (cancela; ivonne@ivonne-rosa.test en el carril 4) + Clienta (token de cotización o del portal)
@@ -186,13 +249,77 @@ La cancelación no forma parte del ciclo de vida de los pagos: ni se invalidan l
 3. `applyPaymentSucceeded` / `processPaymentEvent`: si llega un cobro capturado sobre una reserva cancelada, registrarlo con nota «Reembolso requerido», notificar al equipo (`notifyTeamPaymentAnomaly`) y **no** enviar `PAYMENT_RECEIVED` a la clienta; idealmente reembolso automático. Auditar el caso con `audit(...)`.
 4. Mantener [EVT-024] y [PAY-021] como pruebas `@regression`.
 
+### Fix
+
+**Causa raíz final.** La cancelación no formaba parte del ciclo de vida de los pagos:
+- `cancelEvent` no tocaba el `Payment` `PENDING`.
+- `checkoutLinkState`, la página mock y `mockCheckoutAction` ignoraban `booking.cancelledAt` y `event.status`.
+- `applyPaymentSucceeded` marcaba el pago `PAID` y `runPaymentSuccessEffects` enviaba «Recibimos tu pago».
+
+**Corrección.**
+1. **Anulación al cancelar.** `cancelEvent` llama, dentro de su transacción y con el candado de la reserva (orden reserva → evento), a `voidOpenCheckoutsForCancelledBooking`. Los pagos `DEPOSIT`, `BALANCE` y `FULL` en `PENDING` pasan a `FAILED` con el motivo «Evento cancelado.»; los `REFUND` no se tocan. La auditoría `event.cancelled` incluye `voidedPayments`.
+2. **Enlace no pagable.**
+   - `checkoutLinkState` (`domain/amounts.ts`) tiene un estado `cancelled`.
+   - `/pago/mock/[checkoutId]` muestra «Esta reserva fue cancelada» sin botón de pago.
+   - `mockCheckoutAction` responde `EVENT_CANCELLED` y no emite el webhook.
+   - `startCheckout` y `recordManualPayment` vuelven a verificar la cancelación dentro del candado.
+3. **Cobro tardío de un proveedor real.**
+   - Se registra `PAID`, para poder reembolsarlo, **sin reconfirmar el evento**.
+   - Lleva la nota «Reembolso requerido: …», la auditoría `payment.collected_after_cancellation` y `note: "cancelled_booking"` en `WebhookEvent.error`.
+   - El equipo recibe un aviso deduplicado (`notifyTeamPaymentAnomaly`). La clienta no recibe `PAYMENT_RECEIVED`.
+   - `/pago/resultado` y el panel de pagos lo muestran como «Reembolso requerido».
+4. **Carrera que introdujo la primera corrección** (cambio exigido por la revisión, `568d92d`).
+   - El problema: `applyPaymentSucceeded` leía el estado del pago antes de tomar el candado. Un webhook que leía `PENDING` mientras la cancelación anulaba el pago terminaba en `concurrent_update` y respondía 200, así que el proveedor no reintentaba. El cobro real quedaba `FAILED` sin nota, auditoría ni aviso.
+   - Ahora `applyPaymentSucceeded` y `applyPaymentFailed` leen el estado **después** de `lockBooking`.
+   - `handlePaymentWebhook` trata `concurrent_update` como reintentable: revierte la transacción, no marca `processedAt` y responde 500.
+5. **Lo que ve la clienta.** `paymentStatusView`, compartida por `/pago/resultado` y `getPaymentStatusAction`, promete el reembolso sólo según la nota del propio pago (`collectedAfterCancellation`), no según el estado del evento.
+   - Un checkout anulado dice «Este pago se anuló… si alcanzaste a completar el cobro, te lo reembolsaremos».
+   - «Intentar de nuevo» se oculta, también si la cancelación ocurre mientras la página consulta el estado.
+6. **Sesiones del proveedor.** Se agregó el método opcional `PaymentProvider.expireCheckout`:
+   - Stripe: `POST /v1/checkout/sessions/{id}/expire`.
+   - Mercado Pago: `PUT /checkout/preferences/{id}` con `expiration_date_to` igual a ahora.
+   - Mock: no hace nada, porque su página ya revisa la cancelación.
+   - Se llama best-effort después de confirmar la cancelación (límite de 10 s) y nunca hace fallar la cancelación. Con el checkout en dos fases (`445645c`, ver BUG-007) también expira la sesión que la pasarela abre después de que la cancelación anuló el lugar reservado.
+7. **Casos históricos.** `scripts/report-cancelled-booking-payments.ts`, de sólo lectura (`pnpm exec tsx scripts/report-cancelled-booking-payments.ts [--json]`), lista los cobros con `paidAt` posterior a la cancelación. Contra la base de desarrollo no encontró filas.
+
+**Commits.** `78573ad`, `568d92d` (merge `be74647`); endurecimiento `445645c` (merge `e21eb66`).
+
+**Pruebas @regression.**
+- [EVT-024] tests/e2e/events/event-status.spec.ts.
+- [PAY-021], [PAY-023], [PAY-024] y [PAY-025] tests/e2e/payments/payments.spec.ts. [PAY-008] verifica la forma exacta de la respuesta, sin etiqueta.
+- Integración `tests/integration/payments.test.ts`:
+  - anulación al cancelar;
+  - cancelación contra checkout y contra pago manual;
+  - webhook tardío seguido de reembolso;
+  - las dos órdenes de la carrera webhook↔cancelación, y `concurrent_update` reintentable;
+  - expiración best-effort, y cancelación mientras se abre la sesión.
+
+**Verificación.**
+- **Antes de la ronda 1:** EVT-024 y PAY-021 FAIL (pago `PAID` en un evento `CANCELLED`).
+- **Antes de `568d92d`:** también fallaban PAY-024 y PAY-025, la integración de la carrera (`applied:false`, `concurrent_update`, pago `FAILED`) y la de reintento (200 en lugar de 500).
+- **Después:**
+  - PAY-008, PAY-021, PAY-023, PAY-024, PAY-025 y EVT-024 pasan 3/3 en el carril 2 (`--repeat-each=3 --retries=0`) y 5/5 en el carril 3 tras el endurecimiento.
+  - `payments.test.ts` pasa 40/40 (el subconjunto de carreras, 4 corridas seguidas) y 44/44 después de `445645c`.
+  - `pnpm test:integration`: 324/324.
+- **Regresión del carril 2** (payments, events, quote-public, portal y critical/sales; 101 pruebas): 95 PASS.
+  - 4 FAIL de otros bugs entonces abiertos (BUG-009, BUG-010 y BUG-012).
+  - 2 FLAKY ajenos: EVT-038 (BUG-006) y PAY-003, una caída del worker de Windows que aislada pasó 3/3.
+  - `@mobile` 10/10 y `payments-flag.global` 1/1.
+- **Carril 3, tras el endurecimiento:** 231/231 sin flaky.
+
+**Riesgos residuales y decisiones.**
+- **Reembolsos manuales:** el equipo reembolsa desde el panel después del aviso. El reembolso automático de cobros tardíos queda a decisión del usuario.
+- `expireCheckout` sólo se probó con un `fetch` simulado, nunca contra las API reales de Stripe o Mercado Pago. Si falla, aplica la regla «Reembolso requerido».
+- Una sesión que queda obsoleta por un cambio de saldo (por ejemplo, un pago manual mientras la clienta tiene abierta la pasarela) sigue cobrable hasta que vence, a la hora. El excedente se registra y se avisa al equipo.
+- Después del despliegue conviene correr el script de casos históricos contra producción: los cobros anteriores a la corrección no llevan la nota.
+
 ---
 
 ## BUG-003 — Link general de invitación: escribir el nombre de otra invitada sobrescribe su RSVP y entrega su link personal
 
 **Severity:** CRITICAL
 **Priority:** P0
-**Status:** Open
+**Status:** Verified
 **Type:** POTENTIAL SECURITY ISSUE (integridad de datos de terceros + exposición de datos personales)
 **Module:** guests (RSVP público / micrositio)
 **Role:** Invitada anónima con el link general (`Event.inviteToken`)
@@ -237,13 +364,50 @@ Diseño de «re-identificación por nombre» sin ningún factor de posesión.
 ### Recommended fix
 Con el link general: si hay coincidencia por nombre con una invitada que ya respondió o que tiene email/teléfono, **no** actualizarla ni devolver su token; crear una nueva invitada `SELF_RSVP` marcada como posible duplicado (o pedir el email registrado / enviar el link personal por correo o WhatsApp a la invitada). Sólo empatar por nombre invitadas `PENDING` sin contacto, y nunca exponer el token de otra persona. Mantener [GST-014] como `@regression`.
 
+### Fix
+
+**Causa raíz final.** El link general re-identificaba invitadas por nombre normalizado o por email sin ningún factor de posesión (`findMatchingGuest`). Después actualizaba ese registro con el formulario del tercero y devolvía su token (`personalPath`).
+
+**Corrección.**
+- **El link general nunca toma, modifica ni revela a una invitada existente.** Cada respuesta crea una invitada `SELF_RSVP` con token propio y sólo recibe su propio link. El token personal sigue actualizando únicamente a su invitada. Se elimina `findMatchingGuest`.
+- **Sin enumeración.** La respuesta es idéntica haya o no coincidencia. También desaparece el oráculo anterior, en el que con el cupo lleno un nombre coincidente sí pasaba.
+- **Marca de «Posible duplicado».** Las coincidencias por nombre o email se marcan en el admin y en el portal de la anfitriona. Es una marca derivada, sin cambio de esquema. Quedan la auditoría `guest.possible_duplicate` (ids e IP) y `possibleDuplicate` en analytics.
+- **Cupo y rate limit.** El cupo de 60 aplica a toda respuesta con el link general, dentro del `pg_advisory_xact_lock` del evento. El rate limit (10 por IP cada 10 min) se mantiene.
+- **Aviso en el micrositio.** Con el link general, el micrositio pide a quien ya tiene link personal que responda desde ahí.
+- **Endurecimiento** (`760e7d2`):
+  - Se marcan los dos lados de la coincidencia, con «Coincide con «…»». Antes, si una impostora se registraba primero, la marcada era la legítima.
+  - Cuando la coincidencia es un pendiente que agregó la anfitriona, el portal le indica que lo quite (`hostDuplicateHint`).
+  - La auditoría se escribe dentro de la transacción, lo que reduce el canal lateral de tiempo a un INSERT en la conexión ya abierta.
+  - La etiqueta y el tono viven en `@/lib/labels`.
+  - [GST-024] vacía su cubeta de rate limit al empezar.
+
+**Commits.** `e8165ae` (merge `3964907`); endurecimiento `760e7d2` (merge `e21eb66`).
+
+**Pruebas @regression.**
+- [GST-014], [GST-023] y [GST-025] tests/e2e/guests/rsvp.spec.ts.
+- [GST-024] tests/e2e/guests/rsvp.ratelimit.spec.ts, en la suite `ratelimit` y sin etiqueta.
+- Unitarias en `rsvp.test.ts`.
+- Integración en `tests/integration/portal-rsvp.test.ts`. Las 3 pruebas que exigían la re-identificación ahora exigen lo contrario: es un cambio de requisito causado por el bug, no una prueba debilitada.
+
+**Verificación.**
+- **Antes:** GST-014 FAIL 3/3 (`--repeat-each=3 --retries=0`, carril 4).
+- **Después:** GST-014 y GST-023 pasan 3/3 y GST-024 pasa. La regresión de guests, portal, critical/experience y permissions/public-actions-idor no tuvo fallas nuevas: sólo BUG-006 y BUG-010, entonces abiertos, y PORT-020, que también era intermitente en la base. `portal-rsvp`: 21/21.
+- **Endurecimiento** (carril 3): GST-023 y GST-025 pasan 5/5 con `--repeat-each=5 --retries=0`. GST-024 pasa 3 veces seguidas en el mismo servidor. `portal-rsvp`: 22/22. Chromium: 231/231.
+
+**Riesgos residuales y decisiones.**
+- **Registros duplicados.** Una invitada real que ignora su link personal y responde por el general queda como un segundo registro marcado. Los conteos la cuentan dos veces hasta que la anfitriona o el equipo quitan uno.
+- **Recordatorios.** No se omiten automáticamente para esos pendientes. Es una decisión: si se omitieran, quien conozca un nombre podría silenciar los recordatorios de otra invitada.
+- **Texto de `hostDuplicateHint`.** Pide quitar el registro que agregó la anfitriona, que es el confiable y tiene contacto, y conservar el auto-registro. Si el auto-registro fuera una suplantación, la invitada real perdería su link. La revisión sugiere pedir antes «confírmalo con ella».
+- **Canal lateral de tiempo.** Queda uno mínimo (un INSERT), acotado por el rate limit, el cupo y el registro visible.
+- **Decisiones de producto pendientes:** un tope de auto-registros relativo a `guestCount` y una forma segura de recuperar un link personal perdido (enviarlo al contacto registrado). Con CGNAT, varias invitadas pueden compartir IP y cubeta.
+
 ---
 
 ## BUG-004 — La sesión no se invalida en el servidor: una cookie copiada antes del logout sigue dando acceso
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Verified
 **Type:** POTENTIAL SECURITY ISSUE (gestión de sesión)
 **Module:** auth (sesión)
 **Role:** OWNER (aplica a cualquier rol del equipo)
@@ -286,13 +450,50 @@ Misma causa raíz que BUG-001: no existe estado de sesión en el servidor que se
 ### Recommended fix
 La misma revocación por `sessionVersion` de BUG-001; incrementarla también al restablecer contraseña (`src/features/users/server/user-service.ts` → `resetUserPassword`, `src/features/staff/server/staff-service.ts` → `resetStaffPassword`) y al desactivar. Mantener [AUTH-025] como `@regression` y agregar el caso «restablecer contraseña cierra sesiones».
 
+### Fix
+
+**Causa raíz final.** La misma de BUG-001: no había estado de sesión en el servidor. Una copia del JWT seguía válida hasta 12 h y se renovaba, y restablecer la contraseña tampoco cerraba sesiones.
+
+**Corrección.**
+- **Más eventos revocan.** La revocación por `sessionVersion` de BUG-001 también se incrementa, en el mismo `update` que el cambio, en estos casos:
+  - restablecer la contraseña (`resetUserPassword`, `resetStaffPassword`);
+  - desactivar (`setUserActive`, `setStaffAccessActive` y `deleteStaffMember` con cuenta ligada);
+  - cambiar el rol (`changeUserRole`).
+- **Reactivar no revive** los JWT anteriores.
+- **Reset propio en Usuarios.** Borra también la cookie actual (`signOut({ redirect: false })`) y la UI navega a `/login` con un texto explícito (`user-row-actions.tsx`).
+- **Endurecimiento:** cobertura de integración de la revocación en los servicios y el mismo flujo de reset propio en Staff (BUG-022).
+
+**Commits.** `b24c695` (merge `d144ce7`); endurecimiento `28fb8d3` y `ebb5fac` (merge `c3ba279`).
+
+**Pruebas @regression.**
+- [AUTH-025], [AUTH-033], [AUTH-034], [AUTH-035], [AUTH-036] y [AUTH-037] tests/e2e/auth/session.spec.ts.
+- [AUTH-038], sin etiqueta: una cookie revocada no puede cerrar sesiones nuevas.
+- Integración `tests/integration/settings-notifications.test.ts`:
+  - reset, desactivar/reactivar, cambio de rol e intentos rechazados;
+  - reset propio;
+  - `revokeSessionsOnSignOut` con token vigente, viejo, sin versión y malformado, y dos cierres simultáneos de los que sólo uno incrementa.
+- Integración `tests/integration/operations-staff.test.ts`.
+
+**Verificación.**
+- **Antes:** AUTH-025 FAIL (la cookie copiada recibía 200; se esperaba 307).
+- **Después:**
+  - AUTH-025 pasa 3/3 (`--repeat-each=3 --retries=0`).
+  - AUTH-033…038 pasan 5/5. Hubo una caída del worker de Windows (`0xC0000409`) antes de ejecutar código de prueba, que no se repitió en 5 corridas más.
+  - La regresión de BUG-001 (228 PASS) incluye STF-020/021 y SET-014/015/016.
+- **Endurecimiento:** `pnpm test:integration` 318/318 (carril 4).
+
+**Riesgos residuales y decisiones.**
+- Los mismos de BUG-001: la revocación es por cuenta y no por dispositivo, y el logout falla abierto si la base cae.
+- **`/api/auth/session` con una cookie revocada.** Todavía la decodifica y devuelve nombre, correo y rol de esa cuenta, porque Auth.js no conoce `sessionVersion`. La app no llama ese endpoint y toda autorización pasa por `getCurrentUser`. Cerrarlo exigiría un callback `jwt` con consulta a la base.
+- **STF-021 en WebKit.** En la última corrida de la regresión final del carril 5, [STF-021] (desactivar el acceso bloquea el login y la sesión abierta) agotó el tiempo en WebKit. Está dentro de la corrección de inestabilidades en curso y no está clasificado; en Chromium pasa.
+
 ---
 
 ## BUG-005 — `callbackUrl` con caracteres de control evade `safeCallback`
 
 **Severity:** HIGH
 **Priority:** P1
-**Status:** Open
+**Status:** Verified
 **Type:** POTENTIAL SECURITY ISSUE (bypass del filtro anti open-redirect)
 **Module:** auth (login)
 **Role:** cualquier persona del equipo que abra un enlace de login manipulado
@@ -333,13 +534,42 @@ Validación por prefijo de cadena en lugar de normalizar y comparar el origen de
 ### Recommended fix
 En `safeCallback`: rechazar cualquier carácter de control, espacio o barra invertida (`/[\u0000-\u001F\u007F\s\\]/`) y validar con `const u = new URL(url, "http://x"); if (u.origin !== "http://x" || u.pathname.startsWith("//")) return null; return u.pathname + u.search;`. Agregar `callbacks.redirect` en `src/auth.config.ts` con la misma regla (defensa en profundidad). Mantener [AUTH-049] como `@regression`.
 
+### Fix
+
+**Causa raíz final.** `safeCallback` validaba por prefijo de cadena. Los navegadores eliminan TAB, CR y LF de las URL y tratan `\` como `/`, así que `/\t/evil.example` pasaba el filtro y se convertía en `//evil.example`.
+
+**Corrección.**
+- **Nueva función pura `safeCallbackPath`** (`src/features/auth/domain/callback-url.ts`, 38 pruebas unitarias):
+  - rechaza caracteres de control (C0, DEL y C1), cualquier espacio y `\`;
+  - normaliza con `new URL(url, origen ficticio)` y exige el mismo origen;
+  - descarta rutas que, ya normalizadas, empiezan con `//`;
+  - devuelve `pathname + search + hash`.
+- **Dónde se usa:**
+  - en `loginAction`;
+  - en la página `/login`, cuyo campo oculto sólo lleva una ruta válida;
+  - en el callback `redirect` de Auth.js (`safeRedirectUrl`), como defensa en profundidad.
+- **Endurecimiento.** AUTH-043…050 ya no ejercitaban la validación propia de `loginAction`, porque la página la filtra antes. [AUTH-065]…[AUTH-072] alteran el campo oculto antes de enviar y exigen que `x-action-redirect` sea del mismo origen.
+
+**Commits.** `ee67039` (merge `d144ce7`); endurecimiento `28fb8d3` (merge `c3ba279`).
+
+**Pruebas @regression.** [AUTH-049] y [AUTH-071] (el valor TAB, por la página y por `loginAction`) en tests/e2e/auth/callback.spec.ts. Las demás variantes de AUTH-040…051 y AUTH-065…072 pasan sin etiqueta.
+
+**Verificación.**
+- **Antes:** AUTH-049 FAIL («Application error» y `SecurityError` en `pushState`).
+- **Después:** AUTH-049 pasa 3/3; la carpeta auth, 58/58; ratelimit, 9/9.
+- **Endurecimiento:**
+  - Con `loginAction` mutado a un filtro por prefijo, AUTH-043…050 seguían pasando y el valor TAB (AUTH-071) fallaba.
+  - Ya separadas, AUTH-065…072 pasan 24/24 en Chromium, Firefox y WebKit con `--retries=0`, y 5/5 con repeticiones en Chromium.
+
+**Riesgos residuales.** Ninguno conocido. Sigue la observación previa: con sesión abierta, `/login?callbackUrl=…` ignora el `callbackUrl`.
+
 ---
 
 ## BUG-006 — Navegaciones a la misma ruta y `router.refresh()` dentro de transiciones se quedan colgadas
 
 **Severity:** HIGH
 **Priority:** P0 (afecta la confirmación visible del recorrido crítico de RSVP [CRIT-004]; los datos sí se guardan)
-**Status:** Open
+**Status:** Verified (mitigado)
 **Type:** APPLICATION BUG (navegación del cliente; posible INTEGRATION ISSUE con el App Router de Next 15.5)
 **Module:** transversal (App Router) — calendar, events, leads, customers, quotes, inventory (+ compras y proveedores vía `ListFilters`), content, notifications, settings, guests (RSVP)
 **Role:** OWNER (panel) e Invitada (micrositio, link personal sin sesión)
@@ -425,13 +655,91 @@ Interacción del router del App Router de Next 15.5 (navegación a la misma ruta
 3. Revisar el streaming de la respuesta (compresión, Suspense del `loading.tsx` con `searchParams`) y la re-emisión de la cookie en respuestas RSC (relación con BUG-001).
 4. Mantener como `@regression` CAL-002, EVT-038, LEAD-037, INV-025, CNT-022, NOT-002, GST-012, GST-015 y CRIT-004; verificar también `/admin/purchases` y `/admin/vendors`, y agregar una prueba de componente del `RsvpPanel`.
 
+### Fix
+
+**Por qué es una mitigación y no una corrección de raíz.** El defecto está en el reconciliador de React `19.2.0-canary-0bdb9206-20250818`, el que Next 15.5.27 trae incluido para el App Router; no está en la app ni en la red. La app no puede cambiar ese React: subir sólo `react`/`react-dom` no sirve con Next 15.5. Por eso esquiva el disparador hasta que se actualice Next.
+
+**Causa raíz final** (confirmada en el carril 5):
+1. Una transición del router renderiza un payload RSC que todavía llega por streaming.
+2. React se suspende en un lazy de Flight dentro de un Suspense ya visible: el de `loading.tsx`, con key `__PAGE__` sin searchParams. React cede el hilo.
+3. Si la fila llega en ese intervalo, el chunk queda en `resolved_model`.
+4. Al desenrollar (`RootSuspendedWithDelay`), `attachPingListener` llama `chunk.then()`, que resuelve **de forma síncrona en plena fase de render**.
+5. `pingSuspendedRoot` descarta ese ping. La raíz queda con `pendingLanes = suspendedLanes`, `pingedLanes = 0` y sin callback: la URL y la UI no cambian y `useTransition` queda pendiente.
+
+**Por qué sólo en la misma ruta.** El `<Link>` o `router.push` a `?month=` o `?page=` reutiliza, por alias de pathname, el prefetch de la página actual (sólo en producción). Eso dispara un lazy fetch durante la transición. `router.refresh()` y las Server Actions que revalidan siguen el mismo mecanismo.
+
+**Hipótesis descartadas.** El `Set-Cookie` de `auth()`, la compresión o el chunked, los efectos con `router.*` y un artefacto de Playwright (en `next dev` no se reproduce: 24/24). `force-dynamic` + `loading.tsx` es la condición, no la causa, y `useTransition` pendiente es el síntoma.
+
+**Defecto secundario de Next** hallado al corregir: `serverPatchReducer` aplica el `SERVER_PATCH` de un lazy fetch sin comparar `previousTree`. Eso producía la URL de «Precios» con el contenido de «Negocio» (efecto 10, SET-001).
+
+**Corrección de raíz upstream.** Es facebook/react#36134 «Fix useDeferredValue getting stuck» (commit `c0d218f0f3e0`, 2026-03-24; cierra #35821): el ping que llega en fase de render se registra en `workInProgressRootPingedLanes`.
+- **La traen:** Next 16.3.0 o posterior (React `19.3.0-canary-cbb046ab-20260731`), Next 16.4.0 y `react-dom` 19.3.0.
+- **No la traen:** Next 15.5.27, Next 16.2.x y `react-dom` 19.2.8.
+
+**Mitigación** (sin dependencias nuevas ni cambio de versión):
+- **Instalación.** `src/instrumentation-client.ts`, el hook oficial de Next que carga antes de hidratar, instala `src/components/navigation/navigation-guard.ts` (el único módulo con efectos globales) y le reenvía `onRouterTransitionStart`. La lógica pura está en `src/lib/rsc-response-buffer.ts` y `src/lib/navigation-guard.ts`. `<NavigationGuardBridge />`, en el layout raíz, entrega `router.refresh()`.
+- **A — respuestas RSC completas.** `window.fetch` entrega a React las respuestas `text/x-component` ya completas y conserva status, cabeceras, `url` y `redirected`. Con todo el payload, Flight resuelve todas las filas antes del render y la carrera no ocurre. Cubre navegación, prefetch, refresh y Server Actions.
+- **B — lazy fetch obsoletos.** Si un lazy fetch (GET RSC con `refetch` debajo de la raíz) termina después de que empezó otra navegación a otra URL, se entrega un payload RSC válido y vacío (`{b: buildId, f: []}`), que Next aplica sin cambios.
+- **Red de seguridad.**
+  - Cuándo actúa: un push o replace hacia otra URL que no se confirma después de 5 s de red en reposo. «En reposo» significa sin peticiones RSC en curso y sin `<script>` ni hojas de estilo cargando en `<head>`; los `noModule` se ignoran.
+  - Qué hace: recurre a `location.assign` o `location.replace` y registra `console.error`. El guard de E2E convierte ese error en fallo, así que no puede ocultar una regresión.
+  - Qué cubre: el disparador residual de los chunks de módulos cliente (`resolved_module`) y cuelgues no previstos.
+  - Qué no vigila: la misma URL, el hash, Atrás/Adelante, `router.refresh()` ni las Server Actions.
+
+**Regresión que introdujo la primera mitigación: el esqueleto infinito al volver con Atrás.** Se documenta aquí y no como bug aparte.
+- **Qué pasaba.** La revisión adversarial de `5fc2435` detectó que la parte B ampliaba el esqueleto infinito al volver con Atrás/Adelante.
+  - Next sólo descarta un parche cuando su ruta ya no coincide; B descartaba también parches que sí coincidían (rutas hermanas o la misma URL).
+  - El nodo quedaba en el caché del router con `rsc = null` y `lazyData` resuelto, y `restoreReducer` lo reutilizaba: `use(unresolvedThenable)` para siempre.
+  - Ejemplo: en Ajustes, «Negocio» → «Precios» rápido → Atrás.
+  - La primera nota lo atribuía a Next («riesgo no introducido»), y eso no era exacto.
+- **Por qué queda dentro de BUG-006:** nació de su mitigación, no existía en `f26b1a1` ni en ninguna versión publicada, y comparte causa y verificación. Además se cerró antes del estado final con su propia prueba de reproducción: [SET-023] falla sobre `86b60de` y pasa con la recuperación de `be55029`.
+- **Recuperación.** Cada lazy fetch descartado se anota (`onDiscard`, por URL, máximo 50). Un `traverse` hacia esa URL programa `router.refresh()`, o una carga completa si el puente no está montado, y lo registra con `console.warn`.
+
+**Commits.** `5fc2435` y `b15324a` (merge `a1ece90`); endurecimiento `be55029`, `d87814d` y `ae846ec` (merge `f8797e0`).
+
+**Pruebas @regression.**
+- [CAL-002] tests/e2e/calendar/calendar.spec.ts.
+- [EVT-038] tests/e2e/events/events.spec.ts.
+- [LEAD-037] tests/e2e/leads/leads-list.spec.ts.
+- [INV-025] tests/e2e/inventory/inventory.spec.ts.
+- [CNT-022], [CNT-023] y [CNT-024] tests/e2e/content/content.global.spec.ts.
+- [NOT-002] tests/e2e/notifications/inbox.spec.ts.
+- [GST-011], [GST-012] y [GST-015] tests/e2e/guests/rsvp.spec.ts.
+- [CRIT-004] tests/e2e/critical/experience.spec.ts.
+- [SET-001] y [SET-023] tests/e2e/settings/settings.spec.ts, con [SET-024] como control.
+- Unitarias: `src/lib/rsc-response-buffer.test.ts` (20), `src/lib/navigation-guard.test.ts` (13) y `src/components/navigation/navigation-guard.test.ts` (9).
+
+**Verificación.**
+- **Antes** (`8020b91`, carril 5, `--retries=0`): CAL-002, EVT-038, LEAD-037, INV-025, GST-012 y GST-015 FAIL.
+- **Primera versión, sólo A:** 35/38; SET-001 FAIL 3/3 por el parche obsoleto, y por eso se agregó B.
+- **Versión final A+B** (carril 5, `--repeat-each=5 --retries=0`):
+  - 70/70 en Chromium y mobile-chrome; CNT-022…024 15/15; GST-011 y CRIT-004 en Firefox y WebKit 8/8.
+  - Regresión de 10 carpetas: 225 PASS y 9 FAIL. 7 FAIL eran otros bugs entonces abiertos. LEAD-021 era un TEST BUG que la corrección expuso, ya corregido, y SMK-023 dependía de los datos.
+  - Global: 25/25.
+- **Endurecimiento** (carril 1, builds `be55029` y `d87814d`):
+  - Las 10 pruebas de BUG-006 más SET-023/024 (12 pruebas × 5): 60/60 con `--repeat-each=5 --retries=0`.
+  - GST-011 y CRIT-004 en Firefox, WebKit y mobile-chrome: 30/30.
+  - Carpetas calendar, leads, events, guests, inventory, settings, notifications y smoke: 187/187 sin flaky y sin que se disparara la red de seguridad.
+  - Global 18/18; unitarias 884/884.
+
+**Riesgos residuales y criterio de retiro.**
+- **Criterio de retiro (decisión del usuario): actualizar a Next ≥ 16.3.0.** Es un cambio de versión mayor y no se hizo. Después habría que:
+  1. quitar `installNavigationGuard` de `src/instrumentation-client.ts` y `<NavigationGuardBridge />` del layout raíz;
+  2. correr CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022…024, NOT-002, SET-001, SET-023/024 y CRIT-004 con `--repeat-each=5 --retries=0`, más NAV-034…036 de BUG-020 en Firefox.
+- **Costo aceptado.** Las navegaciones del cliente, `router.refresh()` y las Server Actions ya no pintan por partes: los Suspense internos, como `PaymentsPanel`, esperan la respuesta completa. El HTML inicial sigue en streaming. El envoltorio de `window.fetch` aplica a todo el sitio. Conviene medir en producción el tiempo hasta el contenido en páginas lentas.
+- **Lazy fetch de un layout.** La recuperación se busca por URL. Un lazy fetch descartado de un **layout** (raro) dejaría el esqueleto bajo ese layout y **no tiene recuperación automática**: la red de seguridad no vigila Atrás/Adelante y, con push, la URL sí cambia. Sólo se resuelve recargando. `docs/qa/findings/events.md` › Endurecimiento › 2 todavía atribuye ese caso a la red de seguridad, y no es exacto.
+- **Obsolescencia por URL, no implementada a propósito.** Si React renderiza un estado ya superado después de que empezó otra navegación, se aplica el parche obsoleto. Es el comportamiento de Next sin la mitigación, así que no hay regresión.
+- **Falso positivo latente de la red de seguridad.** Una redirección HTTP que vuelve a la misma URL (por ejemplo, una STAFF en `/staff` que sigue un enlace a `/admin/*`) se tomaría por un cuelgue: recarga innecesaria y `console.error`. Hoy no es alcanzable en la app.
+- **Refresh redundante.** Un push confirmado a una URL de la lista de descartadas no la quita de la lista: un Atrás posterior hace un `router.refresh()` de más (una petición extra, sin daño).
+- **Sin cambio:** `OrderButtons` sigue etiquetando por posición («Subir imagen 2»), el agravante de UX de este bug (ver «Observaciones»).
+
 ---
 
 ## BUG-007 — Dos solicitudes simultáneas de checkout crean dos pagos PENDING del mismo anticipo
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Verified
 **Type:** APPLICATION BUG (condición de carrera)
 **Module:** payments
 **Role:** Clienta (token de cotización o del portal)
@@ -472,13 +780,54 @@ Check-then-insert sin serialización por reserva.
 ### Recommended fix
 Envolver búsqueda + creación en una transacción con `lockBooking(tx, bookingId)` (ya existe en el mismo servicio) o un `pg_advisory_xact_lock` por reserva; opcionalmente un índice único parcial `(bookingId, kind) WHERE status = 'PENDING'` (cambio de schema, coordinar). Mantener [PAY-019] como `@regression`.
 
+### Fix
+
+**Causa raíz final.** `startCheckout` hacía check-then-insert sin serialización. Además, la hora de la regla de reutilización se tomaba **antes** de esperar el candado, así que el pago recién creado por la otra solicitud parecía «futuro» y no se reutilizaba. Lo detectó la nueva prueba de integración con 3 solicitudes simultáneas.
+
+**Corrección.**
+- **Ronda 1.**
+  - `startCheckout` corre en `prisma.$transaction` con `lockBooking` (`SELECT … FOR UPDATE` sobre la reserva). La segunda solicitud espera y reutiliza el `checkoutUrl`.
+  - `track(START_PAYMENT)` sólo se registra para pagos nuevos, después del commit.
+  - Sin cambio de esquema: no se agregó el índice parcial único.
+- **Revisión.** Retener el candado durante la llamada HTTP al proveedor (hasta 15 s) hacía que la cancelación, los webhooks, los pagos manuales y los reembolsos de esa reserva esperaran o fallaran por el timeout de 5 s de Prisma, y podía agotar el pool. Primero se puso `BOOKING_LOCK_TX_OPTIONS` (30 s) y una nota de pool en `docs/DEPLOY_DOKPLOY.md`.
+- **Endurecimiento: checkout en dos fases** (`445645c`).
+  1. Una transacción corta con candado reserva el pago (`PENDING` sin URL).
+  2. La llamada al proveedor ocurre fuera de cualquier transacción.
+  3. La URL se publica con candado sólo si el pago sigue reservado y la reserva sigue viva.
+  - Una solicitud simultánea ve el lugar reservado (`checkoutOpeningState`), espera fuera del candado y reutiliza la URL.
+  - Las reservas sin URL de más de 20 s se dan por abandonadas.
+  - `BOOKING_LOCK_TX_OPTIONS` vuelve a 15 s y ya no se exige un pool mínimo.
+
+**Commits.** `0f4ef49` y `568d92d` (merge `be74647`); endurecimiento `445645c` (merge `e21eb66`).
+
+**Pruebas @regression.**
+- [PAY-019] tests/e2e/payments/payments.spec.ts: exactamente un `Payment`, con el monto del anticipo.
+- Integración `payments.test.ts`:
+  - 3 `startCheckout` simultáneos → 1 pago, 1 URL y 1 `START_PAYMENT`;
+  - la reserva no queda bloqueada mientras responde la pasarela (`FOR UPDATE NOWAIT`);
+  - si la pasarela falla → `FAILED` y `CHECKOUT_FAILED`;
+  - un lugar abandonado → `FAILED`.
+- [PAY-006], la reutilización secuencial, sigue en PASS.
+
+**Verificación.**
+- **Antes:** PAY-019 FAIL 1/1 (2 pagos `PENDING` de 1 032 500 centavos y 2 URLs).
+- **Después:**
+  - 3/3 en el carril 2 (`--repeat-each=3 --retries=0`) y 5/5 en el carril 3 tras el endurecimiento.
+  - La prueba de integración fue estable en 4 corridas; `payments.test.ts` 44/44.
+  - La regresión es la misma que en BUG-002.
+
+**Riesgos residuales.** Ambos casos son raros y ninguno reabre BUG-002 ni BUG-007.
+- **Proceso muerto entre reservar y publicar.** Queda un `PENDING` sin URL hasta que otro `startCheckout` de la misma reserva lo marca abandonado; no hay cron que lo limpie.
+- **Commit ambiguo al publicar.** Si falla de forma ambigua, la sesión se expira aunque la URL pudiera haberse guardado, y esa URL se reutilizaría durante su hora de vigencia.
+- **Sugerencia de la revisión:** que el cron de expiración cierre esos `PENDING` y que se re-lea el pago antes de expirar la sesión.
+
 ---
 
 ## BUG-008 — La misma clienta se duplica porque el teléfono se guarda con formatos distintos
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Verified
 **Type:** APPLICATION BUG (integridad de datos: clientas duplicadas, historial partido; regla «busca o crea clienta por email/teléfono»)
 **Module:** leads (`createInboundLead`) / customers / configurator / marketing (contacto) / ai-designer / quotes / seed
 **Role:** Anónimo (configurador, contacto, diseñador IA) y OWNER (ficha de clienta, «Nuevo lead»; ivonne@ivonne-rosa.test)
@@ -531,13 +880,66 @@ No existe una forma canónica única del teléfono: cada canal (y el perfil y el
 ### Recommended fix
 Normalizar en `createInboundLead` y en **todas** las escrituras (perfil, seed, cotización rápida) con la misma función (`normalizeMxPhone10` → E.164 `+52XXXXXXXXXX`) y buscar por la forma normalizada (en transición, también por las variantes de 10/12 dígitos) o por una columna `phoneNormalized` indexada (cambio de schema, coordinar). Migración para normalizar `Customer.phone`/`whatsapp` y `Lead.phone` existentes. Mantener [CONF-022] y [CUST-016] como `@regression`. Ver también la observación sobre unicidad del teléfono ([CUST-009]).
 
+### Fix
+
+**Causa raíz final.** No existía una forma canónica del teléfono:
+- el configurador guardaba `+52` y 10 dígitos;
+- contacto, diseñador IA y captura manual guardaban los dígitos como llegaban;
+- el perfil, la «Clienta nueva» de cotización y de evento y el seed guardaban el texto tal cual.
+
+La regla «busca o crea clienta» (en la captura y en una copia en `event-service`) comparaba por igualdad exacta.
+
+**Corrección.**
+- **Forma canónica.** `src/lib/phone.ts`, pura y con `phone.test.ts`:
+  - `normalizePhone` produce E.164: `+52` y 10 dígitos para México. Acepta 10 dígitos, `+52`, `52`, el prefijo legado `521` y separadores; otros países quedan como `+lada…`.
+  - Agrega `mxNationalNumber`, `isValidPhone`, `samePhone`, `phoneMatchKeys` y `phoneSearchDigits`.
+  - Los esquemas Zod de clientas, leads, contacto, diseñador IA, cotizaciones y eventos validan con la misma función.
+- **Escrituras y búsqueda.**
+  - Todas las escrituras guardan la forma canónica (`phoneForStorage`, `src/features/customers/server/customer-contact.ts`).
+  - Hay una sola regla de búsqueda, `findCustomerByContact` (primero correo y luego teléfono), en captura, eventos y cotizaciones; las cotizaciones ahora también reutilizan por teléfono.
+  - Un mismo número escrito con otro formato no se registra como cambio.
+- **Datos existentes: búsqueda tolerante en lugar de migración.** `findCustomerByPhone` compara sólo los dígitos contra las formas 10, 52+10 y 521+10. No reescribe datos de clientas ni cambia el esquema, y cada edición deja el dato canónico. El seed ya es canónico (`demo-setup.ts`, `demo-sales.ts`).
+- **Endurecimiento** (`fcef8a7`, `fe9f23a`):
+  - `normalizePhone` rechaza la lada 52 con longitud equivocada, ya no toma `+` seguido de 10 dígitos como número nacional y rechaza números nacionales que empiezan con 0 o 1.
+  - Hay un solo normalizador: `whatsappDigits` reemplaza a `normalizeMxPhone` en wa.me y en los avisos.
+  - La búsqueda por teléfono tolera formatos en Clientas, Eventos, Cotizaciones y los selectores (`customerPhoneSearchFilter`), incluidas filas antiguas y WhatsApp.
+  - `findCustomerByPhone` considera WhatsApp y prueba primero la forma canónica exacta, que usa el índice.
+  - `lockCustomerContact` (advisory lock por correo y número) evita que capturas simultáneas creen dos clientas.
+  - «Clienta nueva» en cotización y evento: el mismo teléfono con otro correo es otra persona. Antes, la cotización se ligaba a otra clienta y el correo escrito se perdía.
+  - La fuga de contacto en capturas públicas que encontró la revisión se registra aparte, como BUG-017.
+
+**Commits.** `75085d4` (merge `880e40b`); endurecimiento `fcef8a7` y `fe9f23a` (merge `e21eb66`).
+
+**Pruebas @regression.**
+- [CONF-022] tests/e2e/configurator/server.spec.ts.
+- [CUST-016] tests/e2e/customers/customers.spec.ts.
+- [EVT-039] tests/e2e/events/events.spec.ts: búsqueda por teléfono en Eventos y Cotizaciones.
+- Unitarias: `src/lib/phone.test.ts` y `tests/unit/libs.test.ts`.
+- Integración `leads-customers`, `quotes` y `public-site`:
+  - el formato heredado se reconoce sin modificarlo;
+  - otra lada no se confunde;
+  - se reconoce el WhatsApp heredado;
+  - 3 capturas simultáneas producen 1 clienta.
+
+**Verificación.**
+- **Antes** (carril 3, `--repeat-each=2 --retries=0`): CONF-022 y CUST-016 FAIL 2/2.
+- **Después:** 3/3 cada una. Las carpetas customers, leads, configurator, public, ai-designer (más la suite global), events, quotes y critical/sales no tuvieron fallas nuevas. Las que quedaron eran bugs entonces abiertos, y QUO-018 salió FLAKY por un locator ambiguo (TEST BUG corregido en `baca565`).
+- **Endurecimiento** (carril 3): EVT-039, CONF-021 y PUB-048 pasan 5/5 con `--repeat-each=5 --retries=0`. Chromium: 231/231. `pnpm test:integration`: 324/324.
+
+**Riesgos residuales y decisiones.**
+- **Validación más estricta.** Un teléfono guardado antes con un formato que la regla rechaza (`044…`, `045…`, `01…`, o `+52` con dígitos de más o de menos) impide guardar ese perfil o lead hasta corregirlo. Está documentado en `docs/DOMAIN.md`.
+- **Recorrido de la tabla.** El respaldo por dígitos sigue recorriendo `Customer` cuando el número no existe en forma canónica. Una columna normalizada e indexada, o normalizar los datos existentes, requiere una decisión de esquema o de migración.
+- **Clienta que regresa con otro correo.** Si vuelve a escribir con el mismo teléfono y **otro** correo, se crea como clienta nueva sin marca de posible duplicado. Es el costo de la regla anti-suplantación.
+- **Truncado de la búsqueda.** `customerPhoneSearchFilter` corta en silencio a 500 ids cuando se buscan pocos dígitos.
+- **CSV.** Todo teléfono nuevo se guarda como `+52…`, así que la protección anti-fórmulas del CSV (`'+52…`) aplica ahora a todos (ver «Requisitos ambiguos»).
+
 ---
 
 ## BUG-009 — Contraste insuficiente (WCAG 1.4.3) en tonos warning/info, taupe y textos atenuados
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Verified
 **Type:** UX ISSUE (accesibilidad; axe `color-contrast` *serious*; requisito explícito «contraste AA» de CLAUDE.md)
 **Module:** UI compartida — `StatusBadge`, admin-shell, events/calendar (admin), finance, portal de la clienta, Memory Capsule, payments (layout `/pago/*`), staff
 **Role:** OWNER/SUPER_ADMIN (panel), STAFF (portal), Clienta (portal, pago) e Invitada (cápsula)
@@ -594,13 +996,59 @@ Tokens de marca pensados para decoración o fondos sólidos usados como color de
 ### Recommended fix
 Oscurecer el texto de los tonos (warning ≈ `#7d5414`–`#7f5616`, info ≈ `#3d5363`) o usar `text-*-foreground`/`text-charcoal` sobre `bg-*/10` en insignias pequeñas; reservar `taupe` para decoración/íconos y usar `text-muted-foreground` (`#645a52`, 6+:1) o un taupe ≥ `#7a6656` para texto; mantener el texto de ayuda del uploader deshabilitado sin opacidad; revisar `text-ivory/80` y los días fuera de mes (más oscuros, o `aria-hidden` si son puramente decorativos). Volver a correr todas las pruebas listadas.
 
+### Fix
+
+**Causa raíz final.**
+- Los tokens `--warning` (`#9a6a1f`) e `--info` (`#4b6577`) se usaban como color de texto sobre su propio fondo al 10 % (3.77–4.47:1).
+- `--brand-taupe` (`#a48f7e`, unos 2.8:1) se usaba como color de texto.
+- Varios textos se atenuaban con opacidad: `text-ivory/80` sobre olive, días fuera de mes, la ayuda del `MediaUploader` deshabilitado, el eje X, contadores, filas inactivas, la propuesta aceptada o expirada y las pestañas inactivas.
+- El mismo patrón quedaba en el detalle «· N × $precio» del configurador, en `lead-timeline`, en los hovers a `/20` y en `--destructive` del modo oscuro preparado.
+
+**Corrección.**
+- **Tokens en `globals.css`:** warning `#7d5619`, info `#486173`, success `#4c6639` y destructive `#a03e2b`. Conservan la tonalidad y dan al menos 4.6:1 sobre el tono al 10 % en todas las superficies.
+- **Taupe.** Nuevo `--brand-taupe-deep` (`#776354`, 5.1:1), que se usa como `text-taupe-deep` para texto; el taupe de marca queda decorativo.
+- **Atenuados.** Los textos dejan la opacidad o usan fondo `muted` en su lugar. `StatusBadge` no necesitó cambios de clases.
+- **Endurecimiento:**
+  - `estimate-summary` y `lead-timeline` sin opacidad;
+  - hovers de `/20` a `/15`;
+  - en `.dark`, `--destructive` `#eab0a4` y `--destructive-foreground` `#1f1d1b`;
+  - `refund-dialog` usa `text-destructive-foreground`.
+- La paleta clara no cambia.
+
+**Commits.** `cf3e12d` (merge `41db385`); endurecimiento `50d2903` (merge `c3ba279`).
+
+**Pruebas @regression.**
+- [PAY-022] tests/e2e/payments/payments.spec.ts.
+- [EVT-037] tests/e2e/events/event-experience.spec.ts.
+- [CAL-007] tests/e2e/calendar/calendar.spec.ts.
+- [MEM-019] tests/e2e/memory/memory-public.spec.ts.
+- [A11Y-008], [A11Y-009], [A11Y-011], [A11Y-012], [A11Y-013], [A11Y-014], [A11Y-015] y [A11Y-018] tests/e2e/accessibility/a11y.spec.ts.
+- [STF-024] tests/e2e/staff/staff-portal.spec.ts.
+- [CONF-024] tests/e2e/configurator/wizard.spec.ts.
+- Contratos unitarios:
+  - `tests/unit/design-tokens-contrast.test.ts`, que falla con los valores anteriores;
+  - `tests/unit/ui-contrast-classes.test.ts`, que recorre las clases reales de `src/**`, incluidas las variantes `hover:`, `[a]:hover:` y `dark:`.
+
+**Verificación.**
+- **Antes:** las pruebas E2E listadas FAIL por `color-contrast` serious (2.63–4.47:1).
+- **Después:**
+  - Cada una pasa 3/3 (`--repeat-each=3 --retries=0`, carril 6).
+  - Un barrido axe temporal de 78 páginas a 1440 y 390 px no encontró ningún `color-contrast`.
+  - Las carpetas accessibility, responsive, smoke, quote-public, navigation, public, finance, staff-portal, memory y notifications pasan 198/198.
+- **Endurecimiento** (carril 4): CONF-024 pasa 5/5. Revertir `estimate-summary` o el hover hace fallar los contratos. Accessibility: 32/32.
+
+**Riesgos residuales.**
+- **Excepciones por archivo.** `DIMMED_TEXT_EXEMPT` exime por archivo y clase, así que podría ocultar un texto atenuado nuevo en esos archivos. La revisión sugiere fijar el número de ocurrencias.
+- **Modo oscuro.** El modo oscuro preparado (no activo) todavía tiene componentes con fondos claros fijos.
+- **Correo.** Fuera de alcance y sin corregir: la plantilla de correo usa `#A48F7E` como color de texto (ver «Observaciones › Hallazgos nuevos sin triage»).
+
 ---
 
 ## BUG-010 — Listas de definición (`<dl>`) inválidas en la propuesta pública y el micrositio
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Verified
 **Type:** UX ISSUE (accesibilidad WCAG 1.3.1; axe `definition-list` + `dlitem` *serious*)
 **Module:** quotes (vista pública `/cotizacion/[token]`) · guests (micrositio `/e/[slug]/[token]`)
 **Role:** Clienta e Invitada (lectores de pantalla)
@@ -644,13 +1092,37 @@ Envoltorios visuales (ícono + contenedor) intercalados entre `<dl>` y sus pares
 ### Recommended fix
 Que cada par quede en un único `<div>` hijo directo del `<dl>` que contenga **sólo** `dt` y `dd` (ícono dentro del `dt` con `aria-hidden`, o fuera del `<dl>`); sacar el bloque «anticipo/saldo» a su propio `<dl>`; o usar `<ul>`/`<p>` donde no sea una lista de definiciones. Volver a correr QPUB-014, GST-022, A11Y-007 y A11Y-010.
 
+### Fix
+
+**Causa raíz final.** Había envoltorios visuales (ícono y contenedor) entre `<dl>` y sus `dt`/`dd` en:
+- `DetailTile` (`/cotizacion/[token]`);
+- `DetailCard` (micrositio);
+- el bloque de anticipo y saldo.
+
+El barrido encontró lo mismo en la ficha del lead: el botón «Copiar» era hijo del `<div>` del `<dl>`.
+
+**Corrección.**
+- Cada `<div>` hijo del `<dl>` contiene sólo `<dt>` y `<dd>`. El ícono decorativo va dentro del `<dt>`, con `aria-hidden`, y el diseño no cambia.
+- El anticipo y el saldo tienen su propio `<dl>`.
+- En `lead-contact-card`, el botón va dentro del `<dd>`.
+
+**Commits.** `7173e13` (merge `41db385`).
+
+**Pruebas @regression.** [QPUB-014] tests/e2e/quote-public/quote-public.spec.ts · [GST-022] tests/e2e/guests/rsvp.spec.ts · [A11Y-007] y [A11Y-010] tests/e2e/accessibility/a11y.spec.ts.
+
+**Verificación.**
+- **Antes:** las 4 FAIL (`definition-list` y `dlitem`).
+- **Después:** cada una pasa 3/3. El barrido axe ya no encuentra `definition-list` en `/admin/leads/[id]`. La regresión de BUG-009 (198/198) y el `@mobile` de quote-public y guests no tuvieron fallas propias.
+
+**Riesgos residuales.** Ninguno conocido.
+
 ---
 
 ## BUG-011 — Portal staff: `aria-controls` de «Agregar nota» apunta a un id inexistente
 
 **Severity:** MEDIUM
 **Priority:** P2
-**Status:** Open
+**Status:** Verified
 **Type:** UX ISSUE (accesibilidad; axe `aria-valid-attr-value` *critical*)
 **Module:** staff (portal `/staff/events/[id]`, checklist)
 **Role:** STAFF (staff@ivonne-rosa.test)
@@ -690,13 +1162,32 @@ Referencia ARIA a un elemento que se monta condicionalmente.
 ### Recommended fix
 Poner `aria-controls` sólo cuando el panel exista (o renderizar el panel oculto con `hidden`) y exponer el estado con `aria-expanded`. Volver a correr [STF-024].
 
+### Fix
+
+**Causa raíz final.** `aria-controls="notas-<id>"` apuntaba al `<Textarea>`, que sólo se monta con el panel abierto (el botón se reemplaza por el panel). Además, el foco caía en `<body>` al abrir y al cerrar.
+
+**Corrección.**
+- Se quitó `aria-controls`: no es un disclosure, porque el botón desaparece.
+- El foco se gestiona: al abrir pasa a «Nota para coordinación» y al cancelar o guardar vuelve al botón.
+- El guardado no cambia.
+
+**Commits.** `e813c1c` (merge `41db385`).
+
+**Pruebas @regression.** [STF-024] y [STF-025] tests/e2e/staff/staff-portal.spec.ts.
+
+**Verificación.**
+- **Antes:** STF-024 FAIL (`aria-valid-attr-value` critical y contraste).
+- **Después:** STF-024 y la nueva STF-025 pasan 3/3. STF-025 comprueba que no queden referencias ARIA colgantes, que Enter lleve el foco al campo, que al cancelar vuelva al botón y que la nota no se guarde. staff-portal completo y su `@mobile` pasan.
+
+**Riesgos residuales.** Ninguno.
+
 ---
 
 ## BUG-012 — El diálogo «Aceptar propuesta» no devuelve el foco al cerrarse
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Verified
 **Type:** UX ISSUE (accesibilidad WCAG 2.4.3, orden del foco)
 **Module:** quotes (vista pública `/cotizacion/[token]`)
 **Role:** Clienta (teclado / lector de pantalla)
@@ -737,13 +1228,32 @@ Radix no sabe a qué elemento devolver el foco porque el diálogo controlado no 
 ### Recommended fix
 Guardar el botón que abrió el diálogo (ref) y devolverle el foco en `onCloseAutoFocus` del `DialogContent`, o envolver cada botón en `DialogTrigger asChild`. Volver a correr QPUB-015 y A11Y-028.
 
+### Fix
+
+**Causa raíz final.** Un `Dialog` controlado se abría desde dos botones (el CTA y la barra fija móvil) sin `DialogTrigger`, así que Radix no tenía a quién devolver el foco.
+
+**Corrección.**
+- Se recuerda el botón que abrió el diálogo (`e.currentTarget`).
+- `onCloseAutoFocus` le devuelve el foco si sigue conectado. Después de aceptar, la vista cambia y queda el comportamiento por defecto.
+- La acción de aceptar no cambia.
+
+**Commits.** `f35fb04` (merge `41db385`).
+
+**Pruebas @regression.** [QPUB-015] tests/e2e/quote-public/quote-public.spec.ts · [A11Y-028] tests/e2e/accessibility/a11y.spec.ts.
+
+**Verificación.**
+- **Antes:** ambas FAIL (el foco quedaba en `body`).
+- **Después:** cada una pasa 3/3, y quote-public completo y su `@mobile` pasan.
+
+**Riesgos residuales.** Ninguno.
+
 ---
 
 ## BUG-013 — Soft-404: `/experiencias/[slug]` inexistente o inactivo responde HTTP 200
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Verified
 **Type:** APPLICATION BUG (SEO)
 **Module:** public (catálogo de experiencias)
 **Role:** Anónimo / rastreadores
@@ -784,13 +1294,43 @@ La existencia del slug se resuelve dentro del límite de Suspense en lugar de an
 ### Recommended fix
 Agregar `src/app/(public)/experiencias/[slug]/layout.tsx` que valide el slug (activo) y llame `notFound()` antes de `loading.tsx` (mismo patrón que `cotizacion/[token]/layout.tsx`), o quitar `loading.tsx` de ese segmento; deduplicar el `<meta name="robots">`. Volver a correr NAV-002 y endurecer PUB-016 para exigir 404.
 
+### Fix
+
+**Causa raíz final.** `(public)/loading.tsx` y `experiencias/loading.tsx` envolvían en Suspense todo el sitio público. El `notFound()` de `experiencias/[slug]/page.tsx` llegaba cuando el shell ya se había enviado con HTTP 200.
+
+**Corrección.**
+- **Layout guardián.** Nuevo `experiencias/[slug]/layout.tsx`: valida que el slug exista y esté activo, y llama `notFound()` antes de cualquier límite de carga (el patrón de `cotizacion/[token]/layout.tsx`).
+- **Esqueletos y not-found.** Los esqueletos del inicio y del catálogo pasan a los grupos `(inicio)` y `(catalogo)`, sin cambiar URLs. El not-found pasa a `experiencias/not-found.tsx`.
+- **Revisión del patrón.** Se revisó en las demás rutas públicas y por token: todas validan en su layout. La tabla está en `docs/qa/findings/sales.md` › SAL-BUG-07.
+- **Endurecimiento.**
+  - El contrato `tests/unit/route-not-found-contract.test.ts` falla si un layout guardián de `(public)`, `(experience)` o `(auth)` queda dentro de un `loading.*` o de un `<Suspense>` ancestro.
+  - La restricción está comentada en `(public)/layout.tsx` y `(experience)/layout.tsx`.
+  - El inventario QA se regeneró (`2fbe8d4`).
+
+**Commits.** `a8ca093` (merge `41db385`); endurecimiento `4a7a780` y `2fbe8d4` (merge `c3ba279`).
+
+**Pruebas @regression.**
+- [NAV-002] y [NAV-034] tests/e2e/navigation/not-found.spec.ts. NAV-034 exige HTTP 404 real en 8 rutas públicas y por token.
+- [PUB-016] tests/e2e/public/site.spec.ts, que ahora exige 404 para un slug inexistente, inválido o inactivo.
+
+**Verificación.**
+- **Antes:** NAV-002 FAIL (HTTP 200).
+- **Después:** NAV-002 y PUB-016 pasan 3/3; navigation y public completos pasan, igual que A11Y-001/002/003.
+- **Endurecimiento:** NAV-034 pasa 5/5. Crear `(public)/loading.tsx` o `(experience)/loading.tsx` hace fallar el contrato.
+
+**Riesgos residuales.**
+- **Soft-404 interno.** Las rutas con sesión `/admin/**/[id]` (19) y `/staff/events/[id]` siguen respondiendo 200 con `noindex` y «No encontramos…». No afecta SEO ni seguridad; es una mejora opcional.
+- **Navegación a una ficha.** En el cliente, ahora espera la consulta del layout (en caché) antes de mostrar el esqueleto.
+- **ID duplicado.** [NAV-034] colisiona con la prueba de hidratación de BUG-020 (ver «Notas de reporters y ejecución»).
+- **Meta robots duplicado.** No se verificó por separado en las páginas 404: PUB-016 usa `.first()`.
+
 ---
 
 ## BUG-014 — Un lead capturado a mano con «Origen» ≠ «Captura manual» dispara los avisos de lead entrante
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Verified
 **Type:** APPLICATION BUG (con REQUIREMENT AMBIGUITY: no hay requisito escrito; la intención del código es no notificar capturas manuales)
 **Module:** leads
 **Role:** OWNER (ivonne@ivonne-rosa.test)
@@ -831,13 +1371,34 @@ Se mezcla el origen del lead (marketing) con el canal por el que se capturó (pa
 ### Recommended fix
 Pasar un indicador explícito (p. ej. `ctx.actor` presente o `{ notify: false }` desde `createManualLead`) y notificar sólo capturas públicas; si se desea avisar a la clienta en capturas manuales, hacerlo con una opción explícita en el formulario. Mantener [LEAD-035]/[LEAD-036] como `@regression`.
 
+### Fix
+
+**Causa raíz final.** `createInboundLead` decidía los avisos con `input.source !== "MANUAL"`: usaba el origen comercial del lead como si fuera el canal de captura.
+
+**Corrección.**
+- `createInboundLead` exige `ctx.channel: "public" | "team"`, y sólo `"public"` dispara `LEAD_RECEIVED` y «Nuevo lead». La regla es la función pura `notifiesInboundLead` (`src/features/leads/domain/lead-workflow.ts`), con prueba unitaria.
+- Configurador, diseñador IA y contacto declaran `"public"`; `createManualLead` declara `"team"`.
+- No se usa `ctx.actor` como señal porque las acciones públicas también lo reciben cuando quien las usa tiene sesión.
+
+**Commits.** `cf05a32` (merge `880e40b`).
+
+**Pruebas @regression.**
+- [LEAD-036] y [LEAD-035] (control) tests/e2e/leads/leads-detail.spec.ts.
+- Integración `leads-customers`: una captura del equipo con origen Instagram genera 0 avisos; el contacto público genera `LEAD_RECEIVED` y el aviso al equipo.
+
+**Verificación.**
+- **Antes:** LEAD-036 FAIL 2/2 (`--repeat-each=2 --retries=0`, carril 3); LEAD-035 pasa.
+- **Después:** ambas pasan 3/3. Las capturas públicas siguen avisando: contacto, configurador, diseñador IA, CRIT-001 y CRIT-010 pasan.
+
+**Riesgos residuales.** No hay una opción para avisar a la clienta en una captura manual; si se quisiera, tendría que ser explícita en el formulario.
+
 ---
 
 ## BUG-015 — El encabezado del evento no indica que el evento está cerrado
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Verified
 **Type:** UX ISSUE
 **Module:** finance / events (encabezado compartido de las pestañas del evento)
 **Role:** OWNER
@@ -878,13 +1439,32 @@ El dato `closedAt` no llega al encabezado.
 ### Recommended fix
 Agregar `closedAt: true` a `getEventHeader` y mostrar `<StatusBadge tone="neutral" dot={false}><Lock/> Cerrado</StatusBadge>` en `EventHeader` cuando exista. Volver a correr [FIN-007].
 
+### Fix
+
+**Causa raíz final.** `getEventHeader` no seleccionaba `closedAt`.
+
+**Corrección.**
+- `getEventHeader` selecciona `closedAt`.
+- `EventHeader` muestra la insignia neutral «Cerrado», con candado, junto al estado, como en `/admin/finance`.
+- La pestaña Finanzas deja de repetir su propia insignia y conserva «Evento cerrado el …».
+
+**Commits.** `d38e91e` (merge `41db385`).
+
+**Pruebas @regression.** [FIN-007] tests/e2e/finance/finance.spec.ts.
+
+**Verificación.**
+- **Antes:** FIN-007 FAIL.
+- **Después:** pasa 3/3; finance completo pasa y events y operations no tienen fallas propias.
+
+**Riesgos residuales.** Ninguno.
+
 ---
 
 ## BUG-016 — Seed DEMO: notificaciones con enlaces a rutas inexistentes
 
 **Severity:** LOW
 **Priority:** P3
-**Status:** Open
+**Status:** Verified
 **Type:** DATA ISSUE (seed DEMO de la app)
 **Module:** notifications (bandeja mock) / seed
 **Role:** OWNER (bandeja) · STAFF (enlace de WhatsApp; staff@ivonne-rosa.test)
@@ -926,109 +1506,733 @@ Rutas en español escritas a mano en el seed, distintas de las rutas reales del 
 ### Recommended fix
 Cambiar `eventos` por `events` en `prisma/seed-data/demo-activity.ts:85` y `:102` (sólo datos de demo; no afecta producción) y, de preferencia, construir los enlaces con el mismo helper `appUrl()` de la app. Mantener [NAV-015] y [NOT-007] como `@regression`.
 
+### Fix
+
+**Causa raíz final.** `prisma/seed-data/demo-activity.ts` construía `actionUrl` con rutas en español que no existen (`/admin/eventos/<id>`, `/staff/eventos/<id>`) y usaba rutas de analytics obsoletas (`/configurador`, `/disena-con-ia`).
+
+**Corrección.**
+- `actionUrl` apunta a `/admin/events/<id>` y `/staff/events/<id>`.
+- Las rutas de `AnalyticsEvent` se alinearon con la app (`/crear-experiencia?experiencia=…`, `/crear-experiencia/ai`).
+- Se revisaron los demás enlaces del seed: todos existen.
+
+**Commits.** `af52434` (merge `41db385`). `976aaec` aisló los datos de NAV-015.
+
+**Pruebas @regression.** [NAV-015] tests/e2e/navigation/links.spec.ts · [NOT-007] tests/e2e/notifications/inbox.spec.ts.
+
+**Verificación.**
+- **Antes:** ambas FAIL (404).
+- **Después:** ambas pasan 3/3. NAV-015 se endureció (sólo avisos de eventos asignados a la cuenta staff, orden determinista y al menos un enlace staff) y pasa también con la base contaminada por otras carpetas.
+
+**Riesgos residuales.**
+- **Bases existentes.** Las bases de desarrollo y demo conservan los enlaces rotos hasta re-sembrar con `pnpm db:setup`. Producción usa el seed BASE y no se afecta.
+- **Cobertura.** NAV-015 ya no abre los enlaces `/staff/events/<id>` de eventos no asignados a la cuenta de prueba, así que la cobertura es algo más estrecha.
+
+---
+
+## BUG-017 — Una captura pública escribía el contacto de la visitante en una clienta existente: sus enlaces privados podían llegarle a otra persona
+
+**Severity:** HIGH
+**Priority:** P1
+**Status:** Verified
+**Type:** POTENTIAL SECURITY ISSUE (desvío de enlaces privados de una tercera; integridad del perfil de la clienta)
+**Module:** leads (`createInboundLead` › `findOrCreateCustomer`) / customers — capturas públicas (contacto, configurador, diseñador IA)
+**Role:** Anónimo (conoce el teléfono o el correo de una clienta registrada) · Clienta afectada
+**Environment:** TEST — build de producción local `:3203`, base `ivonne_rosa_e2e_l3`, sobre `86b60de`; Chromium. El defecto existía desde `f26b1a1`.
+**Reproducible:** Sí, determinista. Antes de corregir, [CONF-021] afirmaba el comportamiento vulnerable, y pasaba: el perfil de la clienta encontrada por teléfono tomaba el correo escrito en el sitio. Lo confirman las pruebas de integración del canal público.
+**Test:** [PUB-048] tests/e2e/public/contact.spec.ts · [CONF-021] tests/e2e/configurator/server.spec.ts
+**Fuentes:** revisión adversarial de BUG-008 (ronda 1, hallazgo menor 1: «riesgo de seguridad que ya existía y que ahora alcanza a más clientas») → endurecimiento del carril 3 (`fe9f23a`)
+
+### Preconditions
+Una clienta registrada **sin correo** (por ejemplo, creada por teléfono o WhatsApp), o sin teléfono. Quien ataca conoce su teléfono (o su correo).
+
+### Steps to reproduce
+1. Enviar el formulario de contacto, el configurador o el diseñador IA con el **teléfono** de la clienta y un **correo propio**.
+2. Consultar el perfil: `select email, phone from "Customer" where id = '<id de la clienta>'`.
+3. Consecuencia: cuando el equipo envía después una cotización, el portal o un enlace de pago a esa clienta, `notifyCustomer` usa el correo del perfil.
+
+Variante: con el correo de una clienta sin teléfono y un teléfono propio, ese teléfono queda en el perfil y los avisos por WhatsApp le llegan a quien lo escribió.
+
+### Expected result
+Una captura del sitio nunca modifica los datos de contacto de una clienta existente. El lead se liga a ella, lo escrito queda en el lead y el equipo decide si lo confirma.
+
+### Actual result
+- `findOrCreateCustomer` hacía `email: customer.email ?? input.email`, y lo mismo con el teléfono. El correo de la visitante quedaba en el perfil de la clienta.
+- Los avisos con enlaces privados por token se enviaban a la visitante: cotización, portal (con la lista de invitadas y la dirección) y pagos.
+- La búsqueda tolerante de BUG-008 ampliaba el alcance a las filas guardadas con separadores.
+
+### Evidence
+- **E2E:** [CONF-021], en su versión anterior, exigía que el perfil tomara el correo escrito; ahora exige lo contrario. [PUB-048] cubre el formulario de contacto.
+- **Integración** en `tests/integration/leads-customers.test.ts`: canal público frente a equipo, y mismo teléfono con otro correo.
+- **Integración** en `tests/integration/quotes.test.ts`: «Clienta nueva» con el teléfono de otra clienta.
+- Corridas en `.claude/worktrees/wf_0695ec9a-980-3/test-results/l3-evidence/minors/` (no versionada).
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno. Las acciones públicas responden 200 `ok: true` y no devuelven `customerId`.
+
+### Technical analysis
+- `src/features/leads/server/lead-intake.ts` (`findOrCreateCustomer`, antes de `fe9f23a`) rellenaba `email`/`phone` de la clienta encontrada con lo que se escribió en una captura pública.
+- `notifyCustomer` toma el destino del perfil de la clienta (`quote-service`, `booking-service`).
+- La captura pública es anónima: no exige demostrar que el contacto es de quien escribe.
+- **Severidad.** Se registra como HIGH por la regla del gate (seguridad ⇒ al menos HIGH). No es CRITICAL porque la exposición no es inmediata: requiere una clienta a la que le falte ese dato de contacto y un envío posterior del equipo. Además, el envío a la tercera no se reprodujo de punta a punta. Los agentes de corrección lo anotaron como «menor» dentro de la revisión de BUG-008.
+
+### Suspected root cause
+La política de fusión de contacto no distinguía el canal: lo que escribía una visitante anónima se trataba como dato confiable del perfil.
+
+### Recommended fix
+Recomendación de la revisión: con `channel === "public"`, no completar `email` ni `whatsapp` de una clienta encontrada sólo por teléfono, o dejarlo pendiente de revisión del equipo. Cualquier relleno de contacto debe quedar en el timeline o en la auditoría.
+
+### Fix
+
+**Causa raíz final.** La de arriba: relleno de contacto desde el canal público sin verificación.
+
+**Corrección.**
+- **Nada del canal público se escribe en una clienta existente.** `contactUpdateForExisting` (pura, en `src/features/customers/domain/contact-merge.ts`, con pruebas) lo garantiza. Los datos quedan en el lead y la entrada `CREATED` del timeline pide al equipo confirmarlos. Las capturas del equipo sí completan campos vacíos.
+- **Reutilización por teléfono acotada.** `findCustomerByContact` sólo reutiliza una coincidencia por teléfono cuando no se escribió correo o la clienta no tiene correo. El mismo teléfono con otro correo es otra persona, así que ningún lead ni cotización se liga a otra clienta.
+
+**Commits.** `fe9f23a` (merge `e21eb66`).
+
+**Pruebas @regression.**
+- [PUB-048] tests/e2e/public/contact.spec.ts.
+- [CONF-021] tests/e2e/configurator/server.spec.ts. Pasó de afirmar el relleno a afirmar el comportamiento seguro: es un cambio de requisito, no una prueba debilitada.
+- Unitarias en `contact-merge.test.ts`; integración en `leads-customers` y `quotes`.
+
+**Verificación.**
+- PUB-048 y CONF-021 pasan 5/5 con `--repeat-each=5 --retries=0` (carril 3).
+- Chromium: 231/231 en customers, leads, configurator, public, guests, portal, payments, events y critical.
+- `pnpm test:integration`: 324/324.
+- La revisión del endurecimiento (approve) volvió a correr la integración de payments, portal-rsvp, leads-customers y quotes: 118/118.
+
+**Riesgos residuales.**
+- **Sin corregir, encontrado en la revisión del endurecimiento:** `findOrCreateCustomer` todavía hace `marketingOptIn: customer.marketingOptIn || !!input.marketingOptIn` en el canal público. Quien conozca el teléfono o el correo de una clienta puede suscribirla a marketing; es un consentimiento dado por un tercero. Ver «Observaciones › Hallazgos nuevos sin triage».
+- **Duplicados.** Una clienta que regresa con otro correo queda duplicada y sin marca (costo aceptado; ver BUG-008).
+
+---
+
+## BUG-018 — Eliminar una ficha de staff desactivaba la cuenta ligada sin aplicar las reglas de Usuarios
+
+**Severity:** MEDIUM
+**Priority:** P1
+**Status:** Verified
+**Type:** POTENTIAL SECURITY ISSUE (autorización: desactivar cuentas protegidas por una vía lateral)
+**Module:** staff (`deleteStaffMember`) / users (reglas de activación)
+**Role:** OWNER con `staff:write`, frente a una SUPER_ADMIN o a sí misma
+**Environment:** TEST — integración contra base efímera y carril 4 (`:3204`, `ivonne_rosa_e2e_l4`), sobre `86b60de`. El defecto existía desde `f26b1a1` (`src/features/staff/server/staff-service.ts:85`).
+**Reproducible:** Sí: 1/1 con una prueba de integración temporal, hoy cubierta de forma permanente en `operations-staff.test.ts`.
+**Test:** integración `tests/integration/operations-staff.test.ts`. No tiene prueba E2E @regression propia; permissions y staff E2E pasan.
+**Fuentes:** endurecimiento de BUG-001/BUG-004/BUG-005 (carril 4, hallazgo nuevo)
+
+### Preconditions
+Una ficha de staff ligada a la cuenta de una SUPER_ADMIN, o a la de la propia OWNER, sin eventos en su historial. Si tiene eventos, la eliminación ya se rechazaba con CONFLICT.
+
+### Steps to reproduce
+1. Como OWNER, abrir `/admin/staff/<id>` de esa ficha.
+2. Pulsar «Eliminar integrante» (`deleteStaffMember`).
+3. Consultar `select active from "User" where id = '<cuenta ligada>'`.
+
+### Expected result
+Las mismas reglas que `setUserActive` en Ajustes › Usuarios: una OWNER no puede desactivar a una SUPER_ADMIN (FORBIDDEN) ni a sí misma (CONFLICT), y no se borra nada.
+
+### Actual result
+La ficha se borraba y la cuenta ligada quedaba con `active = false` (y, después de BUG-004, con sus sesiones revocadas). Una OWNER podía dejar fuera a una SUPER_ADMIN o bloquearse a sí misma.
+
+### Evidence
+- Prueba de integración temporal del carril 4 (1/1). La cobertura permanente en `operations-staff.test.ts` comprueba:
+  - OWNER → SUPER_ADMIN: Forbidden;
+  - sobre sí misma: Conflict;
+  - en ambos casos nada cambia;
+  - una SUPER_ADMIN sí puede.
+- Código en `f26b1a1` (`src/features/staff/server/staff-service.ts:85`): `if (member.userId) await tx.user.update({ where: { id: member.userId }, data: { active: false } })`, sin verificar rol ni actor.
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+- `deleteStaffMember` (`src/features/staff/server/staff-service.ts:72-88` en `f26b1a1`) sólo exigía `staff:write`.
+- Desactivaba la cuenta ligada dentro de su transacción sin las reglas de `setUserActive` (`src/features/users/server/user-service.ts`) ni el candado de super admins.
+- OWNER tiene `staff:write` y `users:manage`, así que no hay escalada desde fuera: es una vía lateral entre cuentas privilegiadas. Se mantiene MEDIUM, como lo clasificó el carril.
+
+### Suspected root cause
+La regla de negocio de activación estaba duplicada, de forma parcial, en el módulo de staff.
+
+### Recommended fix
+Evaluar dentro de la transacción las mismas reglas que `setUserActive`, con el candado de super admins, y rechazar sin borrar. No ofrecer «Eliminar integrante» sobre la propia ficha.
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.**
+- `checkLinkedAccountDeactivation` (`user-service`) aplica dentro de la transacción las reglas de `setUserActive`, con el candado de super admins, y rechaza con FORBIDDEN o CONFLICT sin borrar nada.
+- La página ya no ofrece «Eliminar integrante» ni «Desactivar acceso» sobre la propia ficha.
+
+**Commits.** `ebb5fac` (merge `c3ba279`).
+
+**Pruebas.** Integración en `tests/integration/operations-staff.test.ts`:
+- en el caso permitido, `deleteStaffMember` sube `sessionVersion` en 1 y deja `active: false`;
+- OWNER → SUPER_ADMIN: Forbidden;
+- sobre la propia ficha: Conflict.
+
+No tiene E2E @regression propia.
+
+**Verificación.**
+- `pnpm test:integration`: 318/318 (carril 4).
+- E2E de auth, navigation, permissions y api: 271/271. Staff y settings (Chromium y mobile-chrome): 47/47.
+- STF-016/017 y PERM-126 no cambian.
+
+**Riesgos residuales.**
+- **UX.** Una OWNER todavía ve «Eliminar integrante» en una ficha ligada a una SUPER_ADMIN, y el servidor siempre la rechaza. Convendría ocultar o explicar el botón.
+- **Cobertura.** Falta una prueba E2E @regression del rechazo.
+
+---
+
+## BUG-019 — Formularios públicos y por token se enviaban por GET antes de hidratar, con datos personales en la URL
+
+**Severity:** MEDIUM
+**Priority:** P1
+**Status:** Verified
+**Type:** POTENTIAL SECURITY ISSUE (privacidad: datos personales en la URL, el historial, los logs y el `Referer`) + UX ISSUE (se pierde lo escrito)
+**Module:** guests (RSVP) · portal (acceso por correo, mensajes, opinión, dirección) · configurator («Siguiente»)
+**Role:** Invitada (link personal o general), Clienta (portal) y Anónimo (configurador)
+**Environment:** TEST — build de producción local, carril 7, sobre `e2f3699`; Chromium, mobile-chrome, Firefox y WebKit
+**Reproducible:** Sí. Sin la corrección, las 5 pruebas nuevas fallan 17/17 en los cuatro proyectos. La revisión independiente lo confirmó: 7/7 en Chromium y mobile-chrome con el build anterior en `:3207`.
+**Test:** [GST-028] tests/e2e/guests/rsvp.spec.ts · [PORT-023], [PORT-024], [PORT-025] tests/e2e/portal/portal.spec.ts · [CONF-025] tests/e2e/configurator/wizard.spec.ts
+**Fuentes:** pendiente que se reportó al corregir BUG-021 (`e2f3699`), confirmado por su revisión («minor · privacidad, ya existía y no está registrado»)
+
+### Preconditions
+Una página servida y visible antes de que su JS hidrate: red móvil lenta o, en las pruebas, el chunk de la página retenido con `holdPageChunk`.
+
+### Steps to reproduce
+1. Abrir `/e/<slug>/<token>`, o bien `/mi-evento`, `/mi-evento/<token>` (con la dirección abierta, mensajes u opinión) o `/crear-experiencia`.
+2. Antes de que hidrate, escribir los datos y pulsar «Enviar» o Enter.
+
+### Expected result
+Nada se envía antes de hidratar: el botón está deshabilitado, el formulario usa POST, lo escrito se conserva y el envío normal funciona después.
+
+### Actual result
+El navegador envía el `<form>` nativo por GET a la misma URL y los datos quedan en la query string, por ejemplo:
+- `GET /e/<slug>/<token>?name=Valeria+…&email=valeria-…%40e2e.ivonne-rosa.test`, incluidas las restricciones y alergias;
+- `GET /mi-evento?email=…`;
+- `GET /mi-evento/<token>?addressLine=Durango+…&neighborhood=Roma+Norte…`;
+- `GET /mi-evento/<token>?comment=…`.
+
+Lo escrito se pierde. En `/crear-experiencia`, «Siguiente» recargaba la página y perdía la experiencia de partida. Contacto, el diseñador IA y el libro de visitas ya lo evitaban con `method="post"` y el botón deshabilitado hasta hidratar.
+
+### Evidence
+- Corrida «antes» (build sin la corrección y pruebas finales): 17/17 FAIL en chromium, firefox, webkit y mobile-chrome, con las URL anteriores en las anotaciones.
+- Revisión independiente: build anterior en `:3207`, 7/7 FAIL en Chromium y mobile-chrome, con los datos personales en la URL.
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno: el defecto es la navegación GET que lleva datos personales en la query.
+
+### Technical analysis
+`rsvp-panel.tsx`, `portal/access-form.tsx`, `message-thread.tsx`, `review-form.tsx`, `address-editor.tsx` y el paso de `configurator-wizard.tsx` renderizan en el HTML del servidor un `<form>` sin `method` (GET por defecto) con su botón `type="submit"` habilitado. El `onSubmit` de react-hook-form sólo existe después de hidratar.
+
+### Suspected root cause
+Los formularios dependían del JS para interceptar el envío y no bloqueaban el envío nativo antes de hidratar.
+
+### Recommended fix
+`method="post"` y el botón deshabilitado hasta hidratar, como en contacto y la cápsula (sugerencia de la revisión de `e2f3699`).
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.**
+- **Los seis formularios.** El botón queda deshabilitado y con `aria-busy` hasta hidratar, así que ni el clic ni Enter disparan el envío nativo. El `<form>` lleva `method="post"` sin `action`. Un `<noscript>` explica por qué el botón no se activa sin JavaScript.
+- **Mecanismo compartido** en `src/components/forms/`:
+  - `submit-button.tsx`, con la opción `waitForHydration`;
+  - `use-hydrated.ts`, un solo hook que reemplaza las copias de inventario y de la cápsula (compras y proveedores ahora lo importan de ahí);
+  - `noscript-notice.tsx`.
+- **Formularios ya protegidos.** Contacto, el diseñador IA y el libro de visitas adoptan el mismo botón y ganan `aria-busy`; su comportamiento no cambia.
+- **Sin cambio, porque no hay riesgo:** los filtros del catálogo (GET intencional, sin datos personales), el login (Server Action por POST) y los formularios que sólo existen después de un clic.
+
+**Commits.** `d96a82a`; `b47437b` (TEST BUG de tiempos que detectó la revisión: CONF-025 espera a que el paso sea visible antes de intentar enviar sin hidratar).
+
+**Pruebas @regression.** Todas son @P1. Intentan enviar con Enter y con clic antes de hidratar y exigen tres cosas: que ninguna URL lleve los datos, que lo escrito siga ahí y que el envío normal se guarde.
+- [GST-028] (@mobile) tests/e2e/guests/rsvp.spec.ts.
+- [PORT-023] (@mobile), [PORT-024] y [PORT-025] tests/e2e/portal/portal.spec.ts.
+- [CONF-025] tests/e2e/configurator/wizard.spec.ts.
+
+**Verificación.**
+- **Pruebas nuevas, `--repeat-each=5 --retries=0`:** chromium + firefox 50/50 y mobile-chrome + webkit 35/35.
+- **Carril 7 completo** (8 carpetas, todos los proyectos): 263 PASS, 1 omitida y 1 FAIL.
+  - La omitida es MEM-021 en WebKit.
+  - El FAIL es A11Y-022, un defecto previo de la prueba que se corrigió; después pasó 12/12 y accessibility 27/27.
+- **Compras:** 20/20.
+- **Revisión independiente:** Firefox y WebKit 20/20 (`--repeat-each=2`); responsive RESP-004/005/010…013 18/18; carpetas relacionadas 104/104.
+- **CONF-025** falló una vez por tiempos: el botón medía 0×0 con el esqueleto aún visible. Se ajustó en `b47437b`.
+
+**Riesgos residuales.**
+- **Firefox y WebKit.** Las pruebas son @P1 y la configuración normal sólo corre @P0 en esos motores, así que el envío con Enter ahí no se vigila de rutina.
+- **WebKit.** El formulario sigue oculto hasta que llega el JS. Ahí las pruebas verifican el estado del HTML: botón deshabilitado, `aria-busy` y `method="post"`.
+- **Accesibilidad.** Antes de hidratar sólo se ve el botón atenuado, sin texto de «Cargando…» (mismo criterio que contacto).
+- **Panel admin.** Sus formularios no se revisaron con este criterio (ver «Pendientes que requieren decisión del usuario»).
+
+---
+
+## BUG-020 — Firefox: error de hidratación React #418 cuando el chunk de `error.tsx` llega tarde (React descarta el HTML del servidor)
+
+**Severity:** MEDIUM
+**Priority:** P1
+**Status:** Verified
+**Type:** APPLICATION BUG (hidratación; lo dispara un defecto del React 19.2 canary que incluye Next 15.5.27)
+**Module:** transversal — layouts con `error.tsx` hermano: `pago`, `(public)`, `admin` (`AdminShell`), `admin/catalog`, `admin/content`, `admin/events/[id]` y `admin/settings`
+**Role:** Clienta (checkout), Anónimo (sitio público) y OWNER (panel)
+**Environment:** TEST — build de producción local; carril 2 (`:3202`, `ivonne_rosa_e2e_l2`) y carril 3 (`:3203`); Firefox. Existía antes de las correcciones (se reprodujo sobre `86b60de`). En la auditoría Firefox estaba BLOCKED (ENV-02) y por eso no se detectó. En la regresión intermedia ya aparecía [PAY-001] FLAKY con este error.
+**Reproducible:**
+- Intermitente en el flujo natural: PAY-001 en Firefox 3/5, y el diagnóstico `/cotizacion` → clic → `/pago/mock` 8/12.
+- Sobre la base `86b60de`: EVT-024 2/5 y PAY-001 7/15.
+- Determinista con el chunk de `error.tsx` retrasado: 4/4 en pago, 4/4 en el sitio público y 3/3 en el panel.
+
+**Test:** [NAV-034], [NAV-035], [NAV-036] tests/e2e/navigation/hydration.spec.ts (describe `@regression`; ver la colisión de ID en «Notas de reporters y ejecución») · [PAY-001] tests/e2e/payments/payments.spec.ts · [EVT-024] tests/e2e/events/event-status.spec.ts
+**Fuentes:** endurecimiento cross-browser (carril 2, punto 4a) y hallazgo del carril 3 al endurecer pagos
+
+### Preconditions
+Firefox. Navegar a una página cuyo layout pinta `children` dentro de un elemento HTML y tiene `error.tsx` hermano, con el resto de los chunks en caché y el de `error.tsx` todavía pendiente (por ejemplo, de `/cotizacion/<token>` a `/pago/mock/<checkout>`).
+
+### Steps to reproduce
+1. En Firefox, aceptar una cotización y pulsar pagar (carga de `/pago/mock/<checkoutId>`).
+2. Revisar la consola o los `pageerror`.
+
+### Expected result
+La hidratación termina sin errores y React conserva el HTML del servidor.
+
+### Actual result
+`pageerror`: «Minified React error #418» (hydration mismatch, «HTML»). React descarta el HTML del servidor y re-pinta todo en el cliente: parpadeo, pérdida de foco y de estado, y trabajo extra en celulares. El guard hacía fallar PAY-001 y EVT-024 aunque todos sus asserts pasaban.
+
+### Evidence
+- Sin la corrección: NAV-034…036 FAIL 3/3 en Firefox (`test-results/l2-evidence/HYDRATION-418/`, worktree del carril 2).
+- Sobre la base `86b60de`: `test-results/l3-evidence/minors/{xb-fail,xb-repeat-artifacts,pay001-firefox-artifacts,base-86b60de-firefox}` (worktree del carril 3).
+- Instrumentación temporal de `react-dom` (una copia del chunk, después restaurada y comparada con `cmp`): el fallo sale de `replaySuspendedUnitOfWork` → `beginWork(HostComponent)`.
+
+### Console errors
+`Minified React error #418` (pageerror), sólo en Firefox.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+- Next pasa el componente de `error.tsx` **por valor** (`"error":"$10"`) al router del segmento.
+- Si su chunk llega tarde, el hijo del `<div>` que envuelve `children` en el layout suspende.
+- Al reintentarlo, React vuelve a reclamar el mismo nodo del DOM con el cursor de hidratación ya adentro, y eso produce el #418.
+- Sólo pasa en Firefox, por el orden en que carga los chunks en caché. No se reproduce con `next dev` (4/4) ni en Chromium o WebKit. No viene de fechas, horas ni `Intl`.
+
+### Suspected root cause
+Un defecto de React `19.2.0-canary-0bdb9206` (incluido en Next 15.5.27) al reintentar un elemento HTML suspendido durante la hidratación, disparado por la estructura de los layouts.
+
+### Recommended fix
+Evitar que el hijo directo del elemento HTML sea el nodo perezoso del router, con un envoltorio sin DOM y key constante. Al actualizar Next, verificar sin el envoltorio.
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.** Nuevo `src/components/layout/segment-children.tsx`: un Fragment con key constante, sin DOM.
+- Se aplica a los 7 layouts que tienen `error.tsx` hermano y pintan `children` dentro de un elemento HTML: `pago`, `(public)`, `admin`, `catalog`, `content`, `events/[id]` y `settings`.
+- Los layouts por token de `(experience)` devuelven `children` directo, y `staff` no tiene `error.tsx`.
+
+**Commits.** `a3309b7` (merge `f0cb1b1`).
+
+**Pruebas @regression.** [NAV-034], [NAV-035] y [NAV-036] tests/e2e/navigation/hydration.spec.ts (`@P0`). Retrasan sólo el chunk de `error.tsx` y exigen cero `pageerror` y que `<main id="contenido">` sea el mismo nodo que llegó del servidor.
+
+**Verificación.**
+- Sin la corrección, NAV-034…036 FAIL 3/3 en Firefox. Con ella pasan en Firefox, WebKit y Chromium con `--repeat-each=5`.
+- PAY-001 en Firefox: 5/5 (antes fallaba 3 de 5). Diagnóstico por clic: 0/12 con error (antes 8/12).
+- Carpetas requeridas con `E2E_CROSS_BROWSER=1`: 355 PASS, 1 FLAKY (QUO-018, corregido después) y 1 omitida.
+- Carpetas relacionadas: 234/234. Suites globales: 24/24.
+
+**Riesgos residuales y decisiones.**
+- **Al actualizar Next** (ver BUG-006): comprobar NAV-034…036 en Firefox **sin** el envoltorio antes de quitarlo.
+- **Convención para layouts nuevos.** Todo layout nuevo con `error.tsx` hermano que pinte `children` dentro de un elemento HTML debe usar `<SegmentChildren>`. Conviene anotarlo en CLAUDE.md, que no se editó.
+- **ID duplicado.** NAV-034 de esta prueba colisiona con el de BUG-013.
+
+---
+
+## BUG-021 — Lo escrito antes de hidratar se borraba en formularios públicos y del portal
+
+**Severity:** LOW
+**Priority:** P2
+**Status:** Verified
+**Type:** UX ISSUE (se pierde lo escrito en celulares lentos)
+**Module:** memory-capsule (libro de visitas y subida) · marketing (contacto) · guests (RSVP) · portal (acceso, mensajes, opinión, dirección) · ai-designer
+**Role:** Invitada, Clienta y Anónimo
+**Environment:** TEST — build de producción local; carril 2 (`:3202`) para la cápsula y carril 7 para el resto; Chromium, mobile-chrome, Firefox y WebKit
+**Reproducible:** Sí.
+- [CRIT-008] en WebKit, intermitente en el flujo natural.
+- Con el JS de la página retenido, las regresiones nuevas fallan sin la corrección: 4 de 4 en chromium y mobile-chrome, y 3 de 3 en firefox y webkit. MEM-021 falla en chromium y firefox.
+- [CRIT-010] fallaba 3 de 5 en WebKit por la misma causa: el nombre quedaba vacío.
+
+**Test:** [MEM-021] tests/e2e/memory/memory-public.spec.ts · [PUB-049] tests/e2e/public/contact.spec.ts · [GST-026], [GST-027] tests/e2e/guests/rsvp.spec.ts · [PORT-021], [PORT-022] tests/e2e/portal/portal.spec.ts · [CRIT-008] tests/e2e/critical/experience.spec.ts
+**Fuentes:**
+- Endurecimiento cross-browser: CRIT-008 en WebKit (`0e35e58`).
+- Revisión del carril 3: «CRIT-010 oculta un problema UX real».
+- Revisión cross-browser: «el mismo patrón sigue en otros formularios públicos».
+- Observación previa «Carrera de hidratación en formularios con react-hook-form» (carriles 3, 4 y 5).
+
+### Preconditions
+Un formulario público o del portal que se ve en el HTML del servidor antes de que su JS hidrate (red móvil lenta).
+
+### Steps to reproduce
+1. Abrir `/memory/<token>` (o `/contacto`, `/e/<slug>/<token>`, `/mi-evento`, los mensajes del portal…) y escribir en «Tu nombre» antes de que la página hidrate.
+2. Esperar a que hidrate y enviar.
+
+### Expected result
+Lo escrito se conserva y llega completo.
+
+### Actual result
+Con `defaultValues { name: "" }`, react-hook-form escribe `""` en el DOM al registrar el campo durante la hidratación y borra lo escrito. El envío falla por un campo obligatorio vacío («Escribe tu correo.», «Escribe tu mensaje.»), o la persona tiene que volver a escribir.
+
+### Evidence
+- CRIT-008 en WebKit: el snapshot muestra «Tu nombre» vacío e inválido y el mensaje intacto.
+- Revisión de `e2f3699`: al interceptar el chunk de producción con los `defaultValues` vacíos de antes, el nombre escrito antes de hidratar queda vacío en el RSVP (link general) y en `/contacto`.
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+- react-hook-form 7.89 (`updateValidAndValue`) escribe el valor por defecto en el DOM cuando está definido. Sin valor por defecto, lee lo que ya hay en el DOM.
+- Formularios afectados: `guestbook-form.tsx`, `guest-upload-form.tsx`, `contact-form.tsx`, `rsvp-panel.tsx`, `access-form.tsx`, `message-thread.tsx`, `address-editor.tsx` (llega abierto cuando no hay dirección), `review-form.tsx` y `designer-form.tsx`.
+
+### Suspected root cause
+`defaultValues` con cadenas vacías en formularios que se ven desde el HTML del servidor.
+
+### Recommended fix
+Quitar de `defaultValues` los campos de texto vacíos (o leer el DOM al montar) y agregar regresiones al estilo de MEM-021.
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.**
+- **Cápsula** (`0e35e58`): sin esos `defaultValues` en `guestbook-form` y `guest-upload-form`.
+- **Resto** (`e2f3699`):
+  - **Contacto:** sólo conserva `{ consent: false }`.
+  - **Acceso y mensajes:** sin `defaultValues`; `reset({ email: "" })` y `reset({ body: "" })` siguen limpiando.
+  - **RSVP:** los valores guardados pasan a `defaultValue` del propio campo, así el nombre se ve desde el HTML y RHF lo lee del DOM. Sólo conservan su valor por defecto los campos que pueden empezar ocultos: el acompañante y las notas para la cocina después de «No podré ir».
+  - **Dirección:** el mismo esquema, y `reset(initial)` al cancelar.
+  - **Opinión:** sin `comment: ""`.
+  - **Diseñadora:** sin valores por defecto en perfil, edad y gustos.
+- **Sin cambio:**
+  - los campos controlados (Select, Checkbox, radios) y la validación Zod;
+  - los formularios que sólo existen después de un clic (agregar invitada, aceptar o rechazar propuesta, preferencias…), que no lo necesitan.
+- **Ayudantes de prueba:** `holdPageChunk` y `fillBeforeHydration`, en `tests/e2e/events/_helpers.ts`.
+
+**Commits.** `0e35e58` (merge `f0cb1b1`); `e2f3699`.
+
+**Pruebas @regression.**
+- [MEM-021] (@P0 @mobile) tests/e2e/memory/memory-public.spec.ts.
+- [PUB-049] (@P0) tests/e2e/public/contact.spec.ts.
+- [GST-026] (@P0) y [GST-027] (@P1, protege el valor por defecto condicional de las notas) tests/e2e/guests/rsvp.spec.ts.
+- [PORT-021] (@P1) y [PORT-022] (@P0) tests/e2e/portal/portal.spec.ts.
+
+**Verificación.**
+- **CRIT-008** en WebKit: 5/5.
+- **MEM-021:** chromium y mobile-chrome 10/10, firefox 5/5. Memory y critical completos pasan en los 3 navegadores.
+- **Regresiones nuevas** con `--repeat-each=5 --retries=0`: chromium + firefox 35/35 y mobile-chrome + webkit 35/35.
+- **Carril 7** (public, guests, portal, memory y critical; 4 navegadores): 190 PASS, 1 omitida (MEM-021 en WebKit) y 1 FLAKY ajeno (CRIT-007 en Firefox, `NS_BINDING_ABORTED`). Unitarias: 922.
+- **Revisión independiente** (carril 8): 15/15 sin reintentos. Confirmó que GST-026 y PUB-049 fallarían sin la corrección.
+
+**Riesgos residuales.**
+- **Textarea con un valor guardado.** Si se edita antes de hidratar, vuelve a ese valor al hidratar. Es comportamiento de React (`initTextarea`) y sólo afecta notas que puso la anfitriona.
+- **Dirección (teórico).** Si `initial` de `address-editor` cambia con el formulario abierto, React muestra el valor nuevo en los campos no tocados, pero RHF guardaría el anterior.
+- **Diseñadora.** Si el perfil se escribe antes de hidratar, el contador queda en «0/240» hasta la siguiente tecla, y ese contador es el `aria-describedby` del campo. Sin corregir; ver «Hallazgos nuevos sin triage».
+- **Cobertura de las pruebas:**
+  - GST-026, PORT-021 y PORT-022 no comprueban que el campo siga sin hidratar al escribir (PUB-049 y MEM-021 sí).
+  - Opinión, dirección y diseñadora no tienen regresión propia.
+  - El commit dice 35/35 para chromium + firefox, pero con 5 repeticiones serían 40: GST-027 no entró en esa repetición.
+  - MEM-021 sigue omitida en WebKit, aunque `fillBeforeHydration` ya permitiría correrla.
+- **Pendiente de decisión:** los formularios del panel admin conservan el mismo patrón de `defaultValues` vacíos (observación de los carriles 3, 4 y 5).
+
+---
+
+## BUG-022 — Restablecer la propia contraseña desde Staff revocaba la sesión en silencio
+
+**Severity:** LOW
+**Priority:** P3
+**Status:** Verified
+**Type:** APPLICATION BUG (sesión / UX)
+**Module:** staff (`resetStaffPassword`, `/admin/staff/[id]`)
+**Role:** OWNER o SUPER_ADMIN con una ficha de staff ligada a su propia cuenta
+**Environment:** TEST — build de producción local `:3204`, base `ivonne_rosa_e2e_l4`, sobre `86b60de`; Chromium
+**Reproducible:** Sí: por revisión de código de `b24c695` y por la prueba [AUTH-064].
+**Test:** [AUTH-064] tests/e2e/auth/session.spec.ts
+**Fuentes:** revisión adversarial de BUG-001/004/005 (ronda 1, menor 6) → endurecimiento del carril 4. Lo introdujo la corrección de BUG-004 (`b24c695`), que hizo que `resetStaffPassword` incrementara `sessionVersion`; en `f26b1a1` el reset no revocaba nada.
+
+### Preconditions
+Una fundadora con ficha de staff ligada a su propia cuenta.
+
+### Steps to reproduce
+1. En `/admin/staff/<su ficha>`, pulsar «Restablecer contraseña» y poner una nueva.
+2. Seguir usando el panel.
+
+### Expected result
+Lo mismo que en Ajustes › Usuarios: un aviso explícito («Se cerrarán todas tus sesiones, incluida ésta»), cierre de la sesión actual y navegación a `/login` para entrar con la contraseña nueva.
+
+### Actual result
+La versión de sesión se incrementaba, y con eso la sesión quedaba revocada, pero no había `signOut` ni redirección. En el siguiente request la persona era enviada a `/login` sin explicación.
+
+### Evidence
+- Revisión de `b24c695`: `canAssignRole` permite el auto-reset desde `/admin/staff/[id]`, y `resetStaffPassword` no distinguía `user.id === actor.id`.
+- [AUTH-064] exige ahora:
+  - el flujo en la UI;
+  - la cookie borrada;
+  - la auditoría con `self: true`;
+  - la cookie anterior revocada;
+  - la entrada con la contraseña nueva.
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+`src/features/staff/server/staff-service.ts` (`resetStaffPassword`) y `src/features/staff/server/actions.ts` no tenían rama para el propio usuario, a diferencia de `resetUserPasswordAction`.
+
+### Suspected root cause
+Al corregir BUG-004, el flujo de reset propio sólo se implementó en Usuarios.
+
+### Recommended fix
+Replicar `resetUserPasswordAction`: devolver `signedOut`/`self`, llamar `signOut({ redirect: false })` y hacer una navegación completa a `/login`. Otra opción es bloquear el auto-reset en Staff.
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.**
+- El servicio devuelve `self` y lo audita en la misma transacción (`self: true`).
+- La acción hace `signOut({ redirect: false })` y la UI navega a `/login` con el aviso «Se cerrarán todas tus sesiones, incluida ésta».
+- Sobre la propia ficha ya no se ofrece «Desactivar acceso».
+
+**Commits.** `ebb5fac` (merge `c3ba279`).
+
+**Pruebas @regression.** [AUTH-064] tests/e2e/auth/session.spec.ts · integración en `operations-staff.test.ts`.
+
+**Verificación.**
+- AUTH-064 pasa, y 5/5 con `--repeat-each=5 --retries=0`.
+- Staff y settings: 47/47.
+- `pnpm test:integration`: 318/318.
+
+**Riesgos residuales.** En el auto-reset, el campo sigue rotulado «Contraseña temporal». El toast de éxito se pierde con la navegación inmediata y `/login` no muestra confirmación.
+
+---
+
+## BUG-023 — `GET /api/auth/session` re-emitía la cookie de sesión (latente)
+
+**Severity:** LOW
+**Priority:** P3
+**Status:** Verified
+**Type:** APPLICATION BUG (latente: la app no llama ese endpoint)
+**Module:** auth (`src/app/api/auth/[...nextauth]/route.ts`)
+**Role:** cualquier persona del equipo con sesión
+**Environment:** TEST — build de producción local `:3204`, base `ivonne_rosa_e2e_l4`, sobre `86b60de`; Chromium
+**Reproducible:** Sí. [AUTH-059] falla con el handler original (mutación) y pasa con la corrección.
+**Test:** [AUTH-059] tests/e2e/auth/session-renewal.spec.ts
+**Fuentes:** revisión adversarial de BUG-001 (ronda 1, menor 7) → endurecimiento del carril 4
+
+### Preconditions
+Una sesión iniciada y algo que llame `GET /api/auth/session`. Hoy nada lo llama: no hay `SessionProvider` ni `useSession`.
+
+### Steps to reproduce
+1. Con una sesión reciente, llamar `GET /api/auth/session`.
+2. Revisar el `Set-Cookie` de la respuesta.
+
+### Expected result
+Ningún `Set-Cookie` de renovación; los borrados sí se conservan.
+
+### Actual result
+El matcher del middleware excluye `/api`, así que el handler de Auth.js re-codificaba y re-emitía `authjs.session-token` en cada llamada. Si un cambio futuro usara `useSession`, una petición en vuelo durante el logout volvería a escribir la cookie. La revocación de BUG-001 seguiría bloqueando el acceso, pero se perdería en silencio la garantía de que el logout es definitivo en el navegador.
+
+### Evidence
+[AUTH-059] FAIL con el handler original (mutación temporal). [API-050] no cambia.
+
+### Console errors
+Ninguno.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+- `src/middleware.ts`: su matcher no incluye `/api`.
+- `src/app/api/auth/[...nextauth]/route.ts`: los handlers de Auth.js no tenían el filtro `withoutSessionCookieRenewal` que usa el middleware.
+
+### Suspected root cause
+La corrección de BUG-001 sólo filtró la re-emisión en el middleware.
+
+### Recommended fix
+Envolver el GET de `/session` con el mismo filtro, o prohibir `SessionProvider`/`useSession` con una regla de lint.
+
+### Fix
+
+**Causa raíz final.** La de arriba.
+
+**Corrección.** `src/app/api/auth/[...nextauth]/route.ts` envuelve el GET de `/session` con `withoutSessionCookieRenewal`: nunca re-emite la cookie y conserva los borrados.
+
+**Commits.** `28fb8d3` (merge `c3ba279`).
+
+**Pruebas @regression.** [AUTH-059] tests/e2e/auth/session-renewal.spec.ts.
+
+**Verificación.** AUTH-059 pasa, y 5/5 con `--repeat-each=5 --retries=0`. Auth, navigation, permissions y api: 271/271.
+
+**Riesgos residuales.** El endpoint todavía decodifica una cookie revocada y devuelve nombre, correo y rol (ver BUG-004).
+
 ---
 
 ## Mapa de IDs provisionales
 
-| ID provisional | BUG final | Carril | Prueba(s) |
+Los 31 IDs provisionales de los carriles de la auditoría (fuente: `docs/qa/.bug-map.json`). Todos los bugs finales están en estado **Verified**; BUG-006, **Verified (mitigado)**. Cada hallazgo de `docs/qa/findings/*.md` lleva una sección «Resolution», «Fix», «Corrección» o «Seguimiento» con su detalle.
+
+| ID provisional | BUG final | Estado | Carril | Prueba(s) |
+|---|---|---|---|---|
+| ACC-BUG-01 | BUG-001 | Verified | 1 — Acceso y seguridad | [AUTH-032] tests/e2e/auth/session.spec.ts (+ variante natural [AUTH-020], [AUTH-021], [AUTH-025]) |
+| ACC-BUG-02 | BUG-004 | Verified | 1 — Acceso y seguridad | [AUTH-025] tests/e2e/auth/session.spec.ts |
+| ACC-BUG-03 | BUG-005 | Verified | 1 — Acceso y seguridad | [AUTH-049] tests/e2e/auth/callback.spec.ts |
+| ACC-BUG-04 | BUG-013 | Verified | 1 — Acceso y seguridad | [NAV-002] tests/e2e/navigation/not-found.spec.ts |
+| ACC-BUG-05 | BUG-016 | Verified | 1 — Acceso y seguridad | [NAV-015] tests/e2e/navigation/links.spec.ts |
+| SAL-BUG-01 | BUG-007 | Verified | 2 — Venta pública | [PAY-019] tests/e2e/payments/payments.spec.ts |
+| SAL-BUG-02 | BUG-008 | Verified | 2 — Venta pública | [CONF-022] tests/e2e/configurator/server.spec.ts |
+| SAL-BUG-03 | BUG-002 | Verified | 2 — Venta pública | [PAY-021] tests/e2e/payments/payments.spec.ts |
+| SAL-BUG-04 | BUG-009 | Verified | 2 — Venta pública | [PAY-022] tests/e2e/payments/payments.spec.ts |
+| SAL-BUG-05 | BUG-012 | Verified | 2 — Venta pública | [QPUB-015] tests/e2e/quote-public/quote-public.spec.ts |
+| SAL-BUG-06 | BUG-010 | Verified | 2 — Venta pública | [QPUB-014] tests/e2e/quote-public/quote-public.spec.ts |
+| SAL-BUG-07 | BUG-013 | Verified | 2 — Venta pública | [PUB-016] tests/e2e/public/site.spec.ts |
+| COM-BUG-01 | BUG-014 | Verified | 3 — Comercial admin | [LEAD-036] tests/e2e/leads/leads-detail.spec.ts (control [LEAD-035]) |
+| COM-BUG-02 | BUG-008 | Verified | 3 — Comercial admin | [CUST-016] tests/e2e/customers/customers.spec.ts |
+| COM-BUG-03 | BUG-006 | Verified (mitigado) | 3 — Comercial admin | [LEAD-037], [LEAD-011] tests/e2e/leads/leads-list.spec.ts |
+| EVX-BUG-01 | BUG-002 | Verified | 4 — Eventos y experiencia | [EVT-024] tests/e2e/events/event-status.spec.ts |
+| EVX-BUG-02 | BUG-006 | Verified (mitigado) | 4 — Eventos y experiencia | [CAL-002] tests/e2e/calendar/calendar.spec.ts · [EVT-038] tests/e2e/events/events.spec.ts · [GST-011], [GST-012], [GST-015] tests/e2e/guests/rsvp.spec.ts |
+| EVX-BUG-03 | BUG-003 | Verified | 4 — Eventos y experiencia | [GST-014] tests/e2e/guests/rsvp.spec.ts |
+| EVX-BUG-04 | BUG-009 | Verified | 4 — Eventos y experiencia | [EVT-037] tests/e2e/events/event-experience.spec.ts · [CAL-007] tests/e2e/calendar/calendar.spec.ts · [MEM-019] tests/e2e/memory/memory-public.spec.ts |
+| EVX-BUG-05 | BUG-010 | Verified | 4 — Eventos y experiencia | [GST-022] tests/e2e/guests/rsvp.spec.ts |
+| OPX-BUG-01 | BUG-006 | Verified (mitigado) | 5 — Operación y back-office | [INV-025] tests/e2e/inventory/inventory.spec.ts |
+| OPX-BUG-02 | BUG-006 | Verified (mitigado) | 5 — Operación y back-office | [CNT-022], [CNT-023], [CNT-024] tests/e2e/content/content.global.spec.ts · [NOT-002] tests/e2e/notifications/inbox.spec.ts (relacionado: [SET-001] tests/e2e/settings/settings.spec.ts) |
+| OPX-BUG-03 | BUG-015 | Verified | 5 — Operación y back-office | [FIN-007] tests/e2e/finance/finance.spec.ts |
+| OPX-BUG-04 | BUG-016 | Verified | 5 — Operación y back-office | [NOT-007] tests/e2e/notifications/inbox.spec.ts |
+| OPX-BUG-05 | BUG-011 | Verified | 5 — Operación y back-office | [STF-024] tests/e2e/staff/staff-portal.spec.ts (su parte de contraste se documenta en BUG-009) |
+| TRV-BUG-01 | BUG-006 | Verified (mitigado) | 6 — Transversal | [CRIT-004] tests/e2e/critical/experience.spec.ts |
+| TRV-BUG-02 | BUG-009 | Verified | 6 — Transversal | [A11Y-009], [A11Y-012], [A11Y-013], [A11Y-014], [A11Y-015], [A11Y-018] tests/e2e/accessibility/a11y.spec.ts |
+| TRV-BUG-03 | BUG-009 | Verified | 6 — Transversal | [A11Y-008], [A11Y-011] tests/e2e/accessibility/a11y.spec.ts |
+| TRV-BUG-04 | BUG-010 | Verified | 6 — Transversal | [A11Y-007], [A11Y-010] tests/e2e/accessibility/a11y.spec.ts |
+| TRV-BUG-05 | BUG-012 | Verified | 6 — Transversal | [A11Y-028] tests/e2e/accessibility/a11y.spec.ts |
+| TRV-BUG-06 | BUG-001 | Verified | 6 — Transversal | [CRIT-014], [CRIT-012] tests/e2e/critical/access.spec.ts |
+
+**Bugs nuevos sin ID provisional.** Se encontraron durante las correcciones y no están en `.bug-map.json`, que sólo mapea los IDs de la auditoría.
+
+| BUG | Origen (workflow · agente) | Dónde está documentado | Prueba(s) |
 |---|---|---|---|
-| ACC-BUG-01 | BUG-001 | 1 — Acceso y seguridad | [AUTH-032] tests/e2e/auth/session.spec.ts (+ variante natural [AUTH-020], [AUTH-021], [AUTH-025]) |
-| ACC-BUG-02 | BUG-004 | 1 — Acceso y seguridad | [AUTH-025] tests/e2e/auth/session.spec.ts |
-| ACC-BUG-03 | BUG-005 | 1 — Acceso y seguridad | [AUTH-049] tests/e2e/auth/callback.spec.ts |
-| ACC-BUG-04 | BUG-013 | 1 — Acceso y seguridad | [NAV-002] tests/e2e/navigation/not-found.spec.ts |
-| ACC-BUG-05 | BUG-016 | 1 — Acceso y seguridad | [NAV-015] tests/e2e/navigation/links.spec.ts |
-| SAL-BUG-01 | BUG-007 | 2 — Venta pública | [PAY-019] tests/e2e/payments/payments.spec.ts |
-| SAL-BUG-02 | BUG-008 | 2 — Venta pública | [CONF-022] tests/e2e/configurator/server.spec.ts |
-| SAL-BUG-03 | BUG-002 | 2 — Venta pública | [PAY-021] tests/e2e/payments/payments.spec.ts |
-| SAL-BUG-04 | BUG-009 | 2 — Venta pública | [PAY-022] tests/e2e/payments/payments.spec.ts |
-| SAL-BUG-05 | BUG-012 | 2 — Venta pública | [QPUB-015] tests/e2e/quote-public/quote-public.spec.ts |
-| SAL-BUG-06 | BUG-010 | 2 — Venta pública | [QPUB-014] tests/e2e/quote-public/quote-public.spec.ts |
-| SAL-BUG-07 | BUG-013 | 2 — Venta pública | [PUB-016] tests/e2e/public/site.spec.ts |
-| COM-BUG-01 | BUG-014 | 3 — Comercial admin | [LEAD-036] tests/e2e/leads/leads-detail.spec.ts (control [LEAD-035]) |
-| COM-BUG-02 | BUG-008 | 3 — Comercial admin | [CUST-016] tests/e2e/customers/customers.spec.ts |
-| COM-BUG-03 | BUG-006 | 3 — Comercial admin | [LEAD-037], [LEAD-011] tests/e2e/leads/leads-list.spec.ts |
-| EVX-BUG-01 | BUG-002 | 4 — Eventos y experiencia | [EVT-024] tests/e2e/events/event-status.spec.ts |
-| EVX-BUG-02 | BUG-006 | 4 — Eventos y experiencia | [CAL-002] tests/e2e/calendar/calendar.spec.ts · [EVT-038] tests/e2e/events/events.spec.ts · [GST-011], [GST-012], [GST-015] tests/e2e/guests/rsvp.spec.ts |
-| EVX-BUG-03 | BUG-003 | 4 — Eventos y experiencia | [GST-014] tests/e2e/guests/rsvp.spec.ts |
-| EVX-BUG-04 | BUG-009 | 4 — Eventos y experiencia | [EVT-037] tests/e2e/events/event-experience.spec.ts · [CAL-007] tests/e2e/calendar/calendar.spec.ts · [MEM-019] tests/e2e/memory/memory-public.spec.ts |
-| EVX-BUG-05 | BUG-010 | 4 — Eventos y experiencia | [GST-022] tests/e2e/guests/rsvp.spec.ts |
-| OPX-BUG-01 | BUG-006 | 5 — Operación y back-office | [INV-025] tests/e2e/inventory/inventory.spec.ts |
-| OPX-BUG-02 | BUG-006 | 5 — Operación y back-office | [CNT-022], [CNT-023], [CNT-024] tests/e2e/content/content.global.spec.ts · [NOT-002] tests/e2e/notifications/inbox.spec.ts (relacionado: [SET-001] tests/e2e/settings/settings.spec.ts) |
-| OPX-BUG-03 | BUG-015 | 5 — Operación y back-office | [FIN-007] tests/e2e/finance/finance.spec.ts |
-| OPX-BUG-04 | BUG-016 | 5 — Operación y back-office | [NOT-007] tests/e2e/notifications/inbox.spec.ts |
-| OPX-BUG-05 | BUG-011 | 5 — Operación y back-office | [STF-024] tests/e2e/staff/staff-portal.spec.ts (su parte de contraste se documenta en BUG-009) |
-| TRV-BUG-01 | BUG-006 | 6 — Transversal | [CRIT-004] tests/e2e/critical/experience.spec.ts |
-| TRV-BUG-02 | BUG-009 | 6 — Transversal | [A11Y-009], [A11Y-012], [A11Y-013], [A11Y-014], [A11Y-015], [A11Y-018] tests/e2e/accessibility/a11y.spec.ts |
-| TRV-BUG-03 | BUG-009 | 6 — Transversal | [A11Y-008], [A11Y-011] tests/e2e/accessibility/a11y.spec.ts |
-| TRV-BUG-04 | BUG-010 | 6 — Transversal | [A11Y-007], [A11Y-010] tests/e2e/accessibility/a11y.spec.ts |
-| TRV-BUG-05 | BUG-012 | 6 — Transversal | [A11Y-028] tests/e2e/accessibility/a11y.spec.ts |
-| TRV-BUG-06 | BUG-001 | 6 — Transversal | [CRIT-014], [CRIT-012] tests/e2e/critical/access.spec.ts |
+| BUG-017 | Revisión de BUG-008 (ronda 1) → endurecimiento del carril 3 | `findings/commercial.md` › COM-BUG-02 › Resolution («Riesgo real corregido») | [PUB-048], [CONF-021] |
+| BUG-018 | Endurecimiento de sesión y login (carril 4), hallazgo nuevo | `findings/access.md` › Seguimiento de BUG-001/004/005 («Hallazgo nuevo») | integración `operations-staff.test.ts` |
+| BUG-019 | Pendiente de `e2f3699` y su revisión | Sólo en este documento y en el commit `d96a82a` (no se actualizó `findings/`) | [GST-028], [PORT-023], [PORT-024], [PORT-025], [CONF-025] |
+| BUG-020 | Endurecimiento cross-browser (carril 2) y carril 3 | `findings/sales.md` › SAL-BUG-01 › Revisión adversarial propia (todavía figura como «hallazgo abierto»; se corrigió en `a3309b7`) | [NAV-034]…[NAV-036] (hydration.spec.ts) |
+| BUG-021 | Endurecimiento cross-browser (CRIT-008) y `e2f3699` | Sólo en este documento y en los commits `0e35e58` y `e2f3699` | [MEM-021], [PUB-049], [GST-026], [GST-027], [PORT-021], [PORT-022] |
+| BUG-022 | Revisión de BUG-004 (ronda 1) → endurecimiento del carril 4 | `findings/access.md` › Seguimiento de BUG-001/004/005 | [AUTH-064] |
+| BUG-023 | Revisión de BUG-001 (ronda 1) → endurecimiento del carril 4 | `findings/access.md` › Seguimiento de BUG-001/004/005 | [AUTH-059] |
 
 ---
 
 ## Observaciones (no son bugs)
 
-Consolidadas de los 6 carriles y deduplicadas. No cuentan para el gate; se listan con su prueba o evidencia.
+Consolidadas de los 6 carriles de la auditoría y deduplicadas. No cuentan para el gate; se listan con su prueba o evidencia. Cada observación lleva su estado tras las correcciones: **[Resuelta]** (con el bug o la prueba que la resolvió), **[Parcial]**, **[Decidida]** (el requisito ya quedó definido), **[Sin cambio]**, **[Sin verificar]**, **[Vigente]** (comportamiento correcto que se mantiene) o **[Nota]**. Al final se agregan los hallazgos nuevos sin triage que se vieron durante las correcciones.
 
 ### Seguridad y diseño
-- **Superficie expuesta por co-ubicación de Server Actions:** la página pública `/memory/[token]` incluye las 7 acciones de administración de la cápsula y `/staff/events/[id]` las 6 de administración de staff (Next agrega todas las exportaciones del módulo `"use server"`). Hoy las frena el RBAC de cada acción ([PERM-121..127], [PERM-130..138] PASS); conviene separar acciones públicas y de admin en módulos distintos. *(carril 1)*
-- **Validación antes de autorización:** `src/server/action.ts:71-74` corre Zod antes de autorizar ⇒ un anónimo que llama una acción protegida con datos inválidos recibe `VALIDATION_ERROR` con los mensajes de campo (revela el esquema). Autenticar/autorizar antes de validar en `protectedAction`. *(carril 1)*
-- **Rate limit de login sólo por correo** (`src/auth.ts:39`): cualquiera puede bloquear 15 min una cuenta conocida con 9 intentos ([AUTH-061], suite `ratelimit` en `:3209`). Considerar límite combinado correo+IP y desbloqueo por admin. *(carril 1)*
-- **`clientIp()` confía en `X-Real-Ip`** (`src/lib/rate-limit.ts:55`): correcto detrás de Traefik (que la sobreescribe), pero sin proxy los límites por IP se evaden variando esa cabecera. Documentar el requisito en DEPLOY. *(carril 1)*
-- **Documentación de `Referrer-Policy` desalineada:** `docs/SECURITY.md` dice `no-referrer` en páginas por token; el middleware envía `same-origin` ([PERM-170] PASS) y `/cotizacion/[token]` además declara `<meta name="referrer" content="no-referrer">` (`page.tsx:43`), que en el documento anula la cabecera; el comentario del middleware advierte que `no-referrer` puede dejar `Origin: null` en los POST de Server Actions. Conviene alinear la doc y confirmar aceptar/rechazar en todos los navegadores. *(carril 1)*
-- **CSRF en Server Actions:** con `Origin` ajeno Next rechaza la acción (no escribe) pero responde **HTTP 500** con `digest` en lugar de un 4xx ([PERM-159] PASS; comportamiento de Next 15.5 que ensucia logs/alertas de 5xx). *(carril 1)*
-- **Disponibilidad pública** expone `remaining` (lugares restantes por día): por diseño; no expone datos de otros eventos ([CONF-016]). *(carril 2)*
+- **[Sin cambio]** **Superficie expuesta por co-ubicación de Server Actions:** la página pública `/memory/[token]` incluye las 7 acciones de administración de la cápsula y `/staff/events/[id]` las 6 de administración de staff (Next agrega todas las exportaciones del módulo `"use server"`). Hoy las frena el RBAC de cada acción ([PERM-121..127], [PERM-130..138] PASS); conviene separar acciones públicas y de admin en módulos distintos. *(carril 1)*
+- **[Sin cambio]** **Validación antes de autorización:** `src/server/action.ts:71-74` corre Zod antes de autorizar ⇒ un anónimo que llama una acción protegida con datos inválidos recibe `VALIDATION_ERROR` con los mensajes de campo (revela el esquema). Autenticar/autorizar antes de validar en `protectedAction`. *(carril 1)*
+- **[Sin cambio]** **Rate limit de login sólo por correo** (`src/auth.ts:40`): cualquiera puede bloquear 15 min una cuenta conocida con 9 intentos ([AUTH-061], suite `ratelimit` en `:3209`). Considerar límite combinado correo+IP y desbloqueo por admin. *(carril 1)*
+- **[Sin cambio]** **`clientIp()` confía en `X-Real-Ip`** (`src/lib/rate-limit.ts:55`): correcto detrás de Traefik (que la sobreescribe), pero sin proxy los límites por IP se evaden variando esa cabecera. Documentar el requisito en DEPLOY. *(carril 1)*
+- **[Sin cambio]** **Documentación de `Referrer-Policy` desalineada:** `docs/SECURITY.md` dice `no-referrer` en páginas por token; el middleware envía `same-origin` ([PERM-170] PASS) y `/cotizacion/[token]` además declara `<meta name="referrer" content="no-referrer">` (`page.tsx:43`), que en el documento anula la cabecera; el comentario del middleware advierte que `no-referrer` puede dejar `Origin: null` en los POST de Server Actions. Conviene alinear la doc y confirmar aceptar/rechazar en todos los navegadores. *(carril 1)*
+- **[Sin cambio]** **CSRF en Server Actions:** con `Origin` ajeno Next rechaza la acción (no escribe) pero responde **HTTP 500** con `digest` en lugar de un 4xx ([PERM-159] PASS; comportamiento de Next 15.5 que ensucia logs/alertas de 5xx). *(carril 1)*
+- **[Sin cambio — por diseño]** **Disponibilidad pública** expone `remaining` (lugares restantes por día): por diseño; no expone datos de otros eventos ([CONF-016]). *(carril 2)*
 
 ### UX y funcionalidad
-- **Carrera de hidratación en formularios con `react-hook-form`:** lo que se escribe o selecciona antes de que React hidrate se descarta en silencio (un `select` nativo cambia en el DOM pero el formulario no lo ve; alta/edición de evento, filtros, «Transporte y montaje»: la salida de bodega no se guardó en la primera versión de [OPS-016]). En celulares lentos el staff o la fundadora podrían perder lo tecleado. Sugerencia: deshabilitar campos/botón hasta hidratar, como ya hacen compras/proveedores con `useHydrated`. Las pruebas esperan la hidratación (`gotoReady()`). *(carriles 3, 4 y 5)*
-- **`notFound()` responde HTTP 200 en zonas privadas** (streaming bajo `loading.tsx`): `/admin/events/<id inexistente>` (anotación `http-status: 200` de [EVT-004]), detalles del panel ([NAV-004]) y `/staff/events/<id ajeno>` ([CRIT-005]; la barrera «No encontramos este evento» es correcta). Zonas con sesión y `noindex`, sin impacto de seguridad; misma causa que BUG-013. *(carriles 1, 4 y 6)*
-- **404 dentro de `/admin`:** una URL inexistente muestra el 404 raíz sin el shell del panel ([NAV-003]); sólo los `notFound()` de detalle usan el 404 del panel. *(carril 1)*
-- **`<meta name="robots" content="noindex">` duplicado** (2–3 veces) en las páginas 404 (incluida «Esta mesa ya no está puesta»); se corrige junto con BUG-013. *(carriles 1 y 2)*
-- **`callbackUrl` con sesión abierta:** `/login?callbackUrl=/admin/leads` ignora el `callbackUrl` y lleva al inicio del rol (menor). *(carril 1)*
-- **Cambio de rol con sesión abierta:** STAFF promovida a OWNER sigue en `/staff` hasta re-login (el middleware usa el rol del JWT) — sin riesgo (menos privilegio), sólo UX ([AUTH-029]). *(carril 1)*
-- **Formulario de contacto:** al salir de un campo inválido (modo `onTouched`) aparece su error y desplaza el layout; un clic inmediato en la casilla de consentimiento puede caer en el enlace «aviso de privacidad» del label (abre otra pestaña y no marca la casilla). No envolver el enlace dentro del área clicable o reservar espacio para el error. *(carril 2)*
-- **Desbordamiento horizontal transitorio** de 14 px a 390 px en `/crear-experiencia`, medido justo al cargar; desaparece al asentarse hidratación/transiciones (0 px después). Posible «salto» visual en móviles lentos; [PUB-021] ahora mide tras asentar animaciones. *(carril 2)*
-- **Contraste transitorio** del botón «Enviar mensaje» mientras pasa de deshabilitado a habilitado (axe a mitad de la transición: 2.32:1); estable después. *(carril 2)*
-- **Metadatos en `<body>`:** Next 15.5 transmite title/description/OG al final del documento para navegadores y Googlebot; los rastreadores sin JS (facebookexternalhit, Twitterbot, WhatsApp, Slackbot) sí los reciben en `<head>` ([PUB-018], verificado con ese UA). Vigilar herramientas SEO que no ejecutan JS. *(carril 2)*
-- **Cotizaciones en fechas no disponibles:** el admin puede crear/enviar cotizaciones en fechas bloqueadas o sin capacidad; por diseño (DOMAIN.md §Disponibilidad) se valida al aceptar. Sugerencia: aviso en «Cálculo en vivo» para no enviar propuestas que la clienta no podrá aceptar. *(carril 3)*
-- **Descuento ≥ subtotal:** se limita al subtotal y deja la cotización en $0, que luego no se puede enviar («La cotización no tiene conceptos con precio»); el mensaje no menciona el descuento como causa ([QUO-013]). *(carril 3)*
-- **Auditoría de inventario incompleta:** `addReservation` no deja entrada de auditoría, mientras editar cantidad, liberar y mermas sí. Considerar `inventory.reservation_added`. *(carril 5)*
-- **Margen con 1 decimal** (7025 bps → «70.3 %») frente a 70.25 en el CSV: consistente, conviene documentarlo. *(carril 5)*
-- **Historial de compras:** lista los campos cambiados en orden de `jsonb` («notas, concepto»), no en el orden del formulario. *(carril 5)*
-- **`OrderButtons` etiqueta por posición** («Subir imagen 2»): ambiguo para lector de pantalla y frágil (agravante de BUG-006). *(carril 5)*
+- **[Parcial]** **Carrera de hidratación en formularios con `react-hook-form`:** lo que se escribe o selecciona antes de que React hidrate se descarta en silencio (un `select` nativo cambia en el DOM pero el formulario no lo ve; alta/edición de evento, filtros, «Transporte y montaje»: la salida de bodega no se guardó en la primera versión de [OPS-016]). En celulares lentos el staff o la fundadora podrían perder lo tecleado. Sugerencia: deshabilitar campos/botón hasta hidratar, como ya hacen compras/proveedores con `useHydrated`. Las pruebas esperan la hidratación (`gotoReady()`). *(carriles 3, 4 y 5)* **Actualización:** en los formularios públicos y del portal pasó a bug y se corrigió: BUG-021 (lo escrito se borraba) y BUG-019 (envío por GET antes de hidratar). En el panel admin sigue igual: ver «Pendientes que requieren decisión del usuario». `gotoReady()` espera ahora la hidratación real (`waitForHydration()`, `ae351f7`).
+- **[Sin cambio, documentada]** **`notFound()` responde HTTP 200 en zonas privadas** (streaming bajo `loading.tsx`): `/admin/events/<id inexistente>` (anotación `http-status: 200` de [EVT-004]), detalles del panel ([NAV-004]) y `/staff/events/<id ajeno>` ([CRIT-005]; la barrera «No encontramos este evento» es correcta). Zonas con sesión y `noindex`, sin impacto de seguridad; misma causa que BUG-013. *(carriles 1, 4 y 6)* **Actualización:** la lista completa (19 rutas `/admin/**/[id]` y `/staff/events/[id]`) está en `docs/qa/findings/sales.md` › SAL-BUG-07 › «Revisión del patrón». Corregirlo es una mejora opcional (ver «Pendientes»).
+- **[Sin cambio]** **404 dentro de `/admin`:** una URL inexistente muestra el 404 raíz sin el shell del panel ([NAV-003]); sólo los `notFound()` de detalle usan el 404 del panel. *(carril 1)*
+- **[Sin verificar]** **`<meta name="robots" content="noindex">` duplicado** (2–3 veces) en las páginas 404 (incluida «Esta mesa ya no está puesta»); se corrige junto con BUG-013. *(carriles 1 y 2)* **Actualización:** BUG-013 dio el HTTP 404 real, pero la deduplicación no se verificó por separado: [PUB-016] usa `.first()`.
+- **[Sin cambio]** **`callbackUrl` con sesión abierta:** `/login?callbackUrl=/admin/leads` ignora el `callbackUrl` y lleva al inicio del rol (menor). *(carril 1)*
+- **[Resuelta por BUG-004]** **Cambio de rol con sesión abierta:** STAFF promovida a OWNER sigue en `/staff` hasta re-login (el middleware usa el rol del JWT) — sin riesgo (menos privilegio), sólo UX ([AUTH-029]). *(carril 1)* **Actualización:** un cambio de rol hecho desde la app (`changeUserRole`) revoca la sesión abierta y, al volver a entrar, aplica el rol nuevo ([AUTH-035]). [AUTH-029], que cambia el rol directamente en la base, sigue registrando el comportamiento anterior como anotación.
+- **[Sin cambio]** **Formulario de contacto:** al salir de un campo inválido (modo `onTouched`) aparece su error y desplaza el layout; un clic inmediato en la casilla de consentimiento puede caer en el enlace «aviso de privacidad» del label (abre otra pestaña y no marca la casilla). No envolver el enlace dentro del área clicable o reservar espacio para el error. *(carril 2)*
+- **[Sin cambio]** **Desbordamiento horizontal transitorio** de 14 px a 390 px en `/crear-experiencia`, medido justo al cargar; desaparece al asentarse hidratación/transiciones (0 px después). Posible «salto» visual en móviles lentos; [PUB-021] ahora mide tras asentar animaciones. *(carril 2)*
+- **[Resuelta como TEST BUG]** **Contraste transitorio** del botón «Enviar mensaje» mientras pasa de deshabilitado a habilitado (axe a mitad de la transición: 2.32:1); estable después. *(carril 2)* **Actualización:** `axeCheck` espera a que terminen las animaciones finitas antes de medir, y [A11Y-005] quedó estable (endurecimiento, carril 4).
+- **[Sin cambio]** **Metadatos en `<body>`:** Next 15.5 transmite title/description/OG al final del documento para navegadores y Googlebot; los rastreadores sin JS (facebookexternalhit, Twitterbot, WhatsApp, Slackbot) sí los reciben en `<head>` ([PUB-018], verificado con ese UA). Vigilar herramientas SEO que no ejecutan JS. *(carril 2)*
+- **[Sin cambio]** **Cotizaciones en fechas no disponibles:** el admin puede crear/enviar cotizaciones en fechas bloqueadas o sin capacidad; por diseño (DOMAIN.md §Disponibilidad) se valida al aceptar. Sugerencia: aviso en «Cálculo en vivo» para no enviar propuestas que la clienta no podrá aceptar. *(carril 3)*
+- **[Sin cambio]** **Descuento ≥ subtotal:** se limita al subtotal y deja la cotización en $0, que luego no se puede enviar («La cotización no tiene conceptos con precio»); el mensaje no menciona el descuento como causa ([QUO-013]). *(carril 3)*
+- **[Sin cambio]** **Auditoría de inventario incompleta:** `addReservation` no deja entrada de auditoría, mientras editar cantidad, liberar y mermas sí. Considerar `inventory.reservation_added`. *(carril 5)*
+- **[Sin cambio]** **Margen con 1 decimal** (7025 bps → «70.3 %») frente a 70.25 en el CSV: consistente, conviene documentarlo. *(carril 5)*
+- **[Sin cambio]** **Historial de compras:** lista los campos cambiados en orden de `jsonb` («notas, concepto»), no en el orden del formulario. *(carril 5)*
+- **[Sin cambio]** **`OrderButtons` etiqueta por posición** («Subir imagen 2»): ambiguo para lector de pantalla y frágil (agravante de BUG-006). *(carril 5)* No se corrigió con BUG-006, porque es otro problema de UX.
 
 ### Requisitos ambiguos (REQUIREMENT AMBIGUITY)
-- **Teléfonos en CSV:** `toCsv` (`src/lib/csv.ts:6`) antepone `'` a valores que empiezan con `+`, `=`, `-`, `@`, así que los teléfonos internacionales salen como `'+525512345678` en leads ([LEAD-030]) e invitadas ([GST-006]). Protege contra inyección de fórmulas, pero altera datos de contacto; decidir si exportar el teléfono sin `+` o en columna de texto. *(carriles 3 y 4)*
-- **Unicidad del teléfono:** sólo el correo es único (`Customer.email @unique`); dos clientas pueden compartir teléfono sin aviso ([CUST-009]), lo que vuelve ambigua la búsqueda por teléfono de la captura única (`findFirst`). Decidir si debe advertirse (relacionado con BUG-008). *(carril 3)*
-- **Rechazo de propuesta por token:** el lead se queda en `QUOTED` (sólo se registra actividad SYSTEM y aviso al equipo); [CRIT-003] valida el comportamiento actual. Confirmar con negocio si debe pasar a `LOST` o quedar para re-cotizar. *(carril 6)*
-- **Cambios de invitadas/experiencia en eventos con reserva:** no recalculan el total de la reserva (`updateEvent` sólo audita). No se probó el recálculo porque no hay requisito documentado (NOT TESTED); riesgo para el paquete comercial. *(carril 4)*
-- **Avisos en captura manual de leads:** se trató como bug (BUG-014) porque la intención del código es no notificar capturas manuales, pero no hay requisito escrito. *(carril 3)*
+- **[Sin cambio; ahora afecta a todos los teléfonos]** **Teléfonos en CSV:** `toCsv` (`src/lib/csv.ts:6`) antepone `'` a valores que empiezan con `+`, `=`, `-`, `@`, así que los teléfonos internacionales salen como `'+525512345678` en leads ([LEAD-030]) e invitadas ([GST-006]). Protege contra inyección de fórmulas, pero altera datos de contacto; decidir si exportar el teléfono sin `+` o en columna de texto. *(carriles 3 y 4)* **Actualización:** desde BUG-008 todo teléfono se guarda como `+52…`, así que todos salen con `'` en el CSV.
+- **[Decidida]** **Unicidad del teléfono:** sólo el correo es único (`Customer.email @unique`); dos clientas pueden compartir teléfono sin aviso ([CUST-009]), lo que vuelve ambigua la búsqueda por teléfono de la captura única (`findFirst`). Decidir si debe advertirse (relacionado con BUG-008). *(carril 3)* **Actualización:** regla adoptada en `fe9f23a` y documentada en `docs/DOMAIN.md`. El mismo teléfono con otro correo es otra persona. El teléfono sólo reutiliza a una clienta cuando no se escribió correo o ella no tiene. Se busca primero la forma canónica exacta, y un advisory lock evita duplicados por capturas simultáneas.
+- **[Sin cambio]** **Rechazo de propuesta por token:** el lead se queda en `QUOTED` (sólo se registra actividad SYSTEM y aviso al equipo); [CRIT-003] valida el comportamiento actual. Confirmar con negocio si debe pasar a `LOST` o quedar para re-cotizar. *(carril 6)*
+- **[Sin cambio]** **Cambios de invitadas/experiencia en eventos con reserva:** no recalculan el total de la reserva (`updateEvent` sólo audita). No se probó el recálculo porque no hay requisito documentado (NOT TESTED); riesgo para el paquete comercial. *(carril 4)*
+- **[Resuelta por BUG-014]** **Avisos en captura manual de leads:** se trató como bug (BUG-014) porque la intención del código es no notificar capturas manuales, pero no hay requisito escrito. *(carril 3)* **Actualización:** la regla es explícita: sólo el canal `public` avisa.
 
 ### Accesibilidad
-- `/admin/quotes/[id]/print`: la vista de impresión no tiene ningún encabezado (`h1`–`h6`); el título del documento es un `<p>`. *(carril 1)*
-- Not-found de lead (`/admin/leads/<id inexistente>`): el único encabezado es un `h3` («Este lead no existe»); falta `h1`. *(carril 1)*
-- `Section` (`src/components/layout/page-header.tsx:46-73`) renderiza `<section>` sin nombre accesible, así que no es landmark/region (p. ej. «Compras», «Staff», «Costos manuales» en Finanzas). Agregar `aria-labelledby` al `h2`. *(carril 5)*
-- `StatCard` (`src/components/data/stat-card.tsx`): etiqueta y valor son `span/div` sin relación semántica (sin `dt/dd` ni `aria-labelledby`); un lector de pantalla los lee sueltos. *(carril 3)*
-- Calificación de testimonios: radios `sr-only` cuyo ícono intercepta el puntero; funciona con clic en la estrella (label) y con teclado. Sólo se anota. *(carril 5)*
-- Violaciones axe *moderate*/*minor*: no cuentan como fallo; se registran como anotación `a11y-observación` en cada prueba A11Y y en el adjunto `a11y-axe.json` de [STF-024] (`test-results/l6/results.json`, `test-results/l5/results.json`). *(carriles 5 y 6)*
-- Positivo: radiogroups del configurador navegables con flechas/espacio, foco al abrir diálogos, labels asociados en todos los formularios probados y `aria-invalid` en errores. Con Radix RadioGroup las flechas mueven y seleccionan según WAI-ARIA; el `press` instantáneo de Playwright no seleccionaba (artefacto de prueba corregido en [A11Y-021], no es bug). *(carriles 2 y 6)*
+- **[Sin cambio]** `/admin/quotes/[id]/print`: la vista de impresión no tiene ningún encabezado (`h1`–`h6`); el título del documento es un `<p>`. *(carril 1)*
+- **[Sin cambio]** Not-found de lead (`/admin/leads/<id inexistente>`): el único encabezado es un `h3` («Este lead no existe»); falta `h1`. *(carril 1)*
+- **[Sin cambio]** `Section` (`src/components/layout/page-header.tsx:46-73`) renderiza `<section>` sin nombre accesible, así que no es landmark/region (p. ej. «Compras», «Staff», «Costos manuales» en Finanzas). Agregar `aria-labelledby` al `h2`. *(carril 5)*
+- **[Sin cambio]** `StatCard` (`src/components/data/stat-card.tsx`): etiqueta y valor son `span/div` sin relación semántica (sin `dt/dd` ni `aria-labelledby`); un lector de pantalla los lee sueltos. *(carril 3)*
+- **[Nota]** Calificación de testimonios: radios `sr-only` cuyo ícono intercepta el puntero; funciona con clic en la estrella (label) y con teclado. Sólo se anota. *(carril 5)*
+- **[Nota]** Violaciones axe *moderate*/*minor*: no cuentan como fallo; se registran como anotación `a11y-observación` en cada prueba A11Y y en el adjunto `a11y-axe.json` de [STF-024] (`test-results/l6/results.json`, `test-results/l5/results.json`). *(carriles 5 y 6)*
+- **[Positivo]** radiogroups del configurador navegables con flechas/espacio, foco al abrir diálogos, labels asociados en todos los formularios probados y `aria-invalid` en errores. Con Radix RadioGroup las flechas mueven y seleccionan según WAI-ARIA; el `press` instantáneo de Playwright no seleccionaba (artefacto de prueba corregido en [A11Y-021], no es bug). *(carriles 2 y 6)*
 
 ### Rendimiento
 - Ninguna página superó 5 s de carga en ningún carril. Las 83 páginas de la matriz cargan con el rol principal en ~1–2 s (carril 1); páginas públicas < 2 s; páginas de eventos/calendario/portal < 2 s; acciones de inventario/compras < 1 s con 3 workers. *(carriles 1, 2, 4 y 5)*
 - Recorridos: configurador completo (10 pasos + envío + revisión admin) ~11 s; pago mock completo (checkout → webhook → resultado) ~3 s; [CRIT-002] (≈10 pantallas, 3 actores) ~25–35 s en build de producción local. *(carriles 2 y 6)*
 - **Payload RSC grande:** `/admin/leads` sin filtros devuelve ~176 KB de RSC con ~200 leads en base (tabla de 25 filas + opciones del formulario «Nuevo lead»). Observación para bases grandes. *(carril 3)*
+- **Nuevo, costo de la mitigación de BUG-006.** Las navegaciones del cliente, `router.refresh()` y las Server Actions esperan la respuesta RSC completa, así que los Suspense internos ya no pintan por partes en navegaciones del cliente. Conviene medir en producción el tiempo hasta el contenido en páginas lentas.
 
 ### Comportamientos verificados correctos (referencia)
-- Pagos manuales sobre eventos cancelados: bloqueados (`EVENT_CANCELLED`, [EVT-027]); el hueco es sólo el checkout en línea (BUG-002). *(carril 4)*
-- Recordatorios RSVP: deduplicación diaria por invitada y canal correcta ([GST-007]); la coincidencia con la llave del programador (`/api/cron/notifications`) quedó NOT TESTED en el carril 4. *(carril 4)*
-- Teléfonos del configurador normalizados a `+52XXXXXXXXXX` en lead y clienta ([CRIT-001]). *(carril 6)*
-- La notificación `STAFF_ASSIGNED` generada por la app usa `/staff/events/<id>` ([OPS-010], [CRIT-005]); `/staff/eventos/…` sólo existe en el seed (BUG-016). *(carriles 5 y 6)*
+- **[Vigente]** Pagos manuales sobre eventos cancelados: bloqueados (`EVENT_CANCELLED`, [EVT-027]); el hueco es sólo el checkout en línea (BUG-002). *(carril 4)* El checkout en línea (BUG-002) ya está corregido.
+- **[Vigente]** Recordatorios RSVP: deduplicación diaria por invitada y canal correcta ([GST-007]); la coincidencia con la llave del programador (`/api/cron/notifications`) quedó NOT TESTED en el carril 4. *(carril 4)*
+- **[Vigente]** Teléfonos del configurador normalizados a `+52XXXXXXXXXX` en lead y clienta ([CRIT-001]). *(carril 6)* Desde BUG-008 todas las escrituras usan esa forma.
+- **[Vigente]** La notificación `STAFF_ASSIGNED` generada por la app usa `/staff/events/<id>` ([OPS-010], [CRIT-005]); `/staff/eventos/…` sólo existe en el seed (BUG-016). *(carriles 5 y 6)* El seed ya también la usa (BUG-016).
+
+### Hallazgos nuevos sin triage (vistos durante las correcciones; no cuentan para el gate)
+Los agentes de corrección los vieron en barridos temporales o en revisión de código y **no los corrigieron**. No se reprodujeron dos veces con una prueba versionada, así que todavía no se clasifican como bugs. Si se confirman, serían bugs nuevos abiertos.
+1. **axe `link-name` (serious) en todo `/admin` a menos de 640 px.** El enlace «Ver sitio» de `src/components/admin/admin-shell.tsx:128` oculta su texto con `hidden sm:inline` y en móvil se queda sin nombre accesible. Barrido temporal de la corrección de UI de la ronda 1.
+2. **axe `scrollable-region-focusable` (serious) a 390 px.** Contenedores `overflow-x-auto` no enfocables: las tablas de `/admin/events/[id]/operations` y `/admin/analytics`, el `<pre>` de `/admin/settings/integrations` y la tabla de `/mi-evento/[token]/resumen`. Mismo barrido.
+3. **Plantilla de correo con taupe de marca como texto.** `src/features/notifications/domain/templates.ts:153` usa `color:#A48F7E` (unos 2.8:1). axe no cubre los correos; es la misma causa que BUG-009.
+4. **`marketingOptIn` desde el canal público.** `findOrCreateCustomer` (`src/features/leads/server/lead-intake.ts:75`) todavía suscribe a marketing a una clienta existente si quien escribe en el sitio marca la casilla: es un consentimiento dado por un tercero. Lo encontró la revisión del endurecimiento de BUG-008/BUG-017.
+5. **Número de WhatsApp del negocio en Ajustes.** Se valida sólo con `/^\d{10,15}$/`, mientras la app usa `whatsappDigits()` (regla estricta). Con un valor como `0445512345678`, los botones públicos «Escríbenos por WhatsApp» generan `wa.me/?text=…` sin destinatario. Revisión del endurecimiento de BUG-008.
+6. **Contador de la diseñadora IA.** Si el perfil se escribe antes de hidratar, queda en «0/240» hasta la siguiente tecla, y ese contador es el `aria-describedby` del campo. Revisión de `e2f3699`.
+
+---
+
+## Pendientes que requieren decisión del usuario
+
+| # | Decisión | Contexto | Bug |
+|---|---|---|---|
+| 1 | **Actualizar a Next ≥ 16.3.0** (cambio mayor) para retirar la mitigación de navegación | facebook/react#36134 sólo llega con el React que incluye Next 16.3.0 o posterior; subir `react`/`react-dom` no sirve con Next 15.5. Después: quitar `installNavigationGuard` y `<NavigationGuardBridge />`, correr las pruebas de BUG-006 con `--repeat-each=5 --retries=0` y verificar NAV-034…036 en Firefox sin `<SegmentChildren>` | BUG-006, BUG-020 |
+| 2 | **Revocación por dispositivo en lugar de por cuenta** | Hoy «Cerrar sesión» cierra todas las sesiones de la cuenta en todos los dispositivos, y ningún texto lo avisa. La alternativa es revocar por `jti`/`sid` con una lista de revocadas hasta `exp` y dejar `sessionVersion` para reset, desactivación y rol. Requiere cambio de esquema | BUG-001, BUG-004 |
+| 3 | **Formularios del panel admin con el mismo patrón de antes de hidratar** | Siguen con `defaultValues` vacíos (registrado en la observación de los carriles 3, 4 y 5 y en el pendiente de `e2f3699`). Decidir si se aplica el mismo tratamiento que en BUG-021 (y el de envío de BUG-019) o se acepta, porque son usuarias del equipo con sesión. En la regresión final, EVT-005 y PUR-002 agotaron `locator.fill` en Firefox (carriles 4 y 5); su causa está en análisis por las inestabilidades en curso y no está atribuida a este patrón | BUG-021, BUG-019 |
+| 4 | Reembolso automático de cobros tardíos sobre reservas canceladas | Hoy el equipo reembolsa desde el panel después del aviso | BUG-002 |
+| 5 | Columna de teléfono normalizada e indexada, o normalizar los datos existentes | Quitaría el recorrido de `Customer` en el respaldo por dígitos; requiere `schema.prisma` o una migración de datos | BUG-008 |
+| 6 | Tope de auto-registros por evento relativo a `guestCount`, y recuperación segura de un link personal perdido | Hoy sólo hay un cupo de 60 por evento y 10 por IP cada 10 min | BUG-003 |
+| 7 | Copia del aviso para la anfitriona ante un posible duplicado | Hoy le pide quitar su registro pendiente (el confiable); la revisión sugiere pedirle antes «confírmalo con ella» | BUG-003 |
+| 8 | Expirar la sesión del proveedor cuando un pago manual cambia el saldo | Hoy esa sesión sigue cobrable hasta que vence a la hora, y el excedente se avisa al equipo | BUG-002 |
+| 9 | Convención en CLAUDE.md: los layouts con `error.tsx` hermano que pinten `children` dentro de un elemento HTML deben usar `<SegmentChildren>` | CLAUDE.md no se editó | BUG-020 |
+| 10 | Soft-404 de las rutas internas `/admin/**/[id]` y `/staff/events/[id]` | Es una mejora opcional; hoy responden 200 con `noindex` | BUG-013 |
+| 11 | Re-sembrar las bases de desarrollo y demo (`pnpm db:setup`) | Hace falta para que lleguen los enlaces corregidos del seed | BUG-016 |
 
 ---
 
 ## Problemas de entorno detectados
 
-No son bugs de la app; afectan la ejecución de las pruebas. Las correcciones de infraestructura se incorporaron en el commit `8020b91`.
+No son bugs de la app; afectan la ejecución de las pruebas. ENV-01 y ENV-02 se corrigieron en `8020b91`; ENV-03 se resolvió cambiando la forma de ejecutar el gate.
 
 ### ENV-01 — Caché de datos de Next compartida entre carriles — RESUELTA
 
@@ -1049,15 +2253,35 @@ No son bugs de la app; afectan la ejecución de las pruebas. Las correcciones de
 - **Descripción:** `browserType.launch: spawn UNKNOWN` para `C:\Users\luisc\AppData\Local\ms-playwright\firefox-1543\firefox\firefox.exe`; ejecutado directamente, Windows responde «No se pudo iniciar la aplicación; la configuración en paralelo no es correcta» (error SxS).
 - **Efecto en esta auditoría:** todas las pruebas `@P0` del proyecto `firefox` fallaron al lanzar el navegador antes de ejecutar código de prueba ⇒ cross-browser en Firefox **BLOCKED** (sin resultado funcional de Firefox). `quality-gate.mjs` contaba entonces esos 30 errores de lanzamiento como FAIL (Playwright los registra como `unexpected`); en la matriz de cobertura se reportan como BLOCKED.
 - **Resolución:** copia del Firefox de Playwright (`ms-playwright/firefox-1543/firefox`) en `D:` y variable `E2E_FIREFOX_EXECUTABLE` en `.env` (`playwright.config.ts:81` la usa como `launchOptions.executablePath`; ejemplo en `.env.example:82`; `preflight.mjs:114-118` verifica que exista). Además `quality-gate.mjs:67` clasifica ahora `browserType.launch` / `Executable doesn't exist` / `spawn UNKNOWN` como **BLOCKED**, no FAIL. Las pruebas de Firefox deben re-ejecutarse con `E2E_CROSS_BROWSER=1 … --project=firefox`.
+- **Después de la auditoría:** las correcciones y la regresión final incluyen Firefox. Ahí apareció BUG-020 (hidratación #418, sólo en Firefox), que la auditoría no podía ver.
+
+### ENV-03 — Saturación de Docker/WSL con 6 carriles en paralelo — RESUELTA (carriles en secuencia)
+
+- **Tipo:** ENVIRONMENT ISSUE (capacidad de la máquina: Windows 11 + Docker Desktop/WSL). **Detectado en:** la regresión con todos los navegadores después de las correcciones.
+- **Descripción.** Con 6 carriles × 3 workers y cross-browser en paralelo se satura la red de Docker/WSL.
+- **Síntomas.**
+  - `Can't reach database server at localhost:5432` intermitente.
+  - Timeouts generalizados.
+  - Corridas 5–10 veces más lentas.
+- **Efecto.** Fallas sin relación con el código que no deben clasificarse como bugs ni como pruebas inestables.
+- **Resolución.** La regresión final se corrió **con los carriles en secuencia**. El runbook (`.claude/skills/e2e-quality-gate/references/runbook.md`, «Límite de paralelismo en esta máquina») recomienda como máximo 3 carriles a la vez, o carriles uno tras otro con `E2E_WORKERS=4`, y repetir un carril afectado solo antes de clasificar una falla. También anota que cada commit reconstruye el build E2E, porque el sello incluye `git HEAD`.
+
+### Otras notas de entorno vistas durante las correcciones
+- **Caídas del worker de Node en Windows** (`0xC0000409` / `3221226505`) antes de ejecutar código de prueba, a 0 ms: AUTH-035 una vez y PAY-003 una vez. No se repitieron al correrlas aisladas; son ENVIRONMENT.
+- **Sello del build E2E con archivos sin seguimiento.** `scripts/e2e-server.mjs` no detectaba cambios en archivos nuevos sin commit y reutilizaba un build viejo. Se corrigió en `86b60de`.
+- **Contratos de integración.** `devops.test.ts` esperaba `output: "standalone"` literal, y `memory-capsule.test.ts` esperaba 403 en la prueba CSRF del upload. Fallaban en todas las ramas de la ronda 1 y se alinearon en `86b60de`; después, `pnpm test:integration` pasó 318/318 y 324/324.
+- **`next dev` con `NEXT_DIST_DIR=.next-<x>`** agrega `.next-<x>/types/**/*.ts` a `tsconfig.json`. Hay que revertirlo al terminar.
+- **El `.next-e2e` es compartido entre carriles.** Una verificación que reconstruye el build en un commit distinto deja ese build para el siguiente carril; la próxima corrida lo reconstruye sola.
 
 ### Notas del guard de consola/red (`tests/e2e/fixtures/guard.ts`)
 
 1. **Ruido de WebKit al cancelar prefetch** (`Load failed`, `Fetch API cannot load … due to access control checks`, `Failed to fetch RSC payload … Falling back to browser navigation`) no estaba en `BENIGN` ⇒ con `E2E_CROSS_BROWSER=1` cualquier prueba que navegara rápido en el panel fallaba en WebKit. **Aplicado:** patrones agregados (`guard.ts:18-21`). Pendiente de revisión (carril 2): el patrón `Failed to fetch RSC payload … Falling back to browser navigation` también silencia ese aviso en Chromium. *(carriles 1 y 2)*
 2. **4xx esperados como violación y sin URL:** Chromium duplica cada respuesta 4xx como `console.error` («Failed to load resource: … status of 4xx») sin la URL en el texto, así que toda prueba con un 4xx esperado necesitaba `guard.allow(/404/)` o un patrón por código de estado (p. ej. [CAT-013] 422, [QUO-025] 404). **Aplicado:** el texto incluye `[url de origen]` y esos mensajes se clasifican como `http4xx` (observación), no como violación (`guard.ts:34-40`; documentado en `references/test-design.md`). *(carriles 2, 3 y 5)*
-3. **`net::ERR_ABORTED` es benigno por diseño**, que es justo como se manifiesta BUG-006: el guard no puede detectarlo y las pruebas deben afirmar el resultado (URL/contenido), como hacen CAL-002 y EVT-038. *(carril 4)*
+3. **`net::ERR_ABORTED` es benigno por diseño**, que es justo como se manifiesta BUG-006: el guard no puede detectarlo y las pruebas deben afirmar el resultado (URL/contenido), como hacen CAL-002 y EVT-038. *(carril 4)* **Actualización:** la red de seguridad de BUG-006 registra `console.error`, y el guard lo convierte en fallo, así que una regresión ya no puede pasar en silencio.
 4. **`getByRole("alert")` es ambiguo:** el anunciador de rutas de Next tiene `role="alert"`; acotar a `page.getByRole("main")` o filtrar por texto (documentado en el runbook). *(carril 2)*
 5. **`replayServerAction.classify`** trataba cualquier `ok:false` con código `NOT_FOUND` como «denied», mezclando autorización con recurso inexistente (el carril 4 usó su propio `callAction`). `references/test-design.md` distingue ahora `wasDenied` / `wasForbidden` / `wasBlocked`. *(carril 4)*
 6. **`mode: "serial"` en `*.global.spec.ts`:** un fallo dejaba el resto del archivo sin ejecutar (6 NOT TESTED en la primera corrida global del carril 5). Con `E2E_SUITE=global` ya hay 1 worker; `references/test-design.md` indica ahora no usar `serial`. *(carril 5)*
+7. **Fuente abortada en Firefox** (`downloadable font … status=2152398850` = `NS_BINDING_ABORTED`) después de la redirección del login. Se agregó un patrón `BENIGN` acotado a ese código y a `/_next/static/media/*.woff2` (`7dbe8a1`). Pendiente, menor: la expresión acepta cualquier origen, aunque el comentario dice que otro origen sigue siendo un error. Conviene anclar el host o corregir el comentario. *(carril 2, endurecimiento)*
 
 ### Notas de reporters y ejecución
 
@@ -1065,6 +2289,10 @@ No son bugs de la app; afectan la ejecución de las pruebas. Las correcciones de
 2. **`pnpm.cmd exec playwright … -g "A|B"`** se rompe en Windows (cmd.exe interpreta `|`); usar `node node_modules/@playwright/test/cli.js test … -g "A|B"`. Documentado en el runbook. *(carriles 2, 3 y 4)*
 3. **Cada invocación sobrescribe `test-results/<carril>/artifacts`:** parte de la evidencia previa se perdió (exploración de [AUTH-020]; [EVT-038], [GST-012], [GST-015]). Copiar la evidencia de cada bug a `test-results/<carril>-evidence/<BUG>/` antes de volver a correr (el carril 6 lo hizo en `test-results/l6-evidence/`; el carril 4 en `test-results/l4/evidence/`). Documentado en el runbook. *(carriles 1, 4 y 6)*
 4. **Respuestas RSC de Server Actions sin `charset`:** `Response.text()`/`body()` del navegador en Playwright las decodifica como latin1 (acentos rotos); `APIRequestContext` sí decodifica UTF-8. Comparar contra la base en lugar del texto capturado. *(carril 2)*
-5. **Datos con varios workers:** los conteos globales en la base no sirven en paralelo ([CONF-005]/[CONF-018], TEST BUG corregido) y las altas de eventos pueden chocar por fecha ([EVT-006] FLAKY previo, corregido con `pickFreeDate` por `TEST_PARALLEL_INDEX`). Acotar las aserciones a los datos de la prueba. *(carriles 2 y 4)*
+5. **Datos con varios workers:** los conteos globales en la base no sirven en paralelo ([CONF-005]/[CONF-018], TEST BUG corregido) y las altas de eventos pueden chocar por fecha ([EVT-006] FLAKY previo, corregido con `pickFreeDate` por `TEST_PARALLEL_INDEX`). Acotar las aserciones a los datos de la prueba. *(carriles 2 y 4)* **Actualización:** también se aislaron o se hicieron deterministas [SET-017], [NAV-015], [SMK-023], [CRIT-006], [MEM-001], [QUO-018] y [GST-024].
 6. **Scratchpad compartido entre agentes de todos los carriles** (scripts que desaparecen a mitad de corrida): usar `scratchpad/l<n>/`. Documentado en el runbook. *(carriles 1 y 2)*
-7. **Hidratación:** interactuar antes de hidratar pierde el cambio; conviene un helper compartido tipo `gotoReady()` (espera red en reposo) en los fixtures. *(carriles 3, 4 y 5)*
+7. **Hidratación:** interactuar antes de hidratar pierde el cambio; conviene un helper compartido tipo `gotoReady()` (espera red en reposo) en los fixtures. *(carriles 3, 4 y 5)* **Actualización:** `gotoReady()` espera ahora la hidratación real (`waitForHydration()`: `<main>` y los controles con `__reactProps$`) en lugar de `networkidle`, que no es confiable en Firefox ([QUO-019], `ae351f7`). En los formularios públicos, interactuar antes de hidratar resultó ser un bug de la app (BUG-021).
+8. **WebKit en Windows guarda la cookie sin SameSite** y `context.cookies()` devuelve `None`. [AUTH-001]…[AUTH-005] verifican ahora `HttpOnly`, `SameSite=Lax` y `Path=/` en el `Set-Cookie` real del login (`682b043`).
+9. **`page.reload` después de un `router.refresh()` en Firefox** termina en `NS_BINDING_ABORTED`. Hay que esperar el cuerpo completo del refresh antes de recargar (`routerRefreshed()`, [OPS-010], `b453d6f`). El mismo síntoma aparece en las inestabilidades de la regresión final (STF-003 y PUR-005 en Firefox), que se están corrigiendo en paralelo.
+10. **ID de prueba duplicado: [NAV-034].** Existe en `tests/e2e/navigation/not-found.spec.ts:36` (404 real, BUG-013) y en `tests/e2e/navigation/hydration.spec.ts:56` (hidratación de `/pago/mock`, BUG-020). Las dos ramas de endurecimiento lo asignaron en paralelo. Pendiente: renumerar las pruebas de hidratación (por ejemplo, NAV-035…037 o el siguiente libre) y actualizar las referencias en `docs/qa`.
+11. **MEM-021 sigue omitida en WebKit** (NOT APPLICABLE con anotación). `fillBeforeHydration` (`e2f3699`) ya permitiría correrla ahí.

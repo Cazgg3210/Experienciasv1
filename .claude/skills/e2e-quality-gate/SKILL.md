@@ -106,6 +106,6 @@ Artefactos de Playwright: `test-results/` (trazas, videos, screenshots, `results
 ## Referencias (léelas según el paso)
 
 - `references/runbook.md` — las fases 0–9 y los 17 pasos de FULL, paquetes de trabajo y carriles paralelos, qué hacer en cada modo. **Léelo siempre.**
-- `references/project-profile.md` — roles y permisos, módulos y rutas, datos del seed (cuentas, tokens, eventos), proveedores mock, comportamientos conocidos de Next 15.5 que afectan a las pruebas.
-- `references/test-design.md` — convenciones (IDs, etiquetas, locators, datos), patrones de autorización/replay/IDOR, persistencia, negativas, API, responsive, accesibilidad, con ejemplos.
+- `references/project-profile.md` — roles y permisos, módulos y rutas, datos del seed (cuentas, tokens, eventos), proveedores mock, comportamientos conocidos de Next 15.5 que afectan a las pruebas (navigation guard de BUG-006, `<SegmentChildren>`, formularios antes de hidratar, revocación y renovación de sesión) y el estado de los hallazgos candidatos.
+- `references/test-design.md` — convenciones (IDs, etiquetas, locators, datos), patrones de autorización/replay/IDOR, persistencia, negativas, «antes de hidratar», JWT forjado para la renovación, recetas cross-browser (Firefox/WebKit), API, responsive, accesibilidad, con ejemplos.
 - `references/triage-and-reporting.md` — clasificación de fallos, severidad, plantillas de BUG / matrices / informe, reglas del gate.

@@ -2,6 +2,8 @@
 
 Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 06:45 UTC, commit `f26b1a1`; 83 páginas, 13 APIs, 169 Server Actions; drift: ninguno) + mapas por carril de la auditoría FULL E2E `docs/qa/findings/{access,sales,commercial,events,operations,transversal}-map.md` y sus matrices `*-coverage.md`. Prioridades: P0 crítico · P1 principal · P2 secundario · P3 menor.
 
+**Actualización 2026-10-07 (estado final, `b47437b`).** Se agregaron las pruebas nuevas desde `8020b91`: ronda 1 de correcciones (merges `d144ce7`…`41db385`), endurecimiento (merges `f8797e0`…`c3ba279`) y formularios antes de hidratar (`e2f3699`, `d96a82a`, `b47437b`). Son **48 IDs nuevos**: 46 en esta actualización, más SET-023/024, que `ae846ec` ya había agregado a MAP-488. Con ellas hay **19 filas nuevas (MAP-510…MAP-528)** y se actualizaron filas existentes. El inventario se regeneró el 2026-10-07T04:02Z (`2fbe8d4`) con los mismos 83 / 13 / 169 y sin drift.
+
 ## Prioridades
 
 | Prioridad | Definición | Exigencia del Quality Gate |
@@ -13,10 +15,10 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 
 ## Cómo se consolidó
 
-- **Origen:** 719 filas en los 6 carriles (acceso 256, venta pública 89, comercial 91, eventos 72, operación 154, transversal 57) → **509 filas consolidadas** (`MAP-001`…`MAP-509`), agrupadas por módulo.
+- **Origen:** 719 filas en los 6 carriles (acceso 256, venta pública 89, comercial 91, eventos 72, operación 154, transversal 57) → **509 filas consolidadas** (`MAP-001`…`MAP-509`), agrupadas por módulo. La actualización del 2026-10-07 suma **19 filas (`MAP-510`…`MAP-528`)**. La numeración continúa, pero cada fila nueva se ubicó dentro de su módulo, al final del grupo; por eso el resumen muestra dos rangos en esos módulos. **Total: 528 filas.**
 - **Deduplicación entre carriles:** cuando dos o más carriles describen el mismo flujo con el mismo rol (p. ej. smoke + prueba funcional + recorrido crítico, o la matriz de permisos + la prueba de IDOR del módulo) queda una sola fila; su columna **Pruebas** lista todos los IDs y su prioridad es la más alta de los orígenes.
 - **Agrupación dentro de un carril:** la matriz rol × página se agrupa por sección del panel (cada ruta aparece explícita); también se agrupan los métodos HTTP no soportados, las variantes de `callbackUrl` malicioso y las acciones de administración expuestas en páginas públicas o del portal. Las 169 Server Actions se nombran en la columna «Página/Flujo» del flujo que las ejerce.
-- **Pruebas:** IDs de las matrices `docs/qa/findings/*-coverage.md`; las 838 pruebas únicas de la auditoría aparecen al menos una vez. Los resultados (PASS/FAIL/FLAKY) viven en `TEST_COVERAGE_MATRIX.md` y en los hallazgos de cada carril, no en este mapa.
+- **Pruebas:** IDs de las matrices `docs/qa/findings/*-coverage.md` y, para las nuevas, de los títulos `[XXX-NNN]` de `tests/e2e` (`git diff 8020b91..HEAD -- tests/e2e`). Hay 886 IDs y cada uno aparece al menos una vez: los 838 de la auditoría (836 pruebas automatizadas más M3-106 y M3-107, que son IDs de cobertura) y los 48 nuevos. Las 884 pruebas automatizadas coinciden con los IDs ejecutados en la regresión final (`test-results/l1…l6`, `global` y `ratelimit`). NAV-034 está duplicado en el código (nota ¹ al pie del mapa). Los resultados (PASS/FAIL/FLAKY) viven en `TEST_COVERAGE_MATRIX.md` y en los hallazgos de cada carril, no en este mapa.
 - **Roles:** Anónimo (sin sesión) · Clienta (token) = anfitriona con enlace de cotización/portal · Invitada (token) = enlace del micrositio o de la cápsula · Staff (Lupita = `staff@`, Carlos = `staff2@`) · Owner (Ivonne = `ivonne@`, Rosa = `rosa@`) · SuperAdmin · Proveedor/Cron = llamadas máquina a máquina. «A → B» indica un flujo que cruza roles.
 - **«(global)»** marca escenarios que cambian ajustes globales (suite `E2E_SUITE=global`, 1 worker).
 
@@ -28,31 +30,33 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | APIs (route handlers) | 13/13 | `/admin/finance/export`, `/e/[slug]/[token]/calendar.ics`, `/api/admin/leads-export`, `/api/analytics/track`, `/api/auth/[...nextauth]`, `/api/cron/notifications`, `/api/events/[id]/guests.csv`, `/api/health/db`, `/api/health`, `/api/media/upload`, `/api/media/[id]`, `/api/memory/[token]/upload`, `/api/webhooks/payments/[provider]` |
 | Server Actions | 169/169 | 148 protegidas + 21 públicas, más `loginAction` (función de servidor sin wrapper); cada una se nombra en la columna «Página/Flujo» del flujo que la ejerce (`searchCustomersAction` existe en eventos y en cotizaciones y aparece en ambos). |
 | Pruebas de la auditoría | 838/838 | IDs de los 6 `*-coverage.md` |
+| Pruebas nuevas desde `8020b91` | 48/48 | AUTH-033…038, AUTH-053…059, AUTH-064…072, CONF-024, CONF-025, EVT-039, GST-023…028, MEM-021, NAV-034…036, PAY-023…025, PORT-021…025, PUB-048, PUB-049, SET-023, SET-024, STF-025 |
+| **Total de IDs** | **886/886** | 884 pruebas automatizadas + M3-106/M3-107; NAV-034 = 2 pruebas con el mismo ID (¹) |
 
 ## Resumen por módulo y prioridad
 
 | Módulo | Filas | P0 | P1 | P2 | P3 | Pruebas distintas |
 |---|---:|---:|---:|---:|---:|---:|
-| Autenticación (MAP-001–036) | 36 | 17 | 8 | 10 | 1 | 61 |
+| Autenticación (MAP-001–036, MAP-510–514) | 41 | 18 | 11 | 11 | 1 | 82 |
 | Autorización (MAP-037–069) | 33 | 23 | 6 | 4 | 0 | 110 |
 | Accesos por token (MAP-070–080) | 11 | 5 | 5 | 1 | 0 | 17 |
-| API (route handlers) (MAP-081–104) | 24 | 9 | 6 | 7 | 2 | 39 |
-| Navegación (MAP-105–124) | 20 | 0 | 6 | 11 | 3 | 34 |
-| Sitio público y contacto (MAP-125–147) | 23 | 6 | 11 | 6 | 0 | 53 |
-| Configurador (MAP-148–171) | 24 | 4 | 14 | 5 | 1 | 27 |
+| API (route handlers) (MAP-081–104) | 24 | 9 | 6 | 7 | 2 | 40 |
+| Navegación (MAP-105–124, MAP-515–516) | 22 | 1 | 6 | 11 | 4 | 37 |
+| Sitio público y contacto (MAP-125–147, MAP-517–518) | 25 | 7 | 12 | 6 | 0 | 55 |
+| Configurador (MAP-148–171, MAP-519) | 25 | 4 | 15 | 5 | 1 | 29 |
 | Diseñador IA (MAP-172–180) | 9 | 0 | 7 | 2 | 0 | 10 |
 | Leads (MAP-181–210) | 30 | 1 | 15 | 12 | 2 | 38 |
 | Clientas (MAP-211–221) | 11 | 0 | 8 | 1 | 2 | 14 |
 | Catálogo (MAP-222–239) | 18 | 0 | 13 | 4 | 1 | 32 |
 | Cotizaciones (MAP-240–279) | 40 | 9 | 24 | 5 | 2 | 61 |
-| Pagos (MAP-280–302) | 23 | 5 | 14 | 4 | 0 | 30 |
-| Eventos (MAP-303–319) | 17 | 4 | 10 | 2 | 1 | 32 |
+| Pagos (MAP-280–302, MAP-521–522) | 25 | 5 | 16 | 4 | 0 | 33 |
+| Eventos (MAP-303–319, MAP-520) | 18 | 4 | 10 | 3 | 1 | 33 |
 | Calendario y disponibilidad (MAP-320–327) | 8 | 0 | 4 | 4 | 0 | 14 |
-| Portal de la clienta (MAP-328–338) | 11 | 2 | 7 | 2 | 0 | 20 |
-| Invitadas y RSVP (MAP-339–354) | 16 | 5 | 8 | 3 | 0 | 26 |
-| Memory Capsule (MAP-355–369) | 15 | 4 | 9 | 2 | 0 | 26 |
+| Portal de la clienta (MAP-328–338, MAP-523–524) | 13 | 3 | 8 | 2 | 0 | 25 |
+| Invitadas y RSVP (MAP-339–354, MAP-525–527) | 19 | 6 | 9 | 4 | 0 | 32 |
+| Memory Capsule (MAP-355–369, MAP-528) | 16 | 5 | 9 | 2 | 0 | 27 |
 | Operaciones (MAP-370–394) | 25 | 3 | 16 | 6 | 0 | 29 |
-| Portal staff (MAP-395–416) | 22 | 6 | 9 | 7 | 0 | 36 |
+| Portal staff (MAP-395–416) | 22 | 6 | 9 | 7 | 0 | 37 |
 | Equipo (staff) (MAP-417–424) | 8 | 1 | 6 | 1 | 0 | 9 |
 | Inventario (MAP-425–443) | 19 | 1 | 16 | 2 | 0 | 25 |
 | Compras y proveedores (MAP-444–459) | 16 | 2 | 11 | 3 | 0 | 21 |
@@ -60,19 +64,19 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | Dashboard y analítica (MAP-469–470) | 2 | 0 | 1 | 1 | 0 | 2 |
 | Notificaciones (MAP-471–475) | 5 | 1 | 3 | 1 | 0 | 5 |
 | Contenido (MAP-476–486) | 11 | 0 | 7 | 4 | 0 | 14 |
-| Ajustes y usuarios (MAP-487–503) | 17 | 4 | 10 | 3 | 0 | 22 |
+| Ajustes y usuarios (MAP-487–503) | 17 | 4 | 10 | 3 | 0 | 24 |
 | Transversal (responsive y accesibilidad) (MAP-504–509) | 6 | 0 | 1 | 5 | 0 | 17 |
-| **Total** | **509** | **115** | **260** | **118** | **16** | **838** |
+| **Total** | **528** | **121** | **269** | **121** | **17** | **886** |
 
-«Pruebas distintas» cuenta IDs únicos por módulo; cada prueba quedó asignada a un solo módulo, así que la suma coincide con las 838 pruebas únicas. Una prueba puede aparecer en varias filas del mismo módulo cuando cubre varios flujos.
+«Pruebas distintas» cuenta IDs únicos por módulo; cada prueba quedó asignada a un solo módulo, así que la suma coincide con los 886 IDs únicos (838 de la auditoría + 48 nuevos). Una prueba puede aparecer en varias filas del mismo módulo cuando cubre varios flujos.
 
 ## Mapa
 
 | ID | Módulo | Página/Flujo | Rol | Acción | Resultado esperado | Prioridad | Pruebas |
 |---|---|---|---|---|---|---|---|
-| MAP-001 | Autenticación | `/login` · `loginAction` | SuperAdmin | Iniciar sesión con credenciales válidas | Redirige a `/admin` con «Hola, Admin»; cookie de sesión httpOnly | P0 | AUTH-001, SMK-002 |
-| MAP-002 | Autenticación | `/login` · `loginAction` | Owner (Ivonne, Rosa) | Iniciar sesión con credenciales válidas | Redirige a `/admin` con «Hola, Ivonne» / «Hola, Rosa»; cookie de sesión httpOnly | P0 | AUTH-002, AUTH-003, SMK-003, SMK-004 |
-| MAP-003 | Autenticación | `/login` · `loginAction` | Staff (Lupita, Carlos) | Iniciar sesión con credenciales válidas | Redirige a `/staff` «Mis próximos eventos»; cookie de sesión httpOnly | P0 | AUTH-004, AUTH-005, SMK-005, SMK-006 |
+| MAP-001 | Autenticación | `/login` · `loginAction` | SuperAdmin | Iniciar sesión con credenciales válidas | Redirige a `/admin` con «Hola, Admin»; el `Set-Cookie` real del login lleva `HttpOnly`, `SameSite=Lax` y `Path=/` (3 motores) | P0 | AUTH-001, SMK-002 |
+| MAP-002 | Autenticación | `/login` · `loginAction` | Owner (Ivonne, Rosa) | Iniciar sesión con credenciales válidas | Redirige a `/admin` con «Hola, Ivonne» / «Hola, Rosa»; `Set-Cookie` con `HttpOnly`, `SameSite=Lax` y `Path=/` | P0 | AUTH-002, AUTH-003, SMK-003, SMK-004 |
+| MAP-003 | Autenticación | `/login` · `loginAction` | Staff (Lupita, Carlos) | Iniciar sesión con credenciales válidas | Redirige a `/staff` «Mis próximos eventos»; `Set-Cookie` con `HttpOnly`, `SameSite=Lax` y `Path=/` | P0 | AUTH-004, AUTH-005, SMK-005, SMK-006 |
 | MAP-004 | Autenticación | `/login` | Anónimo | Abrir la página de login | 200, H1 «Bienvenida de vuelta», noindex, contraseña enmascarada y autocompletado correcto, sin errores de consola/red | P0 | SMK-019, AUTH-016 |
 | MAP-005 | Autenticación | `/login` | Anónimo | Contraseña incorrecta | Mensaje genérico; sin sesión y sin actualizar `lastLoginAt` | P0 | AUTH-006 |
 | MAP-006 | Autenticación | `/login` | Anónimo | Usuario inexistente | Exactamente el mismo mensaje que con contraseña incorrecta (sin enumeración de cuentas) | P0 | AUTH-007 |
@@ -93,9 +97,9 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-021 | Autenticación | Panel autenticado | Owner | Inspeccionar cabeceras de respuesta | `Cache-Control: no-store` en las respuestas del panel | P2 | AUTH-022 |
 | MAP-022 | Autenticación | Rutas privadas (`/admin*`, `/staff*`) | Anónimo | Request directo sin cookies | Redirigen a `/login` | P0 | AUTH-023 |
 | MAP-023 | Autenticación | Rutas privadas (`/admin*`, `/staff*`) | Anónimo | Cookie de sesión manipulada o falsificada | No autoriza; redirige a login | P0 | AUTH-024 |
-| MAP-024 | Autenticación | Logout del panel | Owner | Reutilizar la cookie anterior al logout | La sesión queda invalidada en el servidor | P1 | AUTH-025 |
+| MAP-024 | Autenticación | Logout del panel | Owner | Reutilizar la cookie anterior al logout | La sesión queda invalidada en el servidor: la cookie copiada recibe 307 a `/login` (`@regression` BUG-004) | P1 | AUTH-025 |
 | MAP-025 | Autenticación | Logout en dos pestañas | Owner | Cerrar sesión en una pestaña y seguir en la otra | La otra pestaña pierde acceso en el siguiente request | P1 | AUTH-026 |
-| MAP-026 | Autenticación | Logout con request en vuelo (panel y portal staff) | Owner · Staff | Cerrar sesión mientras otra pestaña o un prefetch autenticado sigue cargando | La cookie de sesión no reaparece al llegar la respuesta; `/admin` y `/staff` vuelven a exigir login | P0 | AUTH-032, CRIT-014 |
+| MAP-026 | Autenticación | Logout con request en vuelo (panel y portal staff) | Owner · Staff | Cerrar sesión mientras otra pestaña o un prefetch autenticado sigue cargando | La cookie de sesión no reaparece al llegar la respuesta; `/admin` y `/staff` vuelven a exigir login; si la cookie anterior reapareciera, ya está revocada (`@regression` BUG-001) | P0 | AUTH-032, CRIT-014 |
 | MAP-027 | Autenticación | Desactivar acceso con sesión abierta (`/admin/settings/users`, `/admin/staff/[id]` · `setStaffAccessActiveAction`) | Owner | Desactivar la cuenta o el acceso de staff mientras tiene sesión abierta; luego reactivar | El siguiente request (páginas y acciones, p. ej. `markAllNotificationsReadAction`) queda sin autorización y el login falla; reactivar devuelve el acceso | P0 | AUTH-027, STF-021 |
 | MAP-028 | Autenticación | Cambio de rol con sesión abierta | Owner | Bajar a una OWNER a STAFF mientras tiene sesión | El siguiente request ya no autoriza el panel ni sus acciones (`setUserActiveAction` → FORBIDDEN) | P0 | AUTH-028 |
 | MAP-029 | Autenticación | Cambio de rol con sesión abierta | Staff | Subir de STAFF a OWNER | Aplica en el siguiente request sin volver a iniciar sesión | P2 | AUTH-029 |
@@ -104,8 +108,13 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-032 | Autenticación | `callbackUrl` (`/admin/events` → `/login?callbackUrl`) | Anónimo → Owner | Abrir una ruta privada sin sesión e iniciar sesión | Login con `callbackUrl`; tras entrar regresa a la ruta solicitada | P0 | AUTH-040, CRIT-013 |
 | MAP-033 | Autenticación | `callbackUrl` | Staff | Iniciar sesión con `callbackUrl` a `/admin` | Termina en `/staff` | P1 | AUTH-041 |
 | MAP-034 | Autenticación | `callbackUrl` | Staff | Iniciar sesión con `callbackUrl` interno permitido (`/staff/...`) | Se respeta | P2 | AUTH-042 |
-| MAP-035 | Autenticación | `callbackUrl` malicioso | Owner | Iniciar sesión con `https://evil.example/robo`, `//evil.example/robo`, `/\evil.example/robo`, `\\evil.example`, `javascript:alert(document.domain)`, `/%2F%2Fevil.example`, `/<TAB>/evil.example`, `http://localhost@evil.example/` | Nunca redirige fuera de la app (termina en el inicio del rol) | P0 | AUTH-043, AUTH-044, AUTH-045, AUTH-046, AUTH-047, AUTH-048, AUTH-049, AUTH-050, CRIT-013 |
+| MAP-035 | Autenticación | `callbackUrl` malicioso | Owner | Iniciar sesión con `https://evil.example/robo`, `//evil.example/robo`, `/\evil.example/robo`, `\\evil.example`, `javascript:alert(document.domain)`, `/%2F%2Fevil.example`, `/<TAB>/evil.example`, `http://localhost@evil.example/` | Nunca redirige fuera de la app (termina en el inicio del rol); el valor TAB es `@regression` BUG-005. La validación propia de `loginAction` se cubre en MAP-514 | P0 | AUTH-043, AUTH-044, AUTH-045, AUTH-046, AUTH-047, AUTH-048, AUTH-049, AUTH-050, CRIT-013 |
 | MAP-036 | Autenticación | Middleware (`callbackUrl`) | Anónimo | Abrir una ruta privada con query string | `callbackUrl` conserva ruta + query y nunca incluye host | P2 | AUTH-051 |
+| MAP-510 | Autenticación | Revocación al administrar la cuenta (`/admin/settings/users` · `resetUserPasswordAction`, `changeUserRoleAction`, `setUserActiveAction`; `/admin/staff/[id]` · `resetStaffPasswordAction`) | SuperAdmin · Owner → Owner / Staff con sesión abierta | Restablecer la contraseña (Usuarios y Staff), cambiar el rol, desactivar y reactivar una cuenta mientras tiene sesión abierta | La sesión abierta deja de autorizar en el siguiente request (↪ login); al volver a entrar aplica el rol nuevo; reactivar no revive la cookie anterior (`sessionVersion`) | P1 | AUTH-033, AUTH-034, AUTH-035, AUTH-036 |
+| MAP-511 | Autenticación | Restablecer la **propia** contraseña (`/admin/settings/users` · `resetUserPasswordAction`; propia ficha en `/admin/staff/[id]` · `resetStaffPasswordAction`) | Owner (fundadora con ficha de staff) | Restablecer su propia contraseña | Aviso «Se cerrarán todas tus sesiones, incluida ésta»; la cookie actual se borra y la UI va a `/login`; la cookie vieja queda revocada; auditoría `self: true` (Staff); la contraseña nueva entra | P1 | AUTH-037, AUTH-064 |
+| MAP-512 | Autenticación | `/api/auth/signout` con una cookie ya revocada | Owner | Usar la cookie anterior a un logout contra `/api/auth/signout` mientras hay una sesión nueva abierta | La sesión nueva sigue vigente: la revocación compara e incrementa, así que una cookie revocada no cierra sesiones nuevas | P2 | AUTH-038 |
+| MAP-513 | Autenticación | Renovación del JWT en el middleware (GET de documento, GET RSC, POST de Server Action) | Owner (JWT forjado con `iat` de hace 2 h, reciente, inválido o revocado) | Pedir páginas y acciones del panel con cada tipo de cookie | ≥ 1 h: el GET de documento y el RSC renuevan (`iat` nuevo, mismos `uid`, rol y `sessionVersion`) y la renovada autoriza; el POST de Server Action no re-emite aunque corre autenticado; un JWT reciente no se re-emite; una cookie inválida conserva su borrado y ↪ login; un JWT revocado sigue sin autorizar aunque se renueve | P1 | AUTH-053, AUTH-054, AUTH-055, AUTH-056, AUTH-057, AUTH-058 |
+| MAP-514 | Autenticación | `/login` · `loginAction` (campo oculto `callbackUrl` alterado) | Owner | Enviar el formulario con los mismos 8 valores maliciosos de MAP-035 escritos en el campo oculto, como un POST forjado | `x-action-redirect` del mismo origen: inicio del rol (`/admin`); `/%2F%2Fevil.example` se conserva como ruta interna legítima; el valor TAB (`/<TAB>/evil.example`) se descarta (`@regression` BUG-005) | P0 | AUTH-065, AUTH-066, AUTH-067, AUTH-068, AUTH-069, AUTH-070, AUTH-071, AUTH-072 |
 | MAP-037 | Autorización | Zona pública: `/`, `/como-funciona`, `/contacto`, `/crear-experiencia`, `/crear-experiencia/ai`, `/experiencias`, `/experiencias/[slug]`, `/nuestra-historia`, `/privacidad`, `/terminos` | Anónimo · Staff · Owner · SuperAdmin | GET sin seguir redirects con la cookie de cada rol | ✅ 200 para los 4 roles; sin pantalla de error ni errores de consola/red | P2 | PERM-001, PERM-063, PERM-064, PERM-066, PERM-067, PERM-069, PERM-070, PERM-076, PERM-079, PERM-083 |
 | MAP-038 | Autorización | Zona por token: `/cotizacion/[token]`, `/e/[slug]/[token]`, `/memory/[token]`, `/mi-evento`, `/mi-evento/[token]`, `/mi-evento/[token]/resumen`, `/pago/mock/[checkoutId]`, `/pago/resultado` | Anónimo · Staff · Owner · SuperAdmin | GET con token o firma válidos | ✅ 200 para los 4 roles (el acceso lo da el token, no la sesión) | P1 | PERM-065, PERM-068, PERM-072, PERM-073, PERM-074, PERM-075, PERM-077, PERM-078 |
 | MAP-039 | Autorización | Panel — inicio: `/admin` (`dashboard:view`) | Anónimo · Staff · Owner · SuperAdmin | GET sin seguir redirects con la cookie de cada rol + carga de la UI con Owner | Anónimo ↪ `/login?callbackUrl=<ruta>` · Staff ↪ `/staff` · Owner y SuperAdmin ✅ 200 con encabezado, sin pantalla de error ni errores de consola/red | P0 | PERM-002 |
@@ -163,7 +172,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-091 | API (route handlers) | `/api/analytics/track` | Anónimo | Beacon sin `Origin`, con `Origin` ajeno o `Sec-Fetch-Site: cross-site` | 403 sin registrar (CSRF) | P1 | API-040 |
 | MAP-092 | API (route handlers) | `/api/analytics/track` | Anónimo | Beacon del mismo origen con cuerpo válido | 204 y `AnalyticsEvent` con `origin=client` | P2 | API-041 |
 | MAP-093 | API (route handlers) | `/api/analytics/track` | Anónimo | Tipo no permitido, campos extra, JSON roto; cuerpo > 4 KB | 400; 413 | P2 | API-042 |
-| MAP-094 | API (route handlers) | `/api/auth/[...nextauth]` (`/api/auth/session`) | Anónimo · Owner | GET de la sesión | Anónimo sin usuario; Owner sin datos sensibles (sin hash de contraseña) | P1 | API-050 |
+| MAP-094 | API (route handlers) | `/api/auth/[...nextauth]` (`/api/auth/session`) | Anónimo · Owner | GET de la sesión con un JWT reciente y con uno de ≥ 1 h | Anónimo sin usuario; Owner sin datos sensibles (sin hash de contraseña); la respuesta nunca re-emite la cookie de sesión (`withoutSessionCookieRenewal`) | P1 | API-050, AUTH-059 |
 | MAP-095 | API (route handlers) | `/api/auth/[...nextauth]` (`/api/auth/callback/credentials`) | Anónimo | `POST` directo sin token CSRF | No crea sesión | P1 | API-051 |
 | MAP-096 | API (route handlers) | `/api/auth/[...nextauth]` (`/api/auth/signin`, providers) | Anónimo | GET | `signin` redirige al login propio; providers sólo expone credenciales | P3 | API-052 |
 | MAP-097 | API (route handlers) | `/api/media/[id]` | Anónimo | Archivo privado sin firma o con firma inválida, ajena o vencida | 403; con firma vigente → redirect al archivo | P0 | API-060 |
@@ -194,6 +203,8 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-122 | Navegación | Menú móvil público (390 y 768 px) | Anónimo | Abrir, navegar y cerrar | `aria-expanded` correcto, el foco regresa al botón, navega y cierra; en 1440 px la navegación es visible sin botón | P1 | NAV-031, PUB-012, RESP-007 |
 | MAP-123 | Navegación | Migas de pan en `/experiencias/[slug]` | Anónimo | Leer | Inicio › Experiencias › nombre | P2 | NAV-032 |
 | MAP-124 | Navegación | Enlace «Saltar al contenido» | Anónimo | Tab + Enter | Es el primer foco y lleva a `main#contenido` | P2 | NAV-033, A11Y-023 |
+| MAP-515 | Navegación | 404 real en rutas públicas y por token: `/experiencias/[slug]`, `/cotizacion/[token]`, `/mi-evento/[token]`, `/mi-evento/[token]/resumen`, `/e/[slug]/[token]`, `/memory/[token]`, `/pago/mock/[checkoutId]`, `/pago/resultado` | Anónimo | GET directo (sin seguir redirects) con un slug o token inexistente | HTTP 404 en las 8 rutas, no soft-404. Lo complementa el contrato estático `tests/unit/route-not-found-contract.test.ts` (`@regression` BUG-013) | P3 | NAV-034 ¹ |
+| MAP-516 | Navegación | Hidratación con el chunk de `error.tsx` del segmento retrasado: `/pago/mock/[checkoutId]`, `/crear-experiencia`, `/admin/quotes` | Clienta (token) · Anónimo · Owner | Abrir la página reteniendo sólo el chunk de `error.tsx` (en Firefox llegaba tarde) | Sin `pageerror` (React #418); `<main id=contenido>` es el mismo nodo que llegó del servidor (no se vuelve a pintar en el cliente) | P0 | NAV-034 ¹, NAV-035, NAV-036 |
 | MAP-125 | Sitio público y contacto | `/` | Anónimo | Abrir el inicio | 200, un H1, landmarks (banner, nav, main, footer), sin errores de consola/red | P0 | PUB-001, SMK-010 |
 | MAP-126 | Sitio público y contacto | `/experiencias` | Anónimo | Abrir el catálogo | 200 y exactamente las experiencias activas de la base, cada una enlazada a su detalle | P0 | PUB-002, PUB-014, SMK-011, SMK-020 |
 | MAP-127 | Sitio público y contacto | `/experiencias/[slug]` | Anónimo | Abrir el detalle de una experiencia activa | H1 = nombre, «Desde» con precio base en MXN, rango de personas, JSON-LD Service y CTA «Diseña esta experiencia» → configurador con la experiencia preseleccionada | P0 | PUB-003, PUB-015, SMK-012 |
@@ -217,6 +228,8 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-145 | Sitio público y contacto | `/contacto` (mismo correo dos veces) | Anónimo | Reenviar | Dos leads y una sola clienta | P2 | PUB-046 |
 | MAP-146 | Sitio público y contacto | `/contacto` → `/admin/leads/[id]` | Anónimo → Owner | Enviar texto con HTML/script | Se muestra escapado en el panel; no se ejecuta | P2 | PUB-047 |
 | MAP-147 | Sitio público y contacto | `submitContactForm` (rate limit) | Anónimo | 6 envíos reales en la ventana | Los 5 primeros crean 5 leads; el 6.º se rechaza con mensaje de límite y no crea lead | P1 | API-080 |
+| MAP-517 | Sitio público y contacto | `/contacto` · `submitContactForm` (teléfono de una clienta registrada) → `/admin/leads/[id]` | Anónimo → Owner | Enviar con el teléfono de otra clienta, sin el correo de ella y con un correo ajeno | El lead se liga a esa clienta (no se duplica), pero su perfil no toma el correo escrito: sus enlaces de cotización, portal y pago no se desvían. El timeline avisa al equipo que el correo «No se agregó a su perfil» | P1 | PUB-048 |
+| MAP-518 | Sitio público y contacto | `/contacto` antes de hidratar → `/admin/leads/[id]` | Anónimo (móvil) | Escribir todo el formulario mientras el chunk de la página aún no llega; hidrata; consentimiento; «Enviar mensaje» | «Enviar mensaje» deshabilitado hasta hidratar; nada de lo escrito se borra y el lead llega completo | P0 | PUB-049 |
 | MAP-148 | Configurador | `/crear-experiencia` (10 pasos) · `submitConfiguratorAction` → `/admin/leads/[id]` | Anónimo (móvil) → Owner | Recorrido completo (ocasión, fecha, zona, invitadas, estilo, experiencia, menú, extras, homenajeada, presupuesto) + datos + consentimiento → «Consultar disponibilidad»; la fundadora abre el lead por folio | Resumen con estimado = `estimateAction` sin costos; Lead NEW `CONFIGURATOR` con selección y `estimatedTotalCents` del servidor = total mostrado; Customer con teléfono `+52…`; timeline CREATED; `ConfigurationSnapshot` (data + estimate + submissionId); `LEAD_RECEIVED` + aviso al equipo; analítica de embudo; visible en `/admin/leads` | P0 | CONF-001, CRIT-001 |
 | MAP-149 | Configurador | `estimateAction` | Anónimo | Pedir estimado | Cálculo en servidor con las reglas del motor (base, extras, menú/extra por persona, logística, IVA 16 % incluido, anticipo 50 %), en centavos enteros y sin costos ni márgenes | P0 | CONF-013 |
 | MAP-150 | Configurador | HTML/RSC de las páginas públicas | Anónimo | Inspeccionar lo que llega al navegador | El catálogo enviado no contiene costos internos | P0 | CONF-014 |
@@ -235,12 +248,13 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-163 | Configurador | Grupo > 12 invitadas | Anónimo | Enviar consulta especial | `specialRequest` + nota interna + mensaje | P1 | CONF-009 |
 | MAP-164 | Configurador | `/crear-experiencia?experiencia=&ocasion=` | Anónimo | Llegar con preselección | Ocasión y experiencia preseleccionadas; parámetros inválidos ignorados | P1 | CONF-010 |
 | MAP-165 | Configurador | Pasos 1–10 | Anónimo | Avanzar sin completar | Mensaje en cada paso obligatorio | P2 | CONF-011 |
-| MAP-166 | Configurador | Accesibilidad y teclado del configurador | Anónimo | axe; Tab al grupo, flechas, Espacio y Enter | 0 violaciones critical/serious; las flechas seleccionan, Enter avanza y el foco va al título del paso | P1 | CONF-012, A11Y-004, A11Y-021 |
+| MAP-166 | Configurador | Accesibilidad y teclado del configurador | Anónimo | axe; Tab al grupo, flechas, Espacio y Enter | 0 violaciones critical/serious; las flechas seleccionan, Enter avanza y el foco va al título del paso; las líneas por persona del resumen («· N × $precio») sin texto atenuado bajo AA (`@regression` BUG-009) | P1 | CONF-012, A11Y-004, A11Y-021, CONF-024 |
 | MAP-167 | Configurador | Día lleno | Anónimo | Enviar con fecha FULL | Se acepta como consulta con nota «Fecha llena» para el equipo | P2 | CONF-020 |
-| MAP-168 | Configurador | Clienta recurrente | Anónimo | Enviar con el mismo teléfono | Misma Customer; se completa el correo | P2 | CONF-021 |
+| MAP-168 | Configurador | Clienta recurrente | Anónimo | Enviar con el mismo teléfono | Misma Customer; su perfil **no** toma el correo escrito en el sitio, que queda en el lead (antes se completaba; cambio de requisito del endurecimiento, `@regression`) | P2 | CONF-021 |
 | MAP-169 | Configurador | Entre canales (configurador, diseñador IA, contacto) | Anónimo | Usar el mismo teléfono | Misma Customer | P2 | CONF-022 |
 | MAP-170 | Configurador | `trackConfiguratorAction` | Anónimo | Analítica del embudo | START/COMPLETE con el id de sesión; tipos no permitidos rechazados | P3 | CONF-023 |
 | MAP-171 | Configurador | `submitConfiguratorAction` (rate limit) | Anónimo | 6.º envío en 10 minutos | `RATE_LIMITED` aunque el payload sea inválido; sin lead | P1 | API-081 |
+| MAP-519 | Configurador | `/crear-experiencia?experiencia=…` antes de hidratar | Anónimo | Pulsar «Siguiente» (clic y Enter) antes de que el configurador hidrate | No hay envío nativo: no recarga ni pierde la experiencia de partida; botón deshabilitado con `aria-busy` y `method="post"`; tras hidratar avanza normal | P1 | CONF-025 |
 | MAP-172 | Diseñador IA | `/crear-experiencia/ai` · `generateDesignAction` | Anónimo | Generar propuesta | Propuesta con experiencia activa real y estimado del motor; `AiDesign` persistido; `AI_DESIGN_GENERATED`; sin costos en la respuesta | P1 | AI-001 |
 | MAP-173 | Diseñador IA | «Quiero esta experiencia» · `convertDesignToLeadAction` | Anónimo → Owner | Convertir el diseño en lead | Lead `AI_DESIGNER` ligado al diseño, snapshot y avisos; visible en el panel | P1 | AI-002 |
 | MAP-174 | Diseñador IA | `/crear-experiencia/ai` (formulario) | Anónimo | Enviar vacío | Errores por campo; sin `AiDesign` | P1 | AI-003 |
@@ -371,7 +385,9 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-299 | Pagos | `recordManualPaymentAction` (inválido) | Owner | Monto > saldo, fecha futura, < $1, decimales, evento cancelado o sin reserva (UI y backend) | Rechazo con mensaje; sin filas nuevas | P1 | EVT-026, EVT-027 |
 | MAP-300 | Pagos | `/admin/events/[id]` (Pagos) · `refundPaymentAction` | Owner | Reembolso parcial o total de un pago cobrado | PARTIAL_REFUND / REFUNDED, fila REFUND, auditoría y saldo recalculado | P0 | EVT-028 |
 | MAP-301 | Pagos | `refundPaymentAction` (inválido) | Owner | Reembolso mayor a lo disponible, de un pago pendiente, de una fila de reembolso o doble total | Rechazo; sin efectos | P1 | EVT-029 |
-| MAP-302 | Pagos | `cancelEventAction` con checkout abierto → `/pago/mock/[checkoutId]` | Owner → Clienta (token) | Cancelar el evento con un pago PENDING de checkout y luego intentar pagar | El checkout deja de ser cobrable; nunca se registra PAID en un evento cancelado | P0 | EVT-024, PAY-021 |
+| MAP-302 | Pagos | `cancelEventAction` con checkout abierto → `/pago/mock/[checkoutId]` | Owner → Clienta (token) | Cancelar el evento con un pago PENDING de checkout y luego intentar pagar | El checkout deja de ser cobrable; nunca se registra PAID en un evento cancelado (`@regression` BUG-002) | P0 | EVT-024, PAY-021 |
+| MAP-521 | Pagos | `cancelEventAction` → `/api/webhooks/payments/[provider]` (cobro tardío) → `/pago/resultado` | Owner → Proveedor → Clienta (token) | Con un checkout abierto, la fundadora cancela y la pasarela reporta el cobro igualmente (webhook firmado, repetido) | El cobro se registra PAID con la nota «Reembolso requerido»; el evento sigue CANCELLED; sin `event.confirmed_by_payment` ni avisos a la clienta; auditoría `payment.collected_after_cancellation`; un solo aviso «Revisar pago» al equipo; el reenvío es `duplicate`; la clienta ve «Recibimos tu pago, pero tu evento está cancelado» y el panel, «Reembolso requerido» | P1 | PAY-023 |
+| MAP-522 | Pagos | `/pago/resultado` con el evento cancelado | Clienta (token) → Owner | (a) La fundadora cancela mientras la clienta espera la confirmación. (b) La clienta reabre el resultado de un anticipo pagado antes de la cancelación | (a) La página se actualiza sola a «Este pago se anuló», sin afirmar «No se realizó ningún cobro» ni ofrecer «Intentar de nuevo». (b) «¡Pago recibido!» con «Tu celebración está cancelada», sin nota de reembolso ni invitación a compartir | P1 | PAY-024, PAY-025 |
 | MAP-303 | Eventos | `/admin/events` | Owner | Listar y filtrar por estado, periodo («Pasados») y búsqueda; «Limpiar filtros» | Filtros en URL compartible y resultados correctos; «Pasados» sólo completados; estado vacío «No hay eventos con estos filtros»; «Limpiar filtros» vuelve al listado sin filtros | P1 | EVT-001, EVT-002, EVT-038 |
 | MAP-304 | Eventos | `/admin/events/[id]` (+ pestañas) | Owner | Ver el detalle y navegar Resumen / Invitadas / Operaciones / Finanzas / Memory | Encabezado y estado; pestaña activa con `aria-current`; «Cumpleaños de Sofía» con panel de Pagos | P1 | EVT-003, SMK-024 |
 | MAP-305 | Eventos | `/admin/events/new` · `createEventAction`, `searchCustomersAction` | Owner | Alta manual con nueva clienta y con clienta existente (búsqueda) | Evento INQUIRY con tokens de 256 bits; clienta creada o vinculada sin duplicar; auditoría `event.created`; aparece en el listado | P0 | EVT-005, EVT-006 |
@@ -389,6 +405,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-317 | Eventos | `/admin/events/[id]` (programa) · `saveTimelineItemAction`, `deleteTimelineItemAction` | Owner | Agregar, editar y eliminar momentos (visibles / sólo equipo); ids de otro evento; título vacío | El micrositio sólo muestra los visibles y el portal todos; IDOR → NOT_FOUND; título vacío rechazado | P1 | EVT-033, EVT-034 |
 | MAP-318 | Eventos | `/admin/events/[id]` (conversación) · `addAdminMessageAction` | Owner → Clienta (token) | Responder a la clienta con aviso | Mensaje ADMIN en la conversación + notificación; visible en su portal | P1 | EVT-035 |
 | MAP-319 | Eventos | `/admin/events`, `/admin/events/new`, `/admin/events/[id]` (accesibilidad) | Owner | axe WCAG 2.1 AA | 0 violaciones critical/serious | P2 | EVT-037, A11Y-014 |
+| MAP-520 | Eventos | `/admin/events?q=`, `/admin/quotes?q=` (búsqueda por teléfono) | Owner | Buscar a la clienta por su teléfono como «+52 1 55…», «(55) 1234-5678» y «55 1234 5678» | Encuentra su evento y su cotización en cualquier formato, tanto para un teléfono guardado con separadores (dato antiguo) como para uno canónico `+52…` | P2 | EVT-039 |
 | MAP-320 | Calendario y disponibilidad | `/admin/calendar?month=` | Owner | Ver eventos del mes, capacidad por día y abrir un evento | Chip en la celda del día que abre el detalle; «Lleno / Cerrado / N libres»; H1 «Calendario» | P1 | CAL-001, SMK-025 |
 | MAP-321 | Calendario y disponibilidad | `/admin/calendar` | Owner | Navegar con «Anterior», «Siguiente» y «Hoy» | Cambia el mes y la URL | P1 | CAL-002 |
 | MAP-322 | Calendario y disponibilidad | `/admin/calendar?month=<inválido>` | Owner | Parámetro inválido o lejano | Vuelve al mes actual | P2 | CAL-003 |
@@ -408,20 +425,25 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-336 | Portal de la clienta | `/mi-evento/[token]` · `submitReviewAction` | Clienta (token) | Opinar tras COMPLETED (dos veces) y antes de completar | Review creada una sola vez (2.º envío CONFLICT); antes de completar `REVIEW_NOT_AVAILABLE` (UI y backend) | P1 | PORT-017, PORT-018 |
 | MAP-337 | Portal de la clienta | `/mi-evento/[token]` (evento cancelado) | Clienta (token) | Ver e intentar cambios | Aviso amable de cancelación; acciones `EVENT_CLOSED` | P1 | PORT-016 |
 | MAP-338 | Portal de la clienta | `/mi-evento`, `/mi-evento/[token]` (seguridad de contenido y accesibilidad) | Clienta (token) | Preferencias con HTML; axe WCAG 2.1 AA | HTML escapado en portal e invitación; 0 violaciones critical/serious | P2 | PORT-019, PORT-020, A11Y-009 |
+| MAP-523 | Portal de la clienta | `/mi-evento` antes de hidratar · `requestPortalAccessAction` | Anónimo (móvil) | Escribir el correo mientras el chunk de la página aún no llega; pulsar Enter o clic en «Enviarme mi enlace»; hidrata; enviar | Lo escrito no se borra y el enlace llega; antes de hidratar no hay envío nativo por GET: el correo nunca termina en la URL (botón deshabilitado con `aria-busy` y `method="post"`) | P1 | PORT-021, PORT-023 |
+| MAP-524 | Portal de la clienta | `/mi-evento/[token]` antes de hidratar · `sendHostMessageAction`, `updateAddressAction`, `submitReviewAction` | Clienta (token) | Con el JS retenido, escribir un mensaje, la dirección (evento sin dirección) y la opinión (evento COMPLETED); pulsar Enter o los botones; hidrata; enviar | El mensaje escrito antes de hidratar no se borra y llega al equipo; ningún formulario se envía por GET: dirección, mensaje y comentario nunca terminan en la URL; tras hidratar se guardan normal | P0 | PORT-022, PORT-024, PORT-025 |
 | MAP-339 | Invitadas y RSVP | `/admin/events/[id]/guests` · `saveGuestAction`, `deleteGuestAction` | Owner | Agregar, editar (RSVP, acompañante, dieta) y quitar invitadas | Link personal generado; resumen actualizado; auditoría `guest.rsvp_changed` / `guest.deleted`; tras la baja el link personal responde 404 | P1 | GST-001, GST-002, GST-003 |
 | MAP-340 | Invitadas y RSVP | `/admin/events/[id]/guests` · `saveGuestAction` (inválidos) | Owner | Contacto duplicado; datos inválidos; invitada de otro evento (IDOR) | Aviso confirmable `DUPLICATE_GUEST`; rechazo por campo; NOT_FOUND cruzado | P2 | GST-004, GST-005 |
 | MAP-341 | Invitadas y RSVP | `/api/events/[id]/guests.csv` | Owner · Staff · Anónimo | Exportar CSV de invitadas | Anónimo 401, Staff 403 (incluso de su evento), evento inexistente 404; Owner 200 con BOM, columnas, fórmulas neutralizadas y auditoría `guests.exported` | P0 | API-071, GST-006 |
 | MAP-342 | Invitadas y RSVP | `/admin/events/[id]/guests` · `sendRsvpRemindersAction` | Owner | Enviar recordatorios a pendientes; en evento cancelado o con micrositio apagado | RSVP_REMINDER por canal, uno por día, auditoría; bloqueado en cancelado / micrositio apagado (UI y backend) | P1 | GST-007, GST-008 |
 | MAP-343 | Invitadas y RSVP | `/admin/events/[id]/guests` · `moderateHonoreeMessageAction` | Owner | Ocultar y mostrar un mensaje para la homenajeada | `hidden` + auditoría; el conteo del portal se actualiza | P2 | GST-009 |
-| MAP-344 | Invitadas y RSVP | `/e/[slug]/[token]` (link personal) · `submitRsvpAction` | Invitada (token) | Confirmar con acompañante y restricción; declinar y cambiar con «Editar mi respuesta» | Respuesta persistida y confirmación visible; la dirección exacta sólo al confirmar; se refleja en panel y portal | P0 | GST-011, GST-012 |
+| MAP-344 | Invitadas y RSVP | `/e/[slug]/[token]` (link personal) · `submitRsvpAction` | Invitada (token) | Confirmar con acompañante y restricción; declinar y cambiar con «Editar mi respuesta»; editar sin cambiar «No podré ir» | Respuesta persistida y confirmación visible; la dirección exacta sólo al confirmar; se refleja en panel y portal; con «No podré ir» guarda aunque las notas para la cocina sigan ocultas | P0 | GST-011, GST-012, GST-027 |
 | MAP-345 | Invitadas y RSVP | `/e/[slug]/[token]` (link general) | Invitada (token) | Registrarse sola | Invitada SELF_RSVP y redirección a su link personal | P1 | GST-013 |
-| MAP-346 | Invitadas y RSVP | `/e/[slug]/[token]` (link general) | Invitada (token) | Escribir el nombre de otra invitada | No sobrescribe su respuesta ni entrega su link personal | P0 | GST-014 |
+| MAP-346 | Invitadas y RSVP | `/e/[slug]/[token]` (link general) | Invitada (token) | Escribir el nombre de otra invitada | No sobrescribe su respuesta ni entrega su link personal: crea una sola invitada `SELF_RSVP` nueva y la lleva a *su* link; los datos de la original (nombre, email, restricciones, nota y comentario) quedan intactos (`@regression` BUG-003) | P0 | GST-014 |
 | MAP-347 | Invitadas y RSVP | `/e/[slug]/[token]` (mensaje a la homenajeada) | Invitada (token) | Crear y editar el mensaje | Un mensaje HONOREE por invitada que se actualiza al editar; sorpresa (no visible en el portal) | P1 | GST-015 |
 | MAP-348 | Invitadas y RSVP | `/e/[slug]/[token]/calendar.ics` | Invitada (token) | Descargar el .ics | `text/calendar` con el evento; dirección sólo si confirmó; 404 si el evento está cancelado o el token es ajeno, rotado o inválido | P1 | GST-016, PERM-171 |
 | MAP-349 | Invitadas y RSVP | `/e/[slug]/[token]` (privacidad) | Invitada (token) | Revisar el HTML | Sin dirección exacta antes de confirmar, sin datos de otras invitadas; correo enmascarado | P1 | GST-018 |
-| MAP-350 | Invitadas y RSVP | `/e/[slug]/[token]` (validaciones y límite) | Invitada (token) | Envíos inválidos; registro número 61 con el link general | Errores de campo (formulario y backend); `GUEST_LIMIT` en 60 | P2 | GST-019, GST-021 |
+| MAP-350 | Invitadas y RSVP | `/e/[slug]/[token]` (validaciones y límites) · `submitRsvpAction` | Invitada (token) | Envíos inválidos; registro número 61 con el link general; 11 respuestas por el link general desde la misma IP en 10 min | Errores de campo (formulario y backend); `GUEST_LIMIT` en 60; la 11.ª responde `RATE_LIMITED` y no crea invitada (suite `ratelimit`) | P2 | GST-019, GST-021, GST-024 |
 | MAP-351 | Invitadas y RSVP | `/e/[slug]/[token]` (evento cerrado) | Invitada (token) | Responder en evento COMPLETED o CANCELLED | `RSVP_CLOSED` / `EVENT_CANCELLED` (UI y backend) | P1 | GST-020 |
 | MAP-352 | Invitadas y RSVP | `/e/[slug]/[token]` (invitación sembrada de Sofía / Camila) | Invitada (token) | Abrir la invitación general y el RSVP personal | Micrositio correcto y RSVP personal prellenado | P0 | SMK-033, GST-022 |
+| MAP-525 | Invitadas y RSVP | `/e/[slug]/[token]` (link general) · `submitRsvpAction` → `/admin/events/[id]/guests`, `/mi-evento/[token]` | Invitada (token) → Owner · Clienta (token) | Responder (replay) con el nombre de otra invitada y, aparte, con su email | El link general pide a quien ya tiene link personal que responda desde ahí. La original no cambia y su token nunca aparece en la respuesta; se crean 2 `SELF_RSVP` con su propio link; 2 auditorías `guest.possible_duplicate` con `matchedGuestIds`; en el panel y en el portal las 2 nuevas dicen «Posible duplicado» y «Coincide con «…»», y la original no lleva la marca (`@regression` BUG-003) | P1 | GST-023 |
+| MAP-526 | Invitadas y RSVP | `/mi-evento/[token]` → `/e/[slug]/[token]` (link general) → `/admin/events/[id]/guests` | Clienta (token) → Invitada (token) → Owner | La anfitriona agrega a una amiga (pendiente); la amiga responde por el link general; la anfitriona quita el registro pendiente | El portal sugiere quitar el registro pendiente (no «escríbenos») y el panel muestra con quién coincide; al quitar el pendiente desaparece la marca | P2 | GST-025 |
+| MAP-527 | Invitadas y RSVP | `/e/[slug]/[token]` antes de hidratar · `submitRsvpAction` | Invitada (token, móvil) | Con el JS de la página retenido, escribir nombre y correo; pulsar Enter o «Enviar mi respuesta»; hidrata; «¡Sí, ahí estaré!» y enviar | Lo escrito no se borra y se guarda con su respuesta; antes de hidratar no hay envío nativo por GET: nombre y correo nunca terminan en la URL | P0 | GST-026, GST-028 |
 | MAP-353 | Invitadas y RSVP | `/e/[slug]/[token]` (accesibilidad) | Invitada (token) | axe; elegir respuesta sólo con teclado | 0 violaciones critical/serious; radios con Espacio/flechas, foco visible, labels asociados | P1 | A11Y-010, A11Y-022 |
 | MAP-354 | Invitadas y RSVP | Anfitriona → invitada → panel: `/mi-evento/[token]` → `/e/[slug]/[token]` → `/admin/events/[id]/guests` | Clienta (token, móvil) → Invitada (token, móvil) → Owner | La anfitriona agrega una invitada; la invitada confirma; la fundadora y la anfitriona revisan | Toast «Agregamos a…»; `EventGuest` HOST/PENDING; «¡Gracias…! Te esperamos»; ATTENDING + `respondedAt` sin duplicados; panel «Asiste»; portal «Asiste» | P0 | CRIT-004 |
 | MAP-355 | Memory Capsule | `/admin/events/[id]/memory` · `createCapsuleAction`, `updateCapsuleAction` | Owner | Crear la cápsula (en preparación) y publicarla; cápsula duplicada, título corto o inexistente | En preparación: enlace con aviso y sin fotos; publicada: título y mensaje públicos; auditoría; inválidas rechazadas en el backend | P1 | MEM-001, MEM-002, MEM-003 |
@@ -438,6 +460,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-366 | Memory Capsule | `/memory/[token]` (aislamiento) | Anónimo | Revisar la galería pública; token inválido | Sólo lo aprobado y visible; token inválido 404 | P1 | MEM-017 |
 | MAP-367 | Memory Capsule | `/memory/[token]` (accesibilidad) | Invitada (token) | axe WCAG 2.1 AA | 0 violaciones critical/serious | P2 | MEM-019, A11Y-011 |
 | MAP-368 | Memory Capsule | Flag `MEMORY_CAPSULE_ENABLED=false` (global) | Anónimo · Owner · Clienta (token) | Abrir la cápsula, subir, escribir en el libro, abrir el panel y el portal | Aviso amable; 404 / NOT_FOUND; alerta en el panel; sin enlace en el portal | P1 | MEM-020 |
+| MAP-528 | Memory Capsule | `/memory/[token]` antes de hidratar (libro de visitas y subida de fotos) | Invitada (token, móvil) | Con el chunk de la página retenido, escribir nombre y mensaje; hidrata; enviar y preparar la subida | Lo escrito no se borra; la subida se habilita y el mensaje queda en la base. En WebKit es NOT APPLICABLE (no revela el contenido en streaming mientras falta un script); CRIT-008 cubre WebKit de punta a punta | P0 | MEM-021 |
 | MAP-369 | Memory Capsule | Cápsula de punta a punta: `/memory/[token]` → `/admin/events/[id]/memory` → `/memory/[token]` | Invitada (token, móvil) → Owner → Anónimo | Mensaje + foto con consentimiento; la fundadora aprueba; el público recarga | Mensaje visible; `MediaAsset` PRIVATE `approved=false` con autora; la foto no se ve antes de moderar; «Foto aprobada» → `approved=true`; galería pública con 1 foto cargada (alt con la autora) | P0 | CRIT-008 |
 | MAP-370 | Operaciones | `/admin/operations` | Owner | Abrir el tablero y entrar a una orden de producción | Eventos de los próximos 14 días con enlace a su orden de producción | P1 | OPS-001 |
 | MAP-371 | Operaciones | `/admin/operations` (tareas vencidas) | Owner | Revisar tareas vencidas | Aparecen en el tablero con enlace al checklist del evento | P2 | OPS-021 |
@@ -485,15 +508,15 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-413 | Portal staff | `/staff/events/[id]` · `resetStaffPasswordAction`, `setStaffAccessActiveAction`, `createStaffAccessAction`, `createStaffMemberAction`, `updateStaffMemberAction`, `deleteStaffMemberAction` | Staff | Ejecutar cada acción de administración desde el portal | FORBIDDEN y sin cambios | P0 | PERM-121, PERM-122, PERM-123, PERM-124, PERM-125, PERM-126 |
 | MAP-414 | Portal staff | `/staff/events/[id]` (control positivo) | Owner | Ejecutar la misma acción con OWNER | Se ejecuta (la protección es por permiso) | P2 | PERM-127 |
 | MAP-415 | Portal staff | `/staff`, `/staff/events/[id]` (responsive) | Staff | 390×844, 768×1024, 1366×768, 1440×900 | Sin scroll horizontal; tarjeta de evento usable y CTA visible | P1 | STF-011, RESP-020 |
-| MAP-416 | Portal staff | `/staff`, `/staff/events/[id]` (accesibilidad) | Staff | axe WCAG 2.1 AA | 0 violaciones critical/serious en lista y detalle con checklist | P2 | STF-024, A11Y-016 |
+| MAP-416 | Portal staff | `/staff`, `/staff/events/[id]` (accesibilidad) | Staff | axe WCAG 2.1 AA; «Agregar nota» y «Cancelar» sólo con teclado | 0 violaciones critical/serious en lista y detalle con checklist; «Agregar nota» lleva el foco al campo (sin `aria-controls` roto) y «Cancelar» lo regresa al botón sin guardar (`@regression` BUG-011) | P2 | STF-024, A11Y-016, STF-025 |
 | MAP-417 | Equipo (staff) | `/admin/staff` | Owner | Buscar y filtrar por estado | Muestra al equipo y filtra por nombre y estado | P1 | STF-012 |
 | MAP-418 | Equipo (staff) | `/admin/staff/new` · `createStaffMemberAction` | Owner | «Agregar al equipo» | Guarda tarifa en centavos, días y función; auditoría | P1 | STF-013 |
 | MAP-419 | Equipo (staff) | `/admin/staff/new` (validaciones) | Owner | Nombre, teléfono o correo inválidos | Errores de campo; sin registro | P2 | STF-014 |
 | MAP-420 | Equipo (staff) | `/admin/staff/[id]` · `updateStaffMemberAction` | Owner | Editar tarifa y tipo; desactivar; luego asignar en un evento | Persiste; desactivado deja de ofrecerse al asignar | P1 | STF-015 |
-| MAP-421 | Equipo (staff) | `/admin/staff/[id]` · `deleteStaffMemberAction` | Owner | Eliminar integrante sin historial; replay con uno con asignaciones | Sin historial: se borra y se audita; con historial: botón oculto y backend CONFLICT | P1 | STF-016, STF-017 |
+| MAP-421 | Equipo (staff) | `/admin/staff/[id]` · `deleteStaffMemberAction` | Owner | Eliminar integrante sin historial; replay con uno con asignaciones | Sin historial: se borra y se audita; con historial: botón oculto y backend CONFLICT. Con una ficha ligada a una cuenta, eliminarla desactiva y revoca esa cuenta y aplica las reglas de Usuarios: una OWNER recibe FORBIDDEN sobre una SUPER_ADMIN y CONFLICT sobre sí misma, sin borrar nada; no se ofrece sobre la propia ficha (integración `operations-staff.test.ts`, sin ID E2E) | P1 | STF-016, STF-017 |
 | MAP-422 | Equipo (staff) | `/admin/staff/[id]` · `createStaffAccessAction` → `/login` → `/staff` | Owner → Staff | «Crear acceso» y entrar con la cuenta nueva | Cuenta STAFF ligada a la ficha que inicia sesión en `/staff` | P0 | STF-018 |
 | MAP-423 | Equipo (staff) | `createStaffAccessAction` (correo existente) | Owner | Crear acceso con el correo de Lupita | Rechazado: el correo ya tiene cuenta | P1 | STF-019 |
-| MAP-424 | Equipo (staff) | `/admin/staff/[id]` · `resetStaffPasswordAction` | Owner → Staff | Restablecer contraseña; probar la vieja y la nueva | La anterior deja de servir y la nueva entra | P1 | STF-020 |
+| MAP-424 | Equipo (staff) | `/admin/staff/[id]` · `resetStaffPasswordAction` | Owner → Staff | Restablecer contraseña; probar la vieja y la nueva | La anterior deja de servir y la nueva entra; las sesiones abiertas de esa cuenta se cierran (ver MAP-510 y MAP-511) | P1 | STF-020 |
 | MAP-425 | Inventario | `/admin/inventory?q=` | Owner | Listar y buscar por SKU | Artículos con indicadores; la búsqueda filtra; el artículo activo sembrado aparece | P1 | INV-001, SMK-026 |
 | MAP-426 | Inventario | `/admin/inventory` (filtros en el cliente) | Owner | Escribir en «Buscar» y activar «Incluir inactivos» | La URL y la lista se actualizan sin recargar | P1 | INV-025 |
 | MAP-427 | Inventario | `/admin/inventory` · `createInventoryItemAction` | Owner | «Nuevo artículo» | SKU en mayúsculas, movimiento de alta y auditoría; aparece al recargar | P1 | INV-002 |
@@ -569,7 +592,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-497 | Ajustes y usuarios | `/admin/settings/users` · `createUserAction` → `/staff` | SuperAdmin | Nueva usuaria Staff vinculada a su ficha e iniciar sesión | Ve su portal staff | P1 | SET-022 |
 | MAP-498 | Ajustes y usuarios | `/admin/settings/users` · `changeUserRoleAction` | SuperAdmin | Cambiar rol Staff → Fundadora | Persiste y queda auditado | P1 | SET-014 |
 | MAP-499 | Ajustes y usuarios | `/admin/settings/users` · `setUserActiveAction` | SuperAdmin | Desactivar → login falla → reactivar → login ok | El login refleja el estado; cambios auditados | P0 | SET-015 |
-| MAP-500 | Ajustes y usuarios | `/admin/settings/users` · `resetUserPasswordAction` | SuperAdmin | Restablecer contraseña | Invalida la anterior; la contraseña no se guarda en la auditoría | P1 | SET-016 |
+| MAP-500 | Ajustes y usuarios | `/admin/settings/users` · `resetUserPasswordAction` | SuperAdmin | Restablecer contraseña | Invalida la anterior y cierra las sesiones abiertas de la cuenta (ver MAP-510); la contraseña no se guarda en la auditoría | P1 | SET-016 |
 | MAP-501 | Ajustes y usuarios | `/admin/settings/users` (validaciones) | SuperAdmin | Correo existente; contraseña que contiene el correo | No se crean cuentas duplicadas ni con esa contraseña | P2 | SET-017 |
 | MAP-502 | Ajustes y usuarios | `/admin/settings/users` (fila «(tú)») | SuperAdmin | Intentar cambiar el propio rol o desactivarse | No se permite desde la lista | P2 | SET-018 |
 | MAP-503 | Ajustes y usuarios | `/admin/settings/audit` (`?entityId=<user>`) | SuperAdmin | Revisar la bitácora tras acciones sensibles; parámetros basura | Aparecen con actor, diff y filtros; filtros inválidos se ignoran sin romper la página | P1 | SET-019, SET-020 |
@@ -579,6 +602,8 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-507 | Transversal (responsive y accesibilidad) | Landmarks (público y panel) | Anónimo · Owner | Revisar la estructura | banner, nav, main y footer en público; main y nav en el panel; `lang="es"` | P2 | A11Y-025 |
 | MAP-508 | Transversal (responsive y accesibilidad) | Imágenes (sitio público) | Anónimo | Buscar `<img>` sin alt | Ninguna (o marcada como decorativa) | P2 | A11Y-026 |
 | MAP-509 | Transversal (responsive y accesibilidad) | `prefers-reduced-motion` | Anónimo | Emular reduce | Animaciones y transiciones ≤ 1 ms | P2 | A11Y-027 |
+
+¹ **NAV-034 está duplicado en el código.** Dos pruebas distintas usan el mismo ID: `tests/e2e/navigation/not-found.spec.ts` (404 real, MAP-515, agregada en `4a7a780`) y `tests/e2e/navigation/hydration.spec.ts` (hidratación de `/pago/mock`, MAP-516, agregada en `a3309b7`). Ambas pasan en la regresión final. Hay que renombrar una, por ejemplo la de hidratación a NAV-037, en `tests/e2e`; mientras tanto, en este mapa NAV-034 cuenta como un solo ID y dos pruebas.
 
 ## Recorridos críticos (P0)
 
@@ -743,12 +768,12 @@ Los 14 recorridos críticos se automatizan en `tests/e2e/critical/*.spec.ts` (Ch
 
 **Roles:** Owner · **Ruta:** `/login` → `/admin` → «Cerrar sesión» · **Fila principal:** MAP-020 · **Filas relacionadas:** MAP-002, MAP-022
 
-**Precondiciones:** Cuenta `ivonne@ivonne-rosa.test` activa.
+**Precondiciones:** Cuenta OWNER propia de la prueba (`createBackofficeUser`). Desde BUG-001/BUG-004, cerrar sesión revoca todas las sesiones de la cuenta, así que no se usa la cuenta DEMO compartida `ivonne@`.
 
 **Pasos**
 
 1. Iniciar sesión en `/login`.
-2. Comprobar el inicio «Hola, Ivonne».
+2. Comprobar el inicio «Hola, <nombre>» y que `lastLoginAt` se actualizó.
 3. Hacer un request directo a una ruta privada con la cookie: 200.
 4. Pulsar «Cerrar sesión».
 5. Abrir una URL privada en el navegador.
@@ -776,12 +801,12 @@ Los 14 recorridos críticos se automatizan en `tests/e2e/critical/*.spec.ts` (Ch
 
 **Roles:** SuperAdmin · **Ruta:** `/login` → `/admin` → «Cerrar sesión» · **Fila principal:** MAP-020 · **Filas relacionadas:** MAP-001
 
-**Precondiciones:** Cuenta `superadmin@ivonne-rosa.test` activa.
+**Precondiciones:** Cuenta SUPER_ADMIN propia de la prueba (`createBackofficeUser`), no la DEMO `superadmin@`, porque el logout revoca todas las sesiones de la cuenta.
 
 **Pasos**
 
 1. Iniciar sesión en `/login`.
-2. Comprobar el inicio «Hola, Admin».
+2. Comprobar el inicio «Hola, <nombre>».
 3. Hacer un request directo a una ruta privada con la cookie: 200.
 4. Pulsar «Cerrar sesión».
 5. Abrir una URL privada y repetir el request directo.
@@ -793,17 +818,17 @@ Los 14 recorridos críticos se automatizan en `tests/e2e/critical/*.spec.ts` (Ch
 
 **Roles:** Staff (móvil) · **Ruta:** `/login` → `/staff` → `/admin/finance` → «Cerrar sesión» → `/staff` · **Fila principal:** MAP-030 · **Filas relacionadas:** MAP-003, MAP-040
 
-**Precondiciones:** Cuenta `staff@ivonne-rosa.test` activa.
+**Precondiciones:** Cuenta STAFF propia de la prueba (`createStaffUser`) con un evento asignado. Su tarjeta en `/staff` dispara el prefetch RSC que, en vuelo durante el logout, revivía la sesión: era la reproducción natural de BUG-001.
 
 **Pasos**
 
-1. Iniciar sesión en `/login` desde el celular: llega a `/staff`.
+1. Iniciar sesión en `/login` desde el celular: llega a `/staff` y ve su evento asignado.
 2. Abrir `/admin/finance` en el navegador.
 3. Hacer el request directo a `/admin/finance` con la cookie.
 4. Pulsar «Cerrar sesión».
 5. Abrir `/staff`.
 
-**Verificación:** `/admin*` → `/staff` en la UI y 3xx a `/staff` en el request; tras el logout `/staff` pide login.
+**Verificación:** `/admin*` → `/staff` en la UI y 3xx a `/staff` en el request; tras el logout `/staff` pide login (`/login?callbackUrl=%2Fstaff`). Lleva `@regression` BUG-001; en la regresión final pasa en los 4 proyectos.
 
 ### CRIT-013 — callbackUrl: regreso a la ruta privada sin salir del dominio
 
@@ -823,7 +848,7 @@ Los 14 recorridos críticos se automatizan en `tests/e2e/critical/*.spec.ts` (Ch
 
 **Roles:** Staff · **Ruta:** `/staff` (2 pestañas) → «Cerrar sesión» → `/staff` · **Fila principal:** MAP-026 · **Filas relacionadas:** MAP-020
 
-**Precondiciones:** Sesión de staff abierta en dos pestañas.
+**Precondiciones:** Sesión de una cuenta STAFF propia de la prueba (`createStaffUser`) abierta en dos pestañas. No se usa la DEMO compartida, porque el logout revoca todas las sesiones de la cuenta.
 
 **Pasos**
 
@@ -833,4 +858,4 @@ Los 14 recorridos críticos se automatizan en `tests/e2e/critical/*.spec.ts` (Ch
 4. Dejar que llegue la respuesta de la pestaña B.
 5. Abrir `/staff`.
 
-**Verificación:** Ninguna respuesta posterior al logout vuelve a escribir la cookie `authjs.session-token`; `/staff` exige login (regresión del hallazgo TRV-BUG-06).
+**Verificación:** El servidor ya no re-emite la cookie en una respuesta autenticada con JWT reciente; antes, la precondición del bug era que sí la re-emitía. Ninguna respuesta posterior al logout vuelve a escribir la cookie `authjs.session-token` y `/staff` exige login. Defensa en profundidad: aunque se restaure a mano la cookie anterior al logout, `/staff` sigue pidiendo login, porque la sesión está revocada en el servidor. Lleva `@regression` BUG-001 (TRV-BUG-06 / ACC-BUG-01); en la regresión final pasa en Chromium, Firefox y WebKit.

@@ -53,12 +53,16 @@ src/components/ ui (shadcn), layout, feedback, data, forms, media, admin, staff,
 - Notificaciones: `notify(...)` / `notifyCustomer(...)` de `@/features/notifications/server/notification-service` (siempre deja `NotificationLog`; en dev es el "mock inbox").
 - Analytics internos: `track("VIEW_EXPERIENCE" | ...)` de `@/server/analytics` (nunca lanza).
 - Proveedores (pagos, email, WhatsApp, IA, storage): `@/server/providers` (`getPaymentProvider()`, etc.). Deep links WhatsApp: `whatsappLink(phone, text)`.
+- **Sesiones**: revocar = `...REVOKE_ALL_SESSIONS` (incrementa `User.sessionVersion`; `@/features/auth/server/session-service`) en el mismo `update` que la causa (contraseña, desactivar, rol); `getCurrentUser` la compara en cada request. Logout con `signOut()` de next-auth/react (nunca una Server Action): `events.signOut` revoca todas las sesiones de la cuenta. Sólo el middleware re-emite la cookie de sesión (GET con JWT ≥ `updateAge`).
 
 ## UI / UX
 - Público y portales: mobile-first, editorial, cálido (paleta ivory/sand/sage/olive/taupe/charcoal en `globals.css`: clases `bg-ivory`, `text-olive`, `bg-sand-soft`, `bg-sage-soft`, `text-taupe`, `font-heading`). Sin degradados excesivos ni estética SaaS genérica. CTA principal único por pantalla (`<Button size="xl">`).
 - Admin: dashboard profesional, denso pero claro, misma paleta (nada de azules genéricos).
 - Componentes compartidos: `PageHeader`, `Section` (`@/components/layout/page-header`), `EmptyState`, `PageSkeleton`, `CardsSkeleton`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `CopyButton`, `Field`, `FormError`, `SubmitButton`, `Logo`.
 - Cada ruta: estados vacío / carga (`loading.tsx`) / error (`error.tsx` o manejo inline). Toasts con sonner.
+- **Formularios públicos / por token** (llegan en el HTML del servidor): `<SubmitButton waitForHydration>` y `<form method="post">` sin `action` + `<NoScriptNotice />` (si no, antes de hidratar se envían por GET con datos personales en la URL); `useForm` sin `defaultValues` de cadena vacía en campos de texto (borran lo escrito antes de hidratar; los valores guardados van como `defaultValue` del campo).
+- **Layout con `error.tsx` en su carpeta** que pinta `children` dentro de un elemento HTML (`<main>`, `<div>`, `AdminShell`): envolver `children` en `<SegmentChildren>` (`@/components/layout/segment-children`). Sin él, Firefox falla la hidratación (React #418).
+- **Navegación (BUG-006)**: no quitar, rodear ni duplicar el navigation guard (`src/instrumentation-client.ts`, `@/components/navigation/navigation-guard`, `@/lib/rsc-response-buffer`, `@/lib/navigation-guard`), ni envolver `window.fetch` por otro lado, sin leer su criterio de retiro en `src/lib/rsc-response-buffer.ts` (Next ≥ 16.3.0). Un `console.error("[navegación] …")` es una regresión, no ruido.
 - Accesibilidad: landmarks, labels asociados (`<Field>`), foco visible, navegable con teclado, `aria-*`, contraste AA, respeta reduced-motion. Imágenes con `next/image` y `alt`.
 - Responsive verificado en 375, 390, 768, 1024 y 1440 px.
 
