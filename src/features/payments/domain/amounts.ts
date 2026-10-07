@@ -86,6 +86,28 @@ export function isReusablePendingCheckout(
   );
 }
 
+/**
+ * Un pago PENDING de checkout SIN checkoutUrl es el lugar que reservó una solicitud de checkout antes de
+ * pedirle la sesión a la pasarela (startCheckout la pide fuera de la transacción, sin retener el candado):
+ *  - "opening": mismo tipo, monto y proveedor, dentro de `openingWindowMs` → otra solicitud está abriendo
+ *    esa misma sesión: hay que esperar su checkoutUrl y reutilizarlo (nunca abrir un segundo cobro).
+ *  - "abandoned": lleva `openingWindowMs` o más sin URL (la solicitud murió a la mitad) → se da por fallido.
+ *  - null: no aplica (ya tiene URL, no está PENDING, no es de checkout, u otro tipo/monto/proveedor vigente).
+ */
+export function checkoutOpeningState(
+  payment: { kind: string; status: string; amountCents: number; provider: string; checkoutUrl: string | null; createdAt: Date },
+  wanted: { kind: CheckoutKind; amountCents: number; provider: string },
+  now: Date,
+  openingWindowMs: number,
+): "opening" | "abandoned" | null {
+  if (payment.status !== "PENDING" || payment.checkoutUrl) return null;
+  if (!(CHECKOUT_KINDS as readonly string[]).includes(payment.kind)) return null;
+  if (now.getTime() - payment.createdAt.getTime() >= openingWindowMs) return "abandoned";
+  return payment.kind === wanted.kind && payment.amountCents === wanted.amountCents && payment.provider === wanted.provider
+    ? "opening"
+    : null;
+}
+
 /** Datos mínimos para saber si una reserva sigue viva (la cancelación vive en la reserva y en su evento). */
 export type BookingCancellation = { cancelledAt: Date | null; event: { status: string } };
 
