@@ -76,6 +76,13 @@ function regularProjects() {
             dependencies: ["setup"],
             testIgnore,
             grep: /@P0/,
+            // Un Firefox a la vez (E2E_FIREFOX_WORKERS para cambiarlo). En esta máquina (Windows 11), con varias
+            // páginas de Firefox abiertas a la vez, todas se congelan juntas de 6 a 270 s: sin frames, sin red y las
+            // llamadas de Playwright detenidas. Se reproduce sin la app (página mínima servida por un http de Node),
+            // en localhost y en 127.0.0.1, con y sin traza/video; con una sola página no apareció en 4,900 llamadas.
+            // ENVIRONMENT ISSUE, no de la app. Medido con EVT-005/017, PUR-002/005, STF-003 y SET-015 ×8: con dos
+            // Firefox fallaron 22/48 (11 congelamientos, dos pruebas a la vez); con uno, 3/48 (los 3, congelamientos).
+            workers: Number(process.env.E2E_FIREFOX_WORKERS ?? 1),
             use: {
               ...desktop("Desktop Firefox"),
               ...(process.env.E2E_FIREFOX_EXECUTABLE ? { launchOptions: { executablePath: process.env.E2E_FIREFOX_EXECUTABLE } } : {}),
