@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Check, type LucideIcon } from "lucide-react";
+import { usePaintedId } from "@/components/forms/use-painted-id";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,7 +24,7 @@ function ChipFrame({
   required,
   children,
   className,
-  id,
+  id: generatedId,
 }: {
   legend: React.ReactNode;
   description?: React.ReactNode;
@@ -33,6 +34,10 @@ function ChipFrame({
   className?: string;
   id: string;
 }) {
+  const descRef = React.useRef<HTMLParagraphElement>(null);
+  // Adopta el id con que el servidor pintó la descripción (ver usePaintedId, EVT-005): al aparecer el error, el
+  // aria-describedby se reescribe y debe seguir apuntando a ella.
+  const id = usePaintedId(generatedId, descRef, { suffix: "-desc" });
   return (
     <fieldset
       className={cn("min-w-0 space-y-2.5", className)}
@@ -49,7 +54,7 @@ function ChipFrame({
         ) : null}
       </legend>
       {description ? (
-        <p id={`${id}-desc`} className="text-muted-foreground -mt-1 text-xs">
+        <p ref={descRef} id={`${id}-desc`} className="text-muted-foreground -mt-1 text-xs">
           {description}
         </p>
       ) : null}

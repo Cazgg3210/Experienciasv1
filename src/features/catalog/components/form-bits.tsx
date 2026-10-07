@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { usePaintedId } from "@/components/forms/use-painted-id";
 import { cn } from "@/lib/utils";
 import { moveItem, splitListInput } from "../domain/catalog-rules";
 
@@ -60,7 +61,10 @@ export function FieldGroup({
   children: React.ReactNode;
   className?: string;
 }) {
-  const id = React.useId();
+  const descRef = React.useRef<HTMLParagraphElement>(null);
+  // Adopta el id con que el servidor pintó la descripción (ver usePaintedId, EVT-005): al aparecer el error, el
+  // aria-describedby se reescribe y debe seguir apuntando a ella.
+  const id = usePaintedId(React.useId(), descRef, { suffix: "-d" });
   return (
     <fieldset
       className={cn("space-y-2", className)}
@@ -68,7 +72,7 @@ export function FieldGroup({
     >
       <legend className="mb-1.5 text-sm font-medium">{legend}</legend>
       {description ? (
-        <p id={`${id}-d`} className="text-muted-foreground -mt-1 text-xs">
+        <p ref={descRef} id={`${id}-d`} className="text-muted-foreground -mt-1 text-xs">
           {description}
         </p>
       ) : null}

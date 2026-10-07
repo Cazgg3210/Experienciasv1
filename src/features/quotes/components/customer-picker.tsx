@@ -4,6 +4,7 @@ import * as React from "react";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { usePaintedId } from "@/components/forms/use-painted-id";
 import { cn } from "@/lib/utils";
 import { searchCustomersAction } from "../server/actions";
 
@@ -29,7 +30,10 @@ export function CustomerPicker({
   const [error, setError] = React.useState<string | null>(null);
   const [active, setActive] = React.useState(-1);
   const reqId = React.useRef(0);
-  const listId = React.useId();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  // Adopta el id de la lista con que el servidor pintó el combobox (ver usePaintedId, EVT-005): la lista y sus
+  // opciones se montan después, en el cliente, y aria-controls / aria-activedescendant deben apuntar a ellas.
+  const listId = usePaintedId(React.useId(), inputRef, { attr: "aria-controls" });
 
   React.useEffect(() => {
     const term = q.trim();
@@ -89,6 +93,7 @@ export function CustomerPicker({
     <div className="relative">
       <Search className="text-muted-foreground pointer-events-none absolute top-[18px] left-2.5 size-4 -translate-y-1/2" aria-hidden />
       <Input
+        ref={inputRef}
         id={inputId}
         role="combobox"
         aria-expanded={results.length > 0}

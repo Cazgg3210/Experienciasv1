@@ -12,6 +12,7 @@ import { Field } from "@/components/forms/field";
 import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
+import { usePaintedId } from "@/components/forms/use-painted-id";
 import { cn } from "@/lib/utils";
 import { reviewFormSchema, type ReviewFormValues } from "../schemas";
 import { submitReviewAction } from "../server/actions";
@@ -149,7 +150,10 @@ function NpsScale({
   onChange: (v: number | null) => void;
   error?: string;
 }) {
-  const name = React.useId();
+  const hintRef = React.useRef<HTMLParagraphElement>(null);
+  // Adopta el id con que el servidor pintó la pista (ver usePaintedId, EVT-005): al quitarse el error, el
+  // aria-describedby vuelve a la pista y debe apuntar a ella.
+  const name = usePaintedId(React.useId(), hintRef, { suffix: "-hint" });
   return (
     <fieldset aria-describedby={error ? `${name}-err` : `${name}-hint`}>
       <legend className="mb-2 text-sm font-medium">
@@ -176,7 +180,7 @@ function NpsScale({
           </label>
         ))}
       </div>
-      <p id={`${name}-hint`} className="text-muted-foreground mt-1.5 flex justify-between text-xs">
+      <p ref={hintRef} id={`${name}-hint`} className="text-muted-foreground mt-1.5 flex justify-between text-xs">
         <span>0 = nada probable</span>
         <span>10 = muy probable</span>
       </p>

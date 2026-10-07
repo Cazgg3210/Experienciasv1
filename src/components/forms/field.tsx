@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { usePaintedId } from "./use-painted-id";
 
 /**
  * Campo de formulario accesible: label asociado, descripción y error con aria-describedby.
@@ -34,13 +35,16 @@ export function Field({
   }) => React.ReactNode;
 }) {
   const autoId = React.useId();
-  const id = idProp ?? autoId;
+  const labelRef = React.useRef<HTMLLabelElement>(null);
+  // Adopta el id con que el servidor pintó la etiqueta si difiere del de useId al hidratar (EVT-005): si no, al
+  // aparecer el error la descripción quedaría fuera de aria-describedby, o un input nuevo quedaría sin etiqueta.
+  const id = usePaintedId(idProp ?? autoId, labelRef, { attr: "for" });
   const descId = description ? `${id}-desc` : undefined;
   const errId = error ? `${id}-err` : undefined;
   const describedBy = [descId, errId].filter(Boolean).join(" ") || undefined;
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label htmlFor={id} className="text-sm font-medium">
+      <Label ref={labelRef} htmlFor={id} className="text-sm font-medium">
         {label}
         {required ? (
           <span className="text-destructive ml-0.5" aria-hidden>

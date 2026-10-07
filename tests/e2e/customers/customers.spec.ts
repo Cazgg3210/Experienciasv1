@@ -4,6 +4,8 @@
  * El seed DEMO sólo se lee (Sofía Navarro); las mutaciones usan clientas propias con nombres únicos.
  */
 import { ACCOUNTS, createCustomer, createLead, expect, test, uniq, uniqEmail, uniqPhone } from "../fixtures";
+import { holdPageChunk } from "../events/_helpers";
+import { ready } from "../operations/_helpers";
 import { callAction, createQuoteViaAction, followLink, gotoReady } from "../quotes/_helpers";
 
 test.describe("Clientas · listado y búsqueda", { tag: ["@module:customers"] }, () => {
@@ -149,6 +151,49 @@ test.describe("Clientas · ficha y edición", { tag: ["@module:customers"] }, ()
     await expect(page.getByRole("heading", { level: 1, name: newName })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Instagram" })).toHaveValue("@sofi.brunch");
     await expect(page.getByRole("switch", { name: "Acepta novedades y promociones" })).toBeChecked();
+  });
+
+  test("[CUST-017] un campo con descripción conserva descripción y error aunque los ids del HTML y de React difieran", { tag: ["@P2", "@regression", "@a11y"] }, async ({ rolePage, db, evidence }) => {
+    evidence("owner", "Ficha de clienta (ids pintados por el servidor ≠ ids de useId en el cliente) › WhatsApp inválido › Guardar perfil");
+    test.info().annotations.push({ type: "regression", description: "EVT-005 (Firefox): useId del cliente ≠ ids del HTML; <Field> perdía la descripción al mostrar un error" });
+    const c = await createCustomer(db, { name: uniq("Ids") });
+    const page = await rolePage("owner");
+    // En Firefox, cuando la hidratación se reparte en varias pasadas, useId calcula en el cliente otros ids que los
+    // del HTML (EVT-005) y React no reescribe atributos ya pintados. Se reproduce de forma determinista: con el chunk
+    // de la página retenido (React aún no hidrata el formulario) se cambian los ids que pintó el servidor.
+    const held = await holdPageChunk(page, "(admin)/admin/customers/[id]");
+    await page.goto(`/admin/customers/${c.id}`, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    const whatsapp = page.getByRole("textbox", { name: "WhatsApp" });
+    await expect(whatsapp).toHaveAccessibleDescription("Si es distinto al teléfono.");
+    const rewritten = await page.evaluate(() => {
+      let n = 0;
+      for (const el of Array.from(document.querySelectorAll("main *"))) {
+        for (const attr of ["id", "for", "aria-describedby", "aria-labelledby", "aria-controls"]) {
+          const v = el.getAttribute(attr);
+          if (v?.includes("_R_")) {
+            el.setAttribute(attr, v.replaceAll("_R_", "_S_"));
+            n++;
+          }
+        }
+      }
+      return n;
+    });
+    expect(rewritten, "ids de useId pintados por el servidor en la ficha").toBeGreaterThan(0);
+    held.release();
+    const save = await ready(page.getByRole("button", { name: "Guardar perfil" }));
+    await whatsapp.fill("123");
+    await save.click();
+    const error = "Escribe un número de 10 dígitos (puedes incluir lada +52)";
+    await expect(page.getByRole("alert").filter({ hasText: error })).toBeVisible();
+    // aria-describedby apunta a la descripción Y al error (si apuntara a ids que no están en el DOM, se perdería uno).
+    await expect(whatsapp).toHaveAccessibleName("WhatsApp");
+    await expect(whatsapp).toHaveAccessibleDescription(`Si es distinto al teléfono. ${error}`);
+    await expect(whatsapp).toHaveAttribute("aria-invalid", "true");
+    // La etiqueta sigue llevando el foco a su campo.
+    await page.locator("label", { hasText: /^WhatsApp$/ }).click();
+    await expect(whatsapp).toBeFocused();
+    expect((await db.customer.findUniqueOrThrow({ where: { id: c.id } })).whatsapp, "el error de validación no guardó nada").toBeNull();
   });
 
   test("[CUST-007] no se permite usar el correo de otra clienta (aunque cambie mayúsculas)", { tag: ["@P1", "@negative"] }, async ({ rolePage, db, evidence }) => {
