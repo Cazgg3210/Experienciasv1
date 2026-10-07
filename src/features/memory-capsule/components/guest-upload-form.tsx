@@ -22,7 +22,9 @@ export function GuestUploadForm({ token }: { token: string }) {
   const form = useForm<GuestUploadFormValues>({
     resolver: zodResolver(guestUploadFormSchema),
     mode: "onChange",
-    defaultValues: { name: "", consent: false },
+    // Sin `name` en defaultValues: al registrarlo, react-hook-form toma lo que ya hay en el DOM (lo escrito
+    // antes de hidratar). Con "" lo vaciaría.
+    defaultValues: { consent: false },
   });
   const values = form.watch();
   const ready = guestUploadFormSchema.safeParse(values).success;

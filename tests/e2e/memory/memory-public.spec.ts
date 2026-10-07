@@ -41,6 +41,59 @@ test.describe("Memory Capsule · pública", { tag: ["@module:memory"] }, () => {
     await expect(owner.getByText(body)).toBeVisible();
   });
 
+  test("[MEM-021] lo que la invitada escribe antes de que la página hidrate no se borra (libro de visitas y subida de fotos)", { tag: ["@P0", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
+    // WebKit no revela el contenido en streaming (Suspense) mientras falte un script por cargar, así que no se
+    // puede escribir de forma determinista antes de hidratar. La corrección no depende del navegador (registro
+    // de react-hook-form) y CRIT-008 cubre WebKit de punta a punta.
+    if (browserName === "webkit") {
+      test.info().annotations.push({ type: "not-applicable", description: "WebKit no revela el streaming con JS pendiente" });
+      test.skip(true, "NOT APPLICABLE en WebKit: no se puede escenificar la escritura antes de hidratar");
+    }
+    evidence("invitada", "/memory/[token] con el JS retenido › escribe nombre y mensaje › hidrata › Dejar mi mensaje");
+    // CRIT-008 (WebKit): react-hook-form con defaultValues "" vaciaba al hidratar el «Tu nombre» ya escrito.
+    test.info().annotations.push({ type: "regression", description: "CRIT-008 WebKit: nombre escrito antes de hidratar se borraba" });
+    const ev = await createEventFixture(db, { status: "COMPLETED" });
+    const cap = await createCapsuleFixture(db, ev.id, { published: true });
+    const page = await anonPage();
+    // Celular lento simulado de forma determinista: el chunk de la página (formularios de la cápsula) no llega
+    // hasta que la invitada ya escribió; el resto de la app sí carga.
+    let releaseJs!: () => void;
+    const jsHeld = new Promise<void>((resolve) => (releaseJs = resolve));
+    let chunkRequested = false;
+    await page.route(/\/_next\/static\/chunks\/app\/\(experience\)\/memory\/%5Btoken%5D\/page-\w+\.js$/, async (route) => {
+      chunkRequested = true;
+      await jsHeld;
+      await route.continue();
+    });
+    await page.goto(cap.path, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await expect.poll(() => chunkRequested, { message: "el chunk de la página quedó retenido" }).toBe(true);
+    const guestbook = page.getByRole("form", { name: "Dejar un mensaje en el libro de visitas" });
+    const submit = guestbook.getByRole("button", { name: "Dejar mi mensaje" });
+    await expect(submit, "aún sin hidratar: el envío sigue deshabilitado").toBeDisabled();
+    const author = `Inés ${uniq("Pre")}`;
+    const body = `Escrito antes de hidratar ${uniq("txt")}`;
+    await guestbook.getByRole("textbox", { name: /^Tu nombre/ }).fill(author);
+    await guestbook.getByLabel("Tu mensaje").fill(body);
+    const upload = page.getByRole("region", { name: "¿Tienes fotos del día?" });
+    await upload.getByRole("textbox", { name: /^Tu nombre/ }).fill(author);
+
+    releaseJs();
+    await waitHydrated(submit);
+    await expect(submit).toBeEnabled();
+    // Lo escrito sigue ahí después de hidratar…
+    await expect(guestbook.getByRole("textbox", { name: /^Tu nombre/ })).toHaveValue(author);
+    await expect(guestbook.getByLabel("Tu mensaje")).toHaveValue(body);
+    await expect(upload.getByRole("textbox", { name: /^Tu nombre/ })).toHaveValue(author);
+    // …y el formulario lo usa: la subida se habilita con el nombre ya escrito + el permiso.
+    await upload.getByRole("checkbox").check();
+    await expect(upload.getByLabel("Elige tus fotos")).toBeEnabled();
+    await submit.click();
+    await expect(page.getByText("¡Gracias por tu mensaje! Ya forma parte de la cápsula ✨")).toBeVisible();
+    await expect
+      .poll(() => db.eventMessage.count({ where: { eventId: ev.id, kind: "GUESTBOOK", authorName: author, body, hidden: false } }))
+      .toBe(1);
+  });
+
   test("[MEM-014] una invitada sube una foto con consentimiento: queda privada y pendiente de revisión", { tag: ["@P0", "@critical", "@mobile"] }, async ({ anonPage, db, evidence }) => {
     evidence("invitada", "/memory/[token] › ¿Tienes fotos del día? › nombre + permiso + Elige tus fotos (PNG)");
     const ev = await createEventFixture(db, { status: "COMPLETED" });
