@@ -43,15 +43,9 @@ export function ContactForm({ minDate, waNumber }: { minDate: string; waNumber: 
 
   const form = useForm<ContactFormValues, unknown, ContactFormInput>({
     resolver: zodResolver(contactFormSchema),
-    defaultValues: {
-      name: "",
-      phone: "",
-      email: "",
-      eventDate: "",
-      message: "",
-      consent: false,
-      website: "",
-    },
+    // Sin textos vacíos a propósito: al registrar cada campo, react-hook-form toma lo que ya hay en el DOM.
+    // Con "" vaciaría lo que la persona escribió antes de que la página hidratara (celular lento).
+    defaultValues: { consent: false },
     mode: "onTouched",
   });
   const { register, handleSubmit, control, formState } = form;

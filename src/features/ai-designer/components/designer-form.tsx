@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch, type DefaultValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
@@ -64,14 +64,15 @@ const OCCASION_OPTIONS: ChipOption<DesignerOccasion>[] = OCCASION_VALUES.map((va
 const VIBE_OPTIONS = VIBE_VALUES.map((value) => ({ value, label: VIBE_LABELS[value] }));
 const DIETARY_OPTIONS = DIETARY_VALUES.map((value) => ({ value, label: DIETARY_LABELS[value] }));
 
-const DEFAULTS: DesignerFormValues = {
+// Perfil, edad y gustos (campos de texto visibles desde el HTML del servidor) sin default a propósito: al
+// registrarlos, react-hook-form toma lo que ya hay en el DOM. Con "" vaciaría lo que la clienta escribió antes de
+// que la página hidratara (celular lento). Los selectores y los campos que sólo aparecen al elegir «Otra» (ya
+// hidratado) conservan su "".
+const DEFAULTS: DefaultValues<DesignerFormValues> = {
   occasion: undefined as unknown as DesignerOccasion,
   occasionOther: "",
-  profile: "",
-  honoreeAge: null,
   guestCount: 8,
   budgetRangeId: "",
-  tastes: "",
   colors: [],
   vibes: [],
   serviceArea: "",

@@ -180,19 +180,22 @@ function RsvpForm({
   onCancel?: () => void;
 }) {
   const router = useRouter();
+  const initialStatus = guest?.responded && guest.rsvpStatus !== "PENDING" ? guest.rsvpStatus : undefined;
   const form = useForm<RsvpFormValues>({
     resolver: zodResolver(rsvpFormSchema),
+    // Los campos de texto visibles desde el primer render (nombre, notas, mensaje, comentario, email) no llevan
+    // default aquí: al registrarlos, react-hook-form toma lo que ya hay en el DOM, es decir, lo que la invitada
+    // escribió antes de que la página hidratara (con "" lo borraría). Su valor guardado va como `defaultValue`
+    // del propio campo, así también se ve desde el HTML del servidor. El email empieza vacío: vacío = conservar
+    // el registrado (el servidor no lo borra).
+    // Los que pueden empezar ocultos sí lo necesitan (acompañante; notas si ya había respondido «No podré ir»):
+    // Zod los exige aunque nunca se monten. Sólo aparecen después de hidratar, así que no pisan nada escrito.
     defaultValues: {
-      name: guest?.name ?? "",
-      // Vacío = conservar el email registrado (el servidor no lo borra).
-      email: "",
-      rsvpStatus: guest?.responded && guest.rsvpStatus !== "PENDING" ? guest.rsvpStatus : undefined,
+      rsvpStatus: initialStatus,
       plusOne: guest?.plusOne ?? false,
       plusOneName: guest?.plusOneName ?? "",
       dietaryRestrictions: guest?.dietaryRestrictions ?? [],
-      dietaryNotes: guest?.dietaryNotes ?? "",
-      comment: guest?.comment ?? "",
-      honoreeMessage: guest?.honoreeMessage ?? "",
+      ...(initialStatus === "NOT_ATTENDING" ? { dietaryNotes: guest?.dietaryNotes ?? "" } : {}),
       photoConsent: guest?.photoConsent ?? false,
     },
   });
@@ -254,6 +257,7 @@ function RsvpForm({
           <Input
             {...p}
             {...form.register("name")}
+            defaultValue={guest?.name}
             autoComplete="name"
             autoCapitalize="words"
             placeholder="Nombre y apellido"
@@ -389,7 +393,15 @@ function RsvpForm({
           description="Ej. celiaca, sin contaminación cruzada; alergia a la nuez."
           error={errors.dietaryNotes?.message}
         >
-          {(p) => <Textarea {...p} {...form.register("dietaryNotes")} rows={2} className="text-base" />}
+          {(p) => (
+            <Textarea
+              {...p}
+              {...form.register("dietaryNotes")}
+              defaultValue={guest?.dietaryNotes ?? undefined}
+              rows={2}
+              className="text-base"
+            />
+          )}
         </Field>
       ) : null}
 
@@ -402,6 +414,7 @@ function RsvpForm({
           <Textarea
             {...p}
             {...form.register("honoreeMessage")}
+            defaultValue={guest?.honoreeMessage ?? undefined}
             rows={3}
             placeholder="Unas palabras bonitas…"
             className="text-base"
@@ -410,7 +423,15 @@ function RsvpForm({
       </Field>
 
       <Field label="Comentario (opcional)" error={errors.comment?.message}>
-        {(p) => <Textarea {...p} {...form.register("comment")} rows={2} className="text-base" />}
+        {(p) => (
+          <Textarea
+            {...p}
+            {...form.register("comment")}
+            defaultValue={guest?.comment ?? undefined}
+            rows={2}
+            className="text-base"
+          />
+        )}
       </Field>
 
       <Field

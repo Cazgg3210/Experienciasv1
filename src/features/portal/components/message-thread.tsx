@@ -36,7 +36,8 @@ export function MessageThread({
   const [refreshing, startRefresh] = React.useTransition();
   const form = useForm<HostMessageFormValues>({
     resolver: zodResolver(hostMessageFormSchema),
-    defaultValues: { body: "" },
+    // Sin defaultValues a propósito: al registrar el campo, react-hook-form toma lo que ya hay en el DOM.
+    // Con "" vaciaría el mensaje escrito antes de que la página hidratara (celular lento).
   });
   const pending = form.formState.isSubmitting;
   const textareaId = React.useId();

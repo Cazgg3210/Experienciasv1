@@ -17,7 +17,8 @@ export function AccessForm() {
   const [sent, setSent] = React.useState<{ email: string; message: string } | null>(null);
   const form = useForm<PortalAccessFormValues>({
     resolver: zodResolver(portalAccessFormSchema),
-    defaultValues: { email: "" },
+    // Sin defaultValues a propósito: al registrar el campo, react-hook-form toma lo que ya hay en el DOM.
+    // Con "" vaciaría el correo escrito antes de que la página hidratara (celular lento).
   });
   const pending = form.formState.isSubmitting;
   const statusRef = React.useRef<HTMLDivElement>(null);

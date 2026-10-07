@@ -13,9 +13,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import type { APIRequestContext, Locator } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import type { EventStatus, PaymentKind, PaymentMethod, PaymentStatus, Prisma, PrismaClient, RsvpStatus } from "@prisma/client";
-import { createCustomer, expect, uniq, uniqEmail, uniqPhone } from "../fixtures";
+import { createCustomer, expect, test, uniq, uniqEmail, uniqPhone } from "../fixtures";
 import { dateOnly, localDateKey, zonedDateTime } from "../../../src/lib/dates";
 import { formatMXN } from "../../../src/lib/money";
 
@@ -131,6 +131,52 @@ export async function waitHydrated(locator: Locator): Promise<void> {
       { message: "el componente no terminó de hidratarse", timeout: 20_000 },
     )
     .toBe(true);
+}
+
+/**
+ * Celular lento simulado de forma determinista: retiene el chunk JS de una página (donde viven sus
+ * componentes cliente) hasta `release()`. El HTML del servidor ya se ve y se puede escribir en él, pero
+ * React todavía no hidrata esos formularios; el resto de la app (runtime, layout) carga normal.
+ * `segment` es la ruta del build tal cual: "(public)/contacto", "(experience)/e/[slug]/[token]"…
+ */
+export async function holdPageChunk(page: Page, segment: string) {
+  const encoded = segment
+    .replace(/\[/g, "%5B")
+    .replace(/\]/g, "%5D")
+    .replace(/[.*+?^${}()|\\]/g, "\\$&");
+  const pattern = new RegExp(`/_next/static/chunks/app/${encoded}/page-\\w+\\.js$`);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let requested = false;
+  await page.route(pattern, async (route) => {
+    requested = true;
+    await held;
+    await route.continue();
+  });
+  return {
+    release,
+    /** Espera a que el navegador pida el chunk (queda retenido hasta `release()`). */
+    requested: () => expect.poll(() => requested, { message: `el chunk de ${segment} quedó retenido` }).toBe(true),
+  };
+}
+
+/**
+ * Escribe en un campo mientras `holdPageChunk` retiene la hidratación. Donde el HTML ya se ve, escribe como la
+ * persona (`fill`). WebKit no pinta los segmentos que llegan en streaming (Suspense) mientras quede un script
+ * pendiente: su requestAnimationFrame no corre hasta el evento load, así que el campo existe pero sigue oculto.
+ * Ahí se le asigna el valor en el DOM, que es justo lo que el formulario debe respetar al hidratar. El locator
+ * debe alcanzar elementos ocultos (`includeHidden: true` en getByRole; getByLabel ya los incluye).
+ */
+export async function fillBeforeHydration(field: Locator, value: string, browserName: string): Promise<void> {
+  if (browserName !== "webkit" || (await field.isVisible())) {
+    await field.fill(value);
+    return;
+  }
+  const note = "streaming oculto con JS pendiente: valores asignados en el DOM antes de hidratar";
+  if (!test.info().annotations.some((a) => a.type === "webkit")) test.info().annotations.push({ type: "webkit", description: note });
+  await field.evaluate((el, v) => {
+    (el as HTMLInputElement | HTMLTextAreaElement).value = v;
+  }, value);
 }
 
 export function baseUrl(): string {

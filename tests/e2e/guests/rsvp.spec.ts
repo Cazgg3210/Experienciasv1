@@ -10,6 +10,8 @@ import {
   createEventFixture,
   createGuestFixture,
   describe as d,
+  fillBeforeHydration,
+  holdPageChunk,
   token,
   waitHydrated,
 } from "../events/_helpers";
@@ -100,6 +102,27 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     await expect(page.getByRole("region", { name: "Confirmación de asistencia" })).toContainText("Tal vez");
   });
 
+  test("[GST-027] editar la respuesta sin cambiar «No podré ir» guarda aunque las notas para la cocina sigan ocultas", { tag: ["@P1", "@regression"] }, async ({ anonPage, db, evidence }) => {
+    evidence("invitada", "Link personal (ya respondió «No podré ir») › Editar mi respuesta › comentario › Guardar cambios");
+    // Con «No podré ir» las notas para la cocina no se montan: el formulario debe seguir siendo válido sin ellas.
+    // Tras quitar los textos vacíos de defaultValues (GST-026), sólo los campos que pueden empezar ocultos conservan su "".
+    test.info().annotations.push({ type: "regression", description: "GST-026: defaults del RSVP sin textos vacíos; los campos ocultos siguen válidos" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const g = await createGuestFixture(db, ev, { name: `Lorena ${uniq("Edit")}`, rsvpStatus: "NOT_ATTENDING", comment: "Estaré de viaje" });
+    const page = await anonPage();
+    const section = await openRsvp(page, g.path);
+    await section.getByRole("button", { name: "Editar mi respuesta" }).click();
+    const comment = section.getByLabel("Comentario (opcional)");
+    await expect(comment, "el comentario guardado se precarga").toHaveValue("Estaré de viaje");
+    await expect(section.getByRole("textbox", { name: "Tu nombre" }), "el nombre guardado se precarga").toHaveValue(g.name);
+    await expect(section.getByLabel("Alergias o notas para la cocina")).toHaveCount(0);
+    await comment.fill("Estaré de viaje, ¡pero las quiero!");
+    await section.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(section.getByRole("heading", { name: "Te vamos a extrañar" })).toBeVisible();
+    await expect.poll(async () => (await db.eventGuest.findUnique({ where: { id: g.id } }))?.comment).toBe("Estaré de viaje, ¡pero las quiero!");
+    expect(await db.eventGuest.findUnique({ where: { id: g.id } })).toMatchObject({ rsvpStatus: "NOT_ATTENDING", name: g.name });
+  });
+
   test("[GST-013] con el link general una invitada nueva se registra sola y recibe su link personal", { tag: ["@P1"] }, async ({ anonPage, db, evidence }) => {
     evidence("invitada", "Link general › nombre nuevo › Enviar mi respuesta → redirección al link personal");
     const ev = await createEventFixture(db, { status: "CONFIRMED" });
@@ -119,6 +142,60 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     const list = host.getByRole("list", { name: "Lista de invitadas" });
     await expect(list).toContainText(name);
     await expect(list).toContainText("Confirmó con la invitación general");
+  });
+
+  test("[GST-026] lo que la invitada escribe antes de que la página hidrate no se borra y se guarda con su respuesta", { tag: ["@P0", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("invitada", "Link general con el JS de la página retenido › nombre, alergias, mensaje, comentario y email › hidrata › ¡Sí, ahí estaré! › Enviar mi respuesta");
+    // react-hook-form con defaultValues "" escribía "" en el DOM al registrar cada campo durante la hidratación:
+    // en un celular lento se borraba lo ya escrito (el mismo defecto que CRIT-008 en la cápsula).
+    test.info().annotations.push({ type: "regression", description: "texto escrito antes de hidratar se borraba (react-hook-form + defaultValues \"\")" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED", honoreeName: "Regina" });
+    const name = `Ximena ${uniq("PreHidr")}`;
+    const email = uniqEmail("ximena");
+    const notes = `Alergia a la nuez ${uniq("n")}`;
+    const honoree = `¡Que cumplas muchos más, Regi! ${uniq("m")}`;
+    const comment = `Llego un poco tarde ${uniq("c")}`;
+    const page = await anonPage();
+    // Celular lento simulado de forma determinista: el chunk de la página (el formulario de RSVP) no llega
+    // hasta que la invitada ya escribió; el resto de la app sí carga.
+    const held = await holdPageChunk(page, "(experience)/e/[slug]/[token]");
+    await page.goto(ev.invitePath, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    // Antes de hidratar, en WebKit el formulario (segmento en streaming) existe pero sigue oculto: ver fillBeforeHydration.
+    const before = page.getByRole("region", { name: "Confirmación de asistencia", includeHidden: true });
+    await fillBeforeHydration(before.getByRole("textbox", { name: "Tu nombre", includeHidden: true }), name, browserName);
+    await fillBeforeHydration(before.getByLabel("Alergias o notas para la cocina"), notes, browserName);
+    await fillBeforeHydration(before.getByLabel("Mensaje para Regina"), honoree, browserName);
+    await fillBeforeHydration(before.getByLabel("Comentario (opcional)"), comment, browserName);
+    await fillBeforeHydration(before.getByLabel("Tu email (opcional)"), email, browserName);
+
+    held.release();
+    const section = page.getByRole("region", { name: "Confirmación de asistencia" });
+    const fields = {
+      name: section.getByRole("textbox", { name: "Tu nombre" }),
+      notes: section.getByLabel("Alergias o notas para la cocina"),
+      honoree: section.getByLabel("Mensaje para Regina"),
+      comment: section.getByLabel("Comentario (opcional)"),
+      email: section.getByLabel("Tu email (opcional)"),
+    };
+    await waitHydrated(section.getByRole("button", { name: "Enviar mi respuesta" }));
+    // Elegir la respuesta ya pasa por React: cuando aparece «Voy con acompañante», la hidratación terminó y el
+    // formulario ya registró sus campos (ahí es donde se borraban).
+    await section.getByText("¡Sí, ahí estaré!").click();
+    await expect(section.getByRole("checkbox", { name: "Voy con acompañante" })).toBeVisible();
+    await expect(fields.name).toHaveValue(name);
+    await expect(fields.notes).toHaveValue(notes);
+    await expect(fields.honoree).toHaveValue(honoree);
+    await expect(fields.comment).toHaveValue(comment);
+    await expect(fields.email).toHaveValue(email);
+    await section.getByRole("button", { name: "Enviar mi respuesta" }).click();
+    await expect.poll(() => db.eventGuest.count({ where: { eventId: ev.id, name } })).toBe(1);
+    const guest = await db.eventGuest.findFirstOrThrow({ where: { eventId: ev.id, name } });
+    expect(guest).toMatchObject({ source: "SELF_RSVP", rsvpStatus: "ATTENDING", email, dietaryNotes: notes, comment });
+    const sent = await db.eventMessage.findMany({ where: { eventId: ev.id, kind: "HONOREE", guestId: guest.id } });
+    expect(sent.map((m) => m.body)).toEqual([honoree]);
+    await page.waitForURL(new RegExp(`/e/${ev.micrositeSlug}/${guest.token}`));
+    await expect(page.getByRole("heading", { name: "¡Gracias, Ximena! Te esperamos" })).toBeVisible();
   });
 
   test("[GST-014] con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal", { tag: ["@P0", "@permissions", "@regression"] }, async ({ anonPage, db, evidence }) => {

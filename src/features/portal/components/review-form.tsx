@@ -23,7 +23,9 @@ export function ReviewForm({ token }: { token: string }) {
   const form = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewFormSchema),
     // Consentimiento explícito: la casilla para publicar la opinión empieza desmarcada.
-    defaultValues: { rating: 0, npsScore: null, comment: "", publishable: false },
+    // `comment` sin default a propósito: al registrarlo, react-hook-form toma lo que ya hay en el DOM. Con ""
+    // vaciaría lo escrito antes de que la página hidratara (celular lento).
+    defaultValues: { rating: 0, npsScore: null, publishable: false },
   });
   const pending = form.formState.isSubmitting;
   const errors = form.formState.errors;

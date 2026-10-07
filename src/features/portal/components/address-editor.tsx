@@ -26,7 +26,10 @@ export function AddressEditor({
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(startOpen);
-  const form = useForm<AddressFormValues>({ resolver: zodResolver(addressFormSchema), defaultValues: initial });
+  // Sin defaultValues a propósito: si la anfitriona aún no tiene dirección, el formulario llega abierto desde el
+  // servidor y react-hook-form, al registrar cada campo, toma lo que ya hay en el DOM (lo escrito antes de que la
+  // página hidratara; con "" lo borraría). El valor actual va como `defaultValue` de cada campo.
+  const form = useForm<AddressFormValues>({ resolver: zodResolver(addressFormSchema) });
   const pending = form.formState.isSubmitting;
   const formId = React.useId();
 
@@ -63,18 +66,27 @@ export function AddressEditor({
       <p className="font-heading text-lg font-semibold">Detalles de la dirección</p>
       <Field label="Calle, número e interior" required error={form.formState.errors.addressLine?.message}>
         {(p) => (
-          <Input {...p} {...form.register("addressLine")} autoComplete="street-address" className="h-12 text-base" />
+          <Input
+            {...p}
+            {...form.register("addressLine")}
+            defaultValue={initial.addressLine}
+            autoComplete="street-address"
+            className="h-12 text-base"
+          />
         )}
       </Field>
       <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
         <Field label="Colonia" required error={form.formState.errors.neighborhood?.message}>
-          {(p) => <Input {...p} {...form.register("neighborhood")} className="h-12 text-base" />}
+          {(p) => (
+            <Input {...p} {...form.register("neighborhood")} defaultValue={initial.neighborhood} className="h-12 text-base" />
+          )}
         </Field>
         <Field label="Código postal" error={form.formState.errors.postalCode?.message}>
           {(p) => (
             <Input
               {...p}
               {...form.register("postalCode")}
+              defaultValue={initial.postalCode}
               inputMode="numeric"
               autoComplete="postal-code"
               maxLength={5}
@@ -88,7 +100,15 @@ export function AddressEditor({
         description="Portón, caseta, estacionamiento, elevador de servicio… nos ayuda a llegar a tiempo."
         error={form.formState.errors.addressNotes?.message}
       >
-        {(p) => <Textarea {...p} {...form.register("addressNotes")} rows={3} className="text-base" />}
+        {(p) => (
+          <Textarea
+            {...p}
+            {...form.register("addressNotes")}
+            defaultValue={initial.addressNotes}
+            rows={3}
+            className="text-base"
+          />
+        )}
       </Field>
       <Field
         label="Enlace de Google Maps (opcional)"
@@ -98,6 +118,7 @@ export function AddressEditor({
           <Input
             {...p}
             {...form.register("mapsUrl")}
+            defaultValue={initial.mapsUrl}
             inputMode="url"
             placeholder="https://maps.app.goo.gl/…"
             className="h-12 text-base"

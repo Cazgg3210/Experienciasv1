@@ -4,6 +4,7 @@
 import { expect, test, uniq, uniqEmail, uniqPhone } from "../fixtures";
 import { addDaysKey } from "../quote-public/_helpers";
 import { callAction, failure, okData } from "../configurator/_helpers";
+import { holdPageChunk } from "../events/_helpers";
 import { localDateKey } from "../../../src/lib/dates";
 import type { Page } from "@playwright/test";
 
@@ -285,6 +286,68 @@ test.describe("Contacto", { tag: ["@module:public"] }, () => {
       await expect(owner.getByRole("heading", { level: 1, name: evil })).toBeVisible();
       await expect(owner.getByText("<script>alert('x')</script> hola equipo")).toBeVisible();
       expect(dialogs, "ningún script inyectado se ejecutó").toBe(0);
+    },
+  );
+
+  test(
+    "[PUB-049] lo que la clienta escribe antes de que la página hidrate no se borra y llega completo al lead",
+    { tag: ["@P0", "@regression", "@mobile"] },
+    async ({ page, db, evidence }) => {
+      evidence("anonimo", "/contacto con el JS de la página retenido › escribe todo › hidrata › consentimiento › Enviar mensaje");
+      // react-hook-form con defaultValues "" escribía "" en el DOM al registrar cada campo durante la
+      // hidratación: en un celular lento se borraba lo ya escrito (el mismo defecto que CRIT-008 en la cápsula).
+      test.info().annotations.push({ type: "regression", description: "texto escrito antes de hidratar se borraba (react-hook-form + defaultValues \"\")" });
+      const name = `Renata ${uniq("PreHidr")}`;
+      const phone = uniqPhone();
+      const email = uniqEmail("prehidr");
+      const date = addDaysKey(localDateKey(), 45);
+      const message = `Somos 12 y queremos algo al aire libre (${uniq("msg")}).`;
+      // Celular lento simulado de forma determinista: el chunk de la página (el formulario) no llega hasta que
+      // la clienta ya escribió; el resto de la app sí carga.
+      const held = await holdPageChunk(page, "(public)/contacto");
+      await page.goto("/contacto", { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+      await held.requested();
+      const form = page.getByRole("form", { name: "Escríbenos" });
+      const submit = form.getByRole("button", { name: "Enviar mensaje" });
+      await expect(submit, "aún sin hidratar: el envío sigue deshabilitado").toBeDisabled();
+      const fields = {
+        name: form.getByRole("textbox", { name: "Nombre", exact: true }),
+        phone: form.getByLabel("WhatsApp o teléfono"),
+        email: form.getByLabel("Correo electrónico"),
+        occasion: form.getByLabel("¿Qué quieres celebrar?"),
+        date: form.getByLabel("Fecha tentativa"),
+        message: form.getByLabel("Mensaje"),
+      };
+      await fields.name.fill(name);
+      await fields.phone.fill(phone);
+      await fields.email.fill(email);
+      await fields.occasion.selectOption({ label: "Baby brunch" });
+      await fields.date.fill(date);
+      await fields.message.fill(message);
+
+      held.release();
+      // El botón se habilita en un efecto: cuando lo está, la hidratación ya terminó y el formulario registró sus campos.
+      await expect(submit).toBeEnabled();
+      await expect(fields.name).toHaveValue(name);
+      await expect(fields.phone).toHaveValue(phone);
+      await expect(fields.email).toHaveValue(email);
+      await expect(fields.occasion).toHaveValue("BABY_BRUNCH");
+      await expect(fields.date).toHaveValue(date);
+      await expect(fields.message).toHaveValue(message);
+      // El consentimiento (casilla de Radix) sólo responde ya hidratado; con teclado, como en fillContactForm.
+      const consent = form.getByRole("checkbox", { name: /Acepto el aviso de privacidad/ });
+      await consent.focus();
+      await page.keyboard.press("Space");
+      await expect(consent).toBeChecked();
+      await submit.click();
+      const done = page.getByRole("status").filter({ hasText: "Recibimos tu mensaje" });
+      await expect(done.getByRole("heading", { name: `¡Gracias, ${name.split(" ")[0]}!` })).toBeVisible();
+      // El lead tiene exactamente lo que se escribió antes de hidratar.
+      const lead = await db.lead.findFirstOrThrow({ where: { email } });
+      await expect(done).toContainText(lead.code);
+      expect(lead).toMatchObject({ source: "CONTACT_FORM", status: "NEW", name, occasion: "BABY_BRUNCH", notes: message });
+      expect(lead.eventDate?.toISOString().slice(0, 10)).toBe(date);
+      expect(lead.phone?.replace(/\D/g, "")).toContain(phone);
     },
   );
 });

@@ -11,7 +11,9 @@ import {
   createEventFixture,
   createGuestFixture,
   describe as d,
+  fillBeforeHydration,
   formatMXN,
+  holdPageChunk,
   lastAudit,
   todayKey,
   token,
@@ -146,6 +148,32 @@ test.describe("Portal · acceso por correo", { tag: ["@module:portal"] }, () => 
     const r = await callAction(api, "requestPortalAccessAction", { email: "no-es-correo" }, { path: "/mi-evento" });
     expect(r.fieldErrors?.email?.[0], d(r)).toBe("Escribe un correo válido.");
   });
+
+  test("[PORT-021] el correo escrito antes de que /mi-evento hidrate no se borra y el enlace llega", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence }) => {
+    evidence("clienta", "/mi-evento con el JS de la página retenido › Tu correo › hidrata › Enviarme mi enlace");
+    // react-hook-form con defaultValues { email: "" } escribía "" en el DOM al registrar el campo durante la
+    // hidratación: en un celular lento se borraba el correo ya escrito y el envío pedía «Escribe tu correo.».
+    test.info().annotations.push({ type: "regression", description: "texto escrito antes de hidratar se borraba (react-hook-form + defaultValues \"\")" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const email = ev.customer.email!;
+    const page = await anonPage();
+    const held = await holdPageChunk(page, "(experience)/mi-evento");
+    await page.goto("/mi-evento", { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    await page.getByLabel("Tu correo").fill(email);
+
+    held.release();
+    const submit = page.getByRole("button", { name: "Enviarme mi enlace" });
+    await waitHydrated(submit);
+    // Al enviar ya hidratado, el formulario valida con lo que tiene registrado: si se hubiera borrado, pediría el correo.
+    await submit.click();
+    const status = page.getByRole("status").filter({ hasText: "Revisa tu correo" });
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(email);
+    await expect.poll(() => db.notificationLog.count({ where: { type: "PORTAL_ACCESS", to: email } })).toBe(1);
+    const log = await db.notificationLog.findFirstOrThrow({ where: { type: "PORTAL_ACCESS", to: email } });
+    expect(log.body).toContain(ev.portalToken);
+  });
 });
 
 test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] }, () => {
@@ -261,6 +289,34 @@ test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] },
     const owner = await rolePage("owner");
     await owner.goto(`/admin/events/${ev.id}`);
     await expect(owner.getByRole("region", { name: /Conversación con/ })).toContainText(body);
+  });
+
+  test("[PORT-022] el mensaje escrito antes de que el portal hidrate no se borra y llega al equipo", { tag: ["@P0", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("clienta", "Portal con el JS de la página retenido › Mensajes › escribe › hidrata › Enviar");
+    // react-hook-form con defaultValues { body: "" } escribía "" en el DOM al registrar el campo durante la
+    // hidratación: en un celular lento se borraba el mensaje ya escrito.
+    test.info().annotations.push({ type: "regression", description: "texto escrito antes de hidratar se borraba (react-hook-form + defaultValues \"\")" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const body = `Escrito antes de que cargara todo ${uniq("msg")}`;
+    const page = await anonPage();
+    const held = await holdPageChunk(page, "(experience)/mi-evento/[token]");
+    await page.goto(ev.portalPath, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    // Antes de hidratar, en WebKit el portal (segmento en streaming) existe pero sigue oculto: ver fillBeforeHydration.
+    const before = page.getByRole("region", { name: "Mensajes", includeHidden: true });
+    await fillBeforeHydration(before.getByRole("textbox", { name: "Escribe tu mensaje", includeHidden: true }), body, browserName);
+
+    held.release();
+    const section = page.getByRole("region", { name: "Mensajes" });
+    const box = section.getByRole("textbox", { name: "Escribe tu mensaje" });
+    const send = section.getByRole("button", { name: "Enviar" });
+    await waitHydrated(send);
+    // Al enviar ya hidratado, el formulario valida con lo que tiene registrado: si se hubiera borrado, pediría el mensaje.
+    await send.click();
+    await expect(section.getByRole("list", { name: "Mensajes con el equipo" })).toContainText(body);
+    await expect(box, "tras enviar, el campo se limpia (reset)").toHaveValue("");
+    const msg = await db.eventMessage.findFirst({ where: { eventId: ev.id, body } });
+    expect(msg).toMatchObject({ kind: "HOST_THREAD", authorType: "CUSTOMER", authorName: ev.customer.name });
   });
 
   test("[PORT-012] la anfitriona agrega invitadas; duplicados y contactos inválidos se rechazan", { tag: ["@P1"] }, async ({ anonPage, db, evidence }) => {
