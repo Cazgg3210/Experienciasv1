@@ -43,7 +43,10 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={member.active ? "success" : "muted"}>{member.active ? "Activa" : "Inactiva"}</StatusBadge>
-            {canWrite && member.assignments.length === 0 ? <DeleteStaffButton id={member.id} name={member.name} /> : null}
+            {/* Sin historial y nunca la propia ficha (eliminarla desactivaría tu cuenta; el servidor también lo rechaza). */}
+            {canWrite && member.assignments.length === 0 && member.user?.id !== user.id ? (
+              <DeleteStaffButton id={member.id} name={member.name} />
+            ) : null}
           </div>
         }
       />
@@ -165,6 +168,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
               defaultEmail={member.email}
               canManage={canManageUsers}
               loginUrl={appUrl("/login")}
+              isSelf={member.user?.id === user.id}
               access={
                 member.user
                   ? {

@@ -473,6 +473,44 @@ test.describe("Revocación de sesiones en servidor (sessionVersion)", { tag: ["@
     await ctx.close();
   });
 
+  test("[AUTH-064] restablecer la propia contraseña desde Staff (fundadora con ficha) cierra la sesión actual y pide entrar con la nueva", { tag: ["@P1", "@regression"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
+    test.info().annotations.push({ type: "regression", description: "BUG-004 (auto-restablecimiento desde Staff)" });
+    const user = await createTeamUser(db, { role: "OWNER", withStaffMember: true });
+    const newPassword = strongPassword();
+    evidence("owner", `${user.email}: Staff › (su ficha) › Restablecer contraseña`);
+    const ctx = await loggedInContext(browser, user, "/admin");
+    const page = ctx.pages()[0]!;
+    guard.watch(page);
+    const cookie = await sessionCookie(page);
+    await page.goto(`/admin/staff/${user.staffMemberId}`);
+    const access = page.getByRole("region", { name: "Acceso al portal" });
+    // Su propio acceso no se puede desactivar (el servidor también lo rechaza): no se ofrece el botón
+    await expect(access.getByRole("button", { name: "Restablecer contraseña" })).toBeVisible();
+    await expect(access.getByRole("button", { name: "Desactivar acceso" })).toHaveCount(0);
+    await (await ready(access.getByRole("button", { name: "Restablecer contraseña" }))).click();
+    const dialog = page.getByRole("dialog", { name: "Restablecer contraseña" });
+    await expect(dialog.getByText("Se cerrarán todas tus sesiones, incluida ésta")).toBeVisible();
+    await dialog.getByLabel("Contraseña temporal").fill(newPassword);
+    await dialog.getByRole("button", { name: "Restablecer" }).click();
+
+    // Sale a /login sin cookie de sesión (antes se quedaba en el panel con la sesión revocada en silencio)
+    await page.waitForURL((u) => u.pathname === "/login");
+    await expect(page.getByRole("heading", { name: "Bienvenida de vuelta" })).toBeVisible();
+    expect(await sessionCookie(page), "cookie de sesión eliminada").toBeUndefined();
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: "user.password_reset", entityId: user.id } });
+    expect(audit.actorId).toBe(user.id);
+    expect(audit.after).toMatchObject({ self: true, staffMemberId: user.staffMemberId });
+    expect(await sessionVersion(db, user.id)).toBe(1);
+    await expectCookieRevoked(playwright, baseURL, cookie, "/admin/staff");
+
+    // La contraseña anterior ya no entra; la nueva sí
+    await loginViaUi(page, user.email, user.password);
+    await expect(page.getByText("Correo o contraseña incorrectos.")).toBeVisible();
+    await loginViaUi(page, user.email, newPassword);
+    await page.waitForURL((u) => u.pathname === "/admin");
+    await ctx.close();
+  });
+
   test("[AUTH-038] una cookie ya revocada no puede cerrar las sesiones nuevas de la cuenta", { tag: ["@P2", "@negative"] }, async ({ browser, db, playwright, baseURL, guard, evidence }) => {
     const user = await createTeamUser(db, { role: "OWNER" });
     evidence("owner", "cookie vieja (revocada al cerrar sesión) usada contra /api/auth/signout mientras hay una sesión nueva abierta");
