@@ -142,6 +142,9 @@ test.describe("Recorridos críticos · venta", { tag: ["@critical"] }, () => {
       const message = `Queremos un brunch para 10 amigas en Polanco (${uniq("msg")}).`;
 
       await page.goto("/contacto");
+      // El botón se habilita al hidratar: escribir antes hace que el formulario, al hidratar, regrese el
+      // primer campo a su valor inicial (en WebKit/Firefox el nombre quedaba vacío y no se enviaba).
+      await expect(page.getByRole("button", { name: "Enviar mensaje" })).toBeEnabled();
       await page.getByLabel("Nombre").fill(name);
       await page.getByLabel("WhatsApp o teléfono").fill(phone);
       await page.getByLabel("Correo electrónico").fill(email);
