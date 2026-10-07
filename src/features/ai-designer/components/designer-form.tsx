@@ -19,6 +19,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { Button } from "@/components/ui/button";
@@ -130,9 +131,6 @@ export function DesignerForm({
   onFail: () => void;
 }) {
   const formRef = React.useRef<HTMLFormElement>(null);
-  // Hasta hidratar, el envío nativo está bloqueado (evita un GET con datos personales en la URL).
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => setHydrated(true), []);
   const form = useForm<DesignerFormValues, unknown, DesignerInput>({
     resolver: zodResolver(designerInputSchema),
     defaultValues: DEFAULTS,
@@ -502,9 +500,11 @@ export function DesignerForm({
       </FormSection>
 
       <div className="flex flex-col items-center gap-3 pt-2 text-center">
+        <NoScriptNotice>Para diseñar tu experiencia activa JavaScript en tu navegador.</NoScriptNotice>
+        {/* Deshabilitado hasta hidratar: evita el envío nativo (ver method="post" en el formulario). */}
         <SubmitButton
+          waitForHydration
           size="xl"
-          disabled={!hydrated || isSubmitting}
           pending={isSubmitting}
           pendingText="Diseñando tu experiencia…"
           className="w-full sm:w-auto"

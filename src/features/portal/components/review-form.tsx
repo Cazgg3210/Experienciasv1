@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,14 @@ export function ReviewForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-6">
+    <form
+      onSubmit={form.handleSubmit(onSubmit)}
+      // POST (no GET) y botón deshabilitado hasta hidratar: si alguien envía antes de que cargue el JS, el
+      // comentario nunca termina en la URL (historial, logs, Referer).
+      method="post"
+      noValidate
+      className="space-y-6"
+    >
       <Controller
         control={form.control}
         name="rating"
@@ -77,7 +85,8 @@ export function ReviewForm({ token }: { token: string }) {
           </div>
         )}
       />
-      <SubmitButton pending={pending} pendingText="Enviando…" size="xl" className="w-full sm:w-auto">
+      <NoScriptNotice />
+      <SubmitButton waitForHydration pending={pending} pendingText="Enviando…" size="xl" className="w-full sm:w-auto">
         Enviar mi opinión
       </SubmitButton>
     </form>

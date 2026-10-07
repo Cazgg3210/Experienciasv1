@@ -179,6 +179,91 @@ export async function fillBeforeHydration(field: Locator, value: string, browser
   }, value);
 }
 
+/**
+ * Registra lo que pide la pestaña: los documentos del marco principal (método + ruta con query, en orden) y todas
+ * las URLs. Sirve para comprobar que un formulario NO se envió de forma nativa: antes de hidratar, sin
+ * method="post" y con el botón activo, el navegador lo mandaba por GET a la URL actual con los datos en la query
+ * (historial, logs del servidor y del proxy, Referer).
+ */
+export function watchRequests(page: Page) {
+  const documents: Array<{ method: string; path: string }> = [];
+  const urls: string[] = [];
+  page.on("request", (req) => {
+    urls.push(req.url());
+    if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+      const u = new URL(req.url());
+      documents.push({ method: req.method(), path: `${u.pathname}${u.search}` });
+    }
+  });
+  return {
+    documents,
+    /** URLs pedidas (de cualquier recurso) que llevan alguno de los valores, ya decodificadas (`+` = espacio). */
+    leaking(...values: string[]): string[] {
+      return urls.filter((u) => {
+        let decoded = u;
+        try {
+          decoded = decodeURIComponent(u.replace(/\+/g, " "));
+        } catch {
+          // URL con % sueltos: se compara cruda
+        }
+        return values.some((v) => decoded.includes(v));
+      });
+    },
+  };
+}
+
+/**
+ * Intenta enviar un formulario como una persona con prisa antes de que la página hidrate: Enter en un campo de
+ * texto (envío implícito) y clic en el botón de envío. El clic va con `force` porque, ya corregido, el botón está
+ * deshabilitado y Playwright esperaría a que se habilite; un botón deshabilitado no envía nada (ni el Enter).
+ * En WebKit el formulario en streaming sigue oculto mientras quede JS pendiente (ver fillBeforeHydration): nadie
+ * puede tocarlo, así que no hay intento que escenificar; devuelve false y lo anota.
+ * `requests` (de watchRequests, instalado antes de abrir la página): si un intento anterior ya provocó un envío
+ * nativo (el defecto), la página se está recargando y el clic puede no encontrar el botón; ese caso no se trata como
+ * error aquí porque la prueba lo reporta después, al revisar `requests.documents`.
+ */
+export async function trySubmitBeforeHydration(
+  opts: { submit: Locator; enterIn?: Locator; requests: ReturnType<typeof watchRequests> },
+  browserName: string,
+): Promise<boolean> {
+  if (browserName === "webkit" && !(await opts.submit.isVisible())) {
+    const note = "streaming oculto con JS pendiente: nadie puede enviar el formulario antes de hidratar";
+    if (!test.info().annotations.some((a) => a.description === note)) test.info().annotations.push({ type: "webkit", description: note });
+    return false;
+  }
+  if (opts.enterIn) await opts.enterIn.press("Enter");
+  try {
+    // El botón al centro de la pantalla y nada encima: con `force` el clic cae en el punto, y si una barra fija lo
+    // tapara se haría clic en ella (p. ej. un enlace) y no en el botón. Deshabilitado tiene pointer-events: none, así
+    // que en ese punto queda su propio contenedor: eso también cuenta como «el botón está ahí».
+    const covering = await opts.submit.evaluate((el) => {
+      el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return hit && (el.contains(hit) || hit.contains(el)) ? null : (hit?.outerHTML.slice(0, 160) ?? "nada");
+    });
+    if (covering) throw new Error(`otro elemento tapa el botón de envío: ${covering}`);
+    await opts.submit.click({ force: true });
+  } catch (error) {
+    // El primer documento es la propia página; cualquier otro es un envío nativo que la prueba reportará.
+    if (opts.requests.documents.length <= 1) throw error;
+  }
+  return true;
+}
+
+/**
+ * Estado de un formulario del HTML del servidor mientras la página NO ha hidratado: botón de envío deshabilitado y
+ * con `aria-busy` (se ve y se anuncia que carga) y `method="post"` (un envío nativo nunca sería GET con datos en la
+ * URL). Es HTML estático, no hay nada que esperar: cada aserción mira con un margen corto. Son soft para que, sin la
+ * corrección, la prueba siga y muestre también a dónde fue a dar el envío.
+ */
+export async function expectGuardedBeforeHydration(form: Locator, submit: Locator): Promise<void> {
+  const quick = { timeout: 2_000 };
+  await expect.soft(submit, "aún sin hidratar: el envío sigue deshabilitado").toBeDisabled(quick);
+  await expect.soft(submit, "y avisa que está cargando (aria-busy)").toHaveAttribute("aria-busy", "true", quick);
+  await expect.soft(form, "un envío nativo nunca sería GET").toHaveAttribute("method", "post", quick);
+}
+
 export function baseUrl(): string {
   return process.env.E2E_BASE_URL ?? `http://localhost:${process.env.E2E_PORT ?? 3200}`;
 }

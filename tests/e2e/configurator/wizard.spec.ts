@@ -4,6 +4,7 @@
  */
 import { expect, scanA11y, test, uniq, uniqEmail, uniqPhone } from "../fixtures";
 import { claimFreeDate } from "../quote-public/_helpers";
+import { expectGuardedBeforeHydration, holdPageChunk, trySubmitBeforeHydration, watchRequests } from "../events/_helpers";
 import {
   activeArea,
   callAction,
@@ -489,6 +490,38 @@ test.describe("Configurador — wizard", { tag: ["@module:configurator"] }, () =
       const { all, blocking } = await scanA11y(page, testInfo);
       expect(all.filter((v) => v.id === "color-contrast").map((v) => v.nodes.map((n) => n.target.join(" ")).join(", "))).toEqual([]);
       expect(blocking.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
+    },
+  );
+
+  test(
+    "[CONF-025] antes de que el configurador hidrate, «Siguiente» no envía el paso de forma nativa (ni recarga ni pierde la experiencia de partida)",
+    { tag: ["@P1", "@regression"] },
+    async ({ page, db, evidence, browserName }) => {
+      evidence("anonimo", "/crear-experiencia?experiencia=bridal-brunch&ocasion=bridal con el JS retenido › clic en «Siguiente» › hidrata › Siguiente");
+      // Sin method y con el botón activo antes de hidratar, el navegador enviaba el paso por GET a /crear-experiencia
+      // (la query se reemplaza con los campos del formulario): recargaba y se perdía la experiencia de partida.
+      test.info().annotations.push({ type: "regression", description: "envío nativo por GET antes de hidratar (formularios públicos)" });
+      const exp = await experienceBySlug(db, "bridal-brunch");
+      const path = "/crear-experiencia?experiencia=bridal-brunch&ocasion=bridal";
+      const requests = watchRequests(page);
+      const held = await holdPageChunk(page, "(public)/crear-experiencia");
+      await page.goto(path, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+      await held.requested();
+      // Antes de hidratar, en WebKit el paso (segmento en streaming) existe pero sigue oculto: ver trySubmitBeforeHydration.
+      const nextBefore = page.getByRole("button", { name: "Siguiente", includeHidden: true });
+      await trySubmitBeforeHydration({ submit: nextBefore, requests }, browserName);
+      await expectGuardedBeforeHydration(page.locator("form").filter({ has: nextBefore }), nextBefore);
+
+      held.release();
+      const next = page.getByRole("button", { name: "Siguiente" });
+      await expect(next).toBeEnabled();
+      expect(requests.documents, "ningún envío nativo: la pestaña sólo cargó el configurador").toEqual([{ method: "GET", path }]);
+      await expect(page.getByText(`Partimos de ${exp.name}`), "la experiencia de partida sigue elegida").toBeVisible();
+      await expect(page.getByRole("radio", { name: "Bridal brunch", exact: true })).toHaveAttribute("aria-checked", "true");
+      // Ya hidratado, «Siguiente» avanza sin salir de la página.
+      await next.click();
+      await expectStep(page, 2);
+      expect(requests.documents, "sigue sin navegaciones nativas").toEqual([{ method: "GET", path }]);
     },
   );
 });

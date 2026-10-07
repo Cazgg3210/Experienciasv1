@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { DIETARY_LABELS, RSVP_STATUS_LABELS } from "@/lib/labels";
@@ -242,7 +243,14 @@ function RsvpForm({
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-7">
+    <form
+      onSubmit={form.handleSubmit(onSubmit)}
+      // POST (no GET) y botón deshabilitado hasta hidratar: si alguien envía antes de que cargue el JS, su nombre y
+      // su correo nunca terminan en la URL (historial, logs, Referer).
+      method="post"
+      noValidate
+      className="space-y-7"
+    >
       <div className="text-center">
         <h2 className="font-heading text-3xl font-semibold sm:text-4xl">
           {personal && guest?.name ? `${firstName(guest.name)}, ¿nos acompañas?` : "¿Nos acompañas?"}
@@ -476,7 +484,9 @@ function RsvpForm({
       />
 
       <div className="flex flex-col gap-2">
+        <NoScriptNotice className="text-center">Para enviar tu respuesta activa JavaScript en tu navegador.</NoScriptNotice>
         <SubmitButton
+          waitForHydration
           pending={pending || redirecting}
           pendingText={redirecting ? "Abriendo tu confirmación…" : "Enviando tu respuesta…"}
           size="xl"

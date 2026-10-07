@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { MessageSquareHeart, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { cn } from "@/lib/utils";
@@ -109,7 +110,14 @@ export function MessageThread({
       )}
 
       {canSend ? (
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-2">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          // POST (no GET) y botón deshabilitado hasta hidratar: si alguien envía antes de que cargue el JS, el
+          // mensaje nunca termina en la URL (historial, logs, Referer).
+          method="post"
+          noValidate
+          className="space-y-2"
+        >
           <label htmlFor={textareaId} className="sr-only">
             Escribe tu mensaje
           </label>
@@ -133,6 +141,7 @@ export function MessageThread({
               {form.formState.errors.body.message}
             </p>
           ) : null}
+          <NoScriptNotice />
           <div className="flex items-center justify-between gap-2">
             <Button
               type="button"
@@ -143,7 +152,7 @@ export function MessageThread({
             >
               <RefreshCw className={cn(refreshing && "animate-spin")} aria-hidden /> Actualizar
             </Button>
-            <SubmitButton pending={pending} pendingText="Enviando…" size="xl">
+            <SubmitButton waitForHydration pending={pending} pendingText="Enviando…" size="xl">
               <Send aria-hidden /> Enviar
             </SubmitButton>
           </div>

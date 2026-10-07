@@ -3,6 +3,8 @@
 import * as React from "react";
 import { ArrowRight, ChevronLeft, History, ListChecks, TriangleAlert } from "lucide-react";
 import { Progress as ProgressPrimitive } from "radix-ui";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
+import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -477,6 +479,9 @@ export function ConfiguratorWizard({
         <div>
           <div className="grid gap-8 pb-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12 lg:pb-12 xl:grid-cols-[minmax(0,1fr)_380px]">
             <form
+              // POST (no GET) y «Siguiente» deshabilitado hasta hidratar: antes de que cargue el JS el navegador
+              // enviaría el paso de forma nativa (recarga y se pierde lo elegido).
+              method="post"
               noValidate
               onSubmit={(e) => {
                 e.preventDefault();
@@ -539,6 +544,9 @@ export function ConfiguratorWizard({
                 </div>
               ) : null}
 
+              <NoScriptNotice className="mt-6">
+                Para armar tu experiencia activa JavaScript en tu navegador.
+              </NoScriptNotice>
               <div
                 className={cn(
                   "flex items-center justify-between gap-3 border-t pt-6",
@@ -558,9 +566,9 @@ export function ConfiguratorWizard({
                 ) : (
                   <span />
                 )}
-                <Button type="submit" size="xl">
+                <SubmitButton waitForHydration size="xl">
                   {screen === TOTAL_STEPS ? "Ver mi resumen" : "Siguiente"} <ArrowRight aria-hidden />
-                </Button>
+                </SubmitButton>
               </div>
             </form>
 

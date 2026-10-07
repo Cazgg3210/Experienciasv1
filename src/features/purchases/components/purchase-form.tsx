@@ -16,7 +16,7 @@ import { handleActionResult } from "@/components/forms/action-result";
 import { COST_CATEGORY_LABELS, VENDOR_CATEGORY_LABELS, toOptions } from "@/lib/labels";
 import { purchaseBaseSchema, type CreatePurchaseInput } from "../schemas";
 import { createPurchaseAction, updatePurchaseAction } from "../server/actions";
-import { useHydrated } from "@/features/inventory/components/use-hydrated";
+import { useHydrated } from "@/components/forms/use-hydrated";
 import { moneyHint } from "./money-hint";
 
 const NONE = "none";

@@ -11,13 +11,16 @@ import {
   createEventFixture,
   createGuestFixture,
   describe as d,
+  expectGuardedBeforeHydration,
   fillBeforeHydration,
   formatMXN,
   holdPageChunk,
   lastAudit,
   todayKey,
   token,
+  trySubmitBeforeHydration,
   waitHydrated,
+  watchRequests,
 } from "../events/_helpers";
 
 const portalPath = (t: string) => `/mi-evento/${t}`;
@@ -174,6 +177,41 @@ test.describe("Portal · acceso por correo", { tag: ["@module:portal"] }, () => 
     const log = await db.notificationLog.findFirstOrThrow({ where: { type: "PORTAL_ACCESS", to: email } });
     expect(log.body).toContain(ev.portalToken);
   });
+
+  test("[PORT-023] antes de que /mi-evento hidrate el acceso no se envía de forma nativa: el correo nunca termina en la URL", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("clienta", "/mi-evento con el JS de la página retenido › Tu correo › Enter y clic en «Enviarme mi enlace» › hidrata › Enviarme mi enlace");
+    // Sin method y con el botón activo antes de hidratar, el navegador enviaba el formulario por GET:
+    // /mi-evento?email=… quedaba en el historial, en los logs del servidor y del proxy y en el Referer.
+    test.info().annotations.push({ type: "regression", description: "envío nativo por GET antes de hidratar dejaba datos personales en la URL" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const email = ev.customer.email!;
+    const page = await anonPage();
+    const requests = watchRequests(page);
+    const held = await holdPageChunk(page, "(experience)/mi-evento");
+    await page.goto("/mi-evento", { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    const field = page.getByLabel("Tu correo");
+    const submit = page.getByRole("button", { name: "Enviarme mi enlace" });
+    await fillBeforeHydration(field, email, browserName);
+    await trySubmitBeforeHydration({ enterIn: field, submit, requests }, browserName);
+    await expectGuardedBeforeHydration(page.locator("form").filter({ has: field }), submit);
+
+    held.release();
+    await expect(submit).toBeEnabled();
+    expect(requests.documents, "ningún envío nativo: la pestaña sólo cargó /mi-evento").toEqual([{ method: "GET", path: "/mi-evento" }]);
+    expect(new URL(page.url()).search, "la URL no lleva query").toBe("");
+    await expect(field, "lo escrito sigue ahí").toHaveValue(email);
+
+    // Ya hidratado, el envío normal funciona.
+    await submit.click();
+    const status = page.getByRole("status").filter({ hasText: "Revisa tu correo" });
+    await expect(status).toContainText(email);
+    await expect.poll(() => db.notificationLog.count({ where: { type: "PORTAL_ACCESS", to: email } })).toBe(1);
+    const log = await db.notificationLog.findFirstOrThrow({ where: { type: "PORTAL_ACCESS", to: email } });
+    expect(log.body).toContain(ev.portalToken);
+    expect(requests.documents, "sigue sin navegaciones nativas").toEqual([{ method: "GET", path: "/mi-evento" }]);
+    expect(requests.leaking(email), "ninguna URL pedida lleva el correo").toEqual([]);
+  });
 });
 
 test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] }, () => {
@@ -319,6 +357,61 @@ test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] },
     expect(msg).toMatchObject({ kind: "HOST_THREAD", authorType: "CUSTOMER", authorName: ev.customer.name });
   });
 
+  test("[PORT-024] antes de que el portal hidrate, la dirección y el mensaje no se envían de forma nativa ni terminan en la URL", { tag: ["@P1", "@regression"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("clienta", "Portal (evento sin dirección) con el JS retenido › calle, colonia y mensaje › Enter y clic en «Guardar dirección», clic en «Enviar» › hidrata › Guardar dirección › Enviar");
+    // Sin method y con el botón activo antes de hidratar, el navegador enviaba cada formulario por GET a la URL del
+    // portal: /mi-evento/<token>?addressLine=…&neighborhood=… o ?body=… (historial, logs, Referer).
+    test.info().annotations.push({ type: "regression", description: "envío nativo por GET antes de hidratar dejaba datos personales en la URL" });
+    // Sin dirección, el formulario de dirección llega abierto desde el servidor (visible antes de hidratar).
+    const ev = await createEventFixture(db, { status: "CONFIRMED", addressLine: null, neighborhood: null, postalCode: null });
+    const street = `Durango ${uniq("Num")} int 2`;
+    const neighborhood = "Roma Norte";
+    const body = `Mensaje antes de que cargara todo ${uniq("msg")}`;
+    const page = await anonPage();
+    const requests = watchRequests(page);
+    const held = await holdPageChunk(page, "(experience)/mi-evento/[token]");
+    await page.goto(ev.portalPath, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    // Antes de hidratar, en WebKit el portal (segmento en streaming) existe pero sigue oculto: ver fillBeforeHydration.
+    const locationBefore = page.getByRole("region", { name: "Ubicación", includeHidden: true });
+    const messagesBefore = page.getByRole("region", { name: "Mensajes", includeHidden: true });
+    const streetBefore = locationBefore.getByLabel("Calle, número e interior");
+    const saveBefore = locationBefore.getByRole("button", { name: "Guardar dirección", includeHidden: true });
+    const sendBefore = messagesBefore.getByRole("button", { name: "Enviar", includeHidden: true });
+    await fillBeforeHydration(streetBefore, street, browserName);
+    await fillBeforeHydration(locationBefore.getByRole("textbox", { name: /^Colonia/, includeHidden: true }), neighborhood, browserName);
+    await fillBeforeHydration(messagesBefore.getByRole("textbox", { name: "Escribe tu mensaje", includeHidden: true }), body, browserName);
+    await trySubmitBeforeHydration({ enterIn: streetBefore, submit: saveBefore, requests }, browserName);
+    // El mensaje es un textarea (Enter agrega un salto de línea): sólo el clic.
+    await trySubmitBeforeHydration({ submit: sendBefore, requests }, browserName);
+    await expectGuardedBeforeHydration(locationBefore.locator("form"), saveBefore);
+    await expectGuardedBeforeHydration(messagesBefore.locator("form"), sendBefore);
+
+    held.release();
+    const location = page.getByRole("region", { name: "Ubicación" });
+    const messages = page.getByRole("region", { name: "Mensajes" });
+    const save = location.getByRole("button", { name: "Guardar dirección" });
+    const send = messages.getByRole("button", { name: "Enviar" });
+    await expect(save).toBeEnabled();
+    await expect(send).toBeEnabled();
+    expect(requests.documents, "ningún envío nativo: la pestaña sólo cargó el portal").toEqual([{ method: "GET", path: ev.portalPath }]);
+    expect(new URL(page.url()).search, "la URL no lleva query").toBe("");
+    await expect(location.getByLabel("Calle, número e interior"), "lo escrito sigue ahí").toHaveValue(street);
+    await expect(messages.getByRole("textbox", { name: "Escribe tu mensaje" })).toHaveValue(body);
+
+    // Ya hidratado, el envío normal funciona y se guarda.
+    await save.click();
+    await expect(page.getByText("Dirección actualizada")).toBeVisible();
+    await expect.poll(async () => (await db.event.findUnique({ where: { id: ev.id } }))?.addressLine).toBe(street);
+    expect(await db.event.findUnique({ where: { id: ev.id } })).toMatchObject({ neighborhood });
+    await send.click();
+    await expect(messages.getByRole("list", { name: "Mensajes con el equipo" })).toContainText(body);
+    const msg = await db.eventMessage.findFirst({ where: { eventId: ev.id, body } });
+    expect(msg).toMatchObject({ kind: "HOST_THREAD", authorType: "CUSTOMER" });
+    expect(requests.documents, "sigue sin navegaciones nativas").toEqual([{ method: "GET", path: ev.portalPath }]);
+    expect(requests.leaking(street, body), "ninguna URL pedida lleva la dirección ni el mensaje").toEqual([]);
+  });
+
   test("[PORT-012] la anfitriona agrega invitadas; duplicados y contactos inválidos se rechazan", { tag: ["@P1"] }, async ({ anonPage, db, evidence }) => {
     evidence("clienta", "Portal › Invitadas › Agregar invitada (válida, duplicada, contacto inválido)");
     const ev = await createEventFixture(db, { status: "CONFIRMED" });
@@ -457,6 +550,43 @@ test.describe("Portal · opinión", { tag: ["@module:portal"] }, () => {
     expect(again.code, d(again)).toBe("CONFLICT");
     expect(again.error).toBe("Ya recibimos tu opinión. ¡Gracias por tomarte el tiempo!");
     expect(await db.review.findUnique({ where: { eventId: ev.id } })).toMatchObject({ rating: 5 });
+  });
+
+  test("[PORT-025] antes de que el portal hidrate, la opinión no se envía de forma nativa: el comentario nunca termina en la URL", { tag: ["@P1", "@regression"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("clienta", "Portal de evento COMPLETED con el JS retenido › Cuéntanos más › clic en «Enviar mi opinión» › hidrata › 4 estrellas › Enviar mi opinión");
+    // Sin method y con el botón activo antes de hidratar, el navegador enviaba la opinión por GET a la URL del portal
+    // (/mi-evento/<token>?comment=…): historial, logs, Referer.
+    test.info().annotations.push({ type: "regression", description: "envío nativo por GET antes de hidratar dejaba datos personales en la URL" });
+    const ev = await createEventFixture(db, { status: "COMPLETED" });
+    const comment = `Opinión escrita antes de hidratar ${uniq("rev")}`;
+    const page = await anonPage();
+    const requests = watchRequests(page);
+    const held = await holdPageChunk(page, "(experience)/mi-evento/[token]");
+    await page.goto(ev.portalPath, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    const before = page.getByRole("region", { name: "¿Cómo lo vivieron?", includeHidden: true });
+    const submitBefore = before.getByRole("button", { name: "Enviar mi opinión", includeHidden: true });
+    await fillBeforeHydration(before.getByLabel("Cuéntanos más (opcional)"), comment, browserName);
+    // El comentario es un textarea (Enter agrega un salto de línea): sólo el clic.
+    await trySubmitBeforeHydration({ submit: submitBefore, requests }, browserName);
+    await expectGuardedBeforeHydration(before.locator("form"), submitBefore);
+
+    held.release();
+    const section = page.getByRole("region", { name: "¿Cómo lo vivieron?" });
+    const submit = section.getByRole("button", { name: "Enviar mi opinión" });
+    await expect(submit).toBeEnabled();
+    expect(requests.documents, "ningún envío nativo: la pestaña sólo cargó el portal").toEqual([{ method: "GET", path: ev.portalPath }]);
+    expect(new URL(page.url()).search, "la URL no lleva query").toBe("");
+    await expect(section.getByLabel("Cuéntanos más (opcional)"), "lo escrito sigue ahí").toHaveValue(comment);
+
+    // Ya hidratado, el envío normal funciona y se guarda.
+    await section.getByRole("radio", { name: "4 estrellas: Muy bien" }).check({ force: true }); // input sr-only dentro de la etiqueta
+    await submit.click();
+    await expect(page.getByText("¡Gracias por tu opinión!")).toBeVisible();
+    await expect.poll(async () => (await db.review.findUnique({ where: { eventId: ev.id } }))?.comment).toBe(comment);
+    expect(await db.review.findUnique({ where: { eventId: ev.id } })).toMatchObject({ rating: 4, publishable: false, customerId: ev.customer.id });
+    expect(requests.documents, "sigue sin navegaciones nativas").toEqual([{ method: "GET", path: ev.portalPath }]);
+    expect(requests.leaking(comment), "ninguna URL pedida lleva el comentario").toEqual([]);
   });
 
   test("[PORT-018] antes de completarse el evento no se puede opinar (UI y backend)", { tag: ["@P1", "@negative"] }, async ({ anonPage, apiAs, db, evidence }) => {

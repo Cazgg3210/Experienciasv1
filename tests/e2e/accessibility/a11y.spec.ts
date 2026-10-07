@@ -189,6 +189,9 @@ test.describe("Accesibilidad · teclado, foco, semántica", { tag: ["@a11y"] }, 
   test("[A11Y-022] RSVP: elegir respuesta con teclado, foco visible y labels asociados", { tag: ["@P1", "@module:guests"] }, async ({ page, evidence }) => {
     evidence("invitada", "/e/cumple-sofia/[Camila] sin mouse (sin enviar)");
     await page.goto(`/e/${TOKENS.micrositeSofia}/${TOKENS.guestCamila}`);
+    // La invitación llega en streaming (Suspense): al evento load el formulario puede seguir en el segmento oculto,
+    // donde focus() no hace nada y el Tab arrancaba desde el inicio («Saltar al contenido»). Esperar a que se revele.
+    await expect(page.getByLabel("Tu nombre")).toBeVisible();
     await expect(page.getByLabel("Tu nombre")).toHaveValue("Camila Torres");
     await page.getByLabel("Tu nombre").focus();
     await page.keyboard.press("Tab");

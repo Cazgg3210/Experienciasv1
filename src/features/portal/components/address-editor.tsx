@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { addressFormSchema, type AddressFormValues } from "../schemas";
@@ -60,6 +61,9 @@ export function AddressEditor({
     <form
       id={formId}
       onSubmit={form.handleSubmit(onSubmit)}
+      // POST (no GET) y botón deshabilitado hasta hidratar: si llega abierto desde el servidor (sin dirección), lo
+      // escrito nunca termina en la URL (historial, logs, Referer).
+      method="post"
       noValidate
       className="bg-sand-soft/60 space-y-4 rounded-2xl border p-4 sm:p-5"
     >
@@ -125,6 +129,7 @@ export function AddressEditor({
           />
         )}
       </Field>
+      <NoScriptNotice />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
@@ -137,7 +142,7 @@ export function AddressEditor({
         >
           Cancelar
         </Button>
-        <SubmitButton pending={pending} size="xl">
+        <SubmitButton waitForHydration pending={pending} size="xl">
           Guardar dirección
         </SubmitButton>
       </div>

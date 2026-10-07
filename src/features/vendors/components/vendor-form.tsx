@@ -17,7 +17,7 @@ import { VENDOR_CATEGORY_LABELS, VENDOR_STATUS_LABELS, toOptions } from "@/lib/l
 import { cn } from "@/lib/utils";
 import { vendorBaseSchema, type VendorFormInput } from "../schemas";
 import { createVendorAction, updateVendorAction } from "../server/actions";
-import { useHydrated } from "@/features/inventory/components/use-hydrated";
+import { useHydrated } from "@/components/forms/use-hydrated";
 
 const categoryOptions = toOptions(VENDOR_CATEGORY_LABELS);
 const statusOptions = toOptions(VENDOR_STATUS_LABELS);

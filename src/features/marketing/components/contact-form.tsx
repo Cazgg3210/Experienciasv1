@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { handleActionResult } from "@/components/forms/action-result";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { WhatsAppIcon } from "@/components/site/brand-icons";
@@ -37,9 +38,6 @@ export function ContactForm({ minDate, waNumber }: { minDate: string; waNumber: 
   const [success, setSuccess] = useState<{ code: string; name: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const successRef = useRef<HTMLHeadingElement>(null);
-  // Hasta hidratar, el envío nativo no debe ocurrir (perdería lo escrito); ver method="post" abajo.
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
 
   const form = useForm<ContactFormValues, unknown, ContactFormInput>({
     resolver: zodResolver(contactFormSchema),
@@ -223,14 +221,13 @@ export function ContactForm({ minDate, waNumber }: { minDate: string; waNumber: 
         </div>
       </div>
 
-      <noscript>
-        <p className="text-muted-foreground mt-6 text-sm">
-          Para enviar este formulario activa JavaScript en tu navegador, o escríbenos directo por WhatsApp o correo.
-        </p>
-      </noscript>
+      <NoScriptNotice className="mt-6">
+        Para enviar este formulario activa JavaScript en tu navegador, o escríbenos directo por WhatsApp o correo.
+      </NoScriptNotice>
+      {/* Deshabilitado hasta hidratar: el envío nativo perdería lo escrito (ver method="post" arriba). */}
       <SubmitButton
+        waitForHydration
         pending={pending}
-        disabled={!hydrated || pending}
         pendingText="Enviando…"
         size="xl"
         className="mt-8 w-full sm:w-auto"

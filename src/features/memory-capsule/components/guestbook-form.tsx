@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { Input } from "@/components/ui/input";
@@ -13,11 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { GUESTBOOK_BODY_MAX } from "../domain/capsule";
 import { guestbookFormSchema, type GuestbookFormValues } from "../schemas";
 import { submitGuestbookMessageAction } from "../server/actions";
-import { useHydrated } from "./use-hydrated";
 
 export function GuestbookForm({ token }: { token: string }) {
   const [pending, startTransition] = useTransition();
-  const hydrated = useHydrated();
   const form = useForm<GuestbookFormValues>({
     resolver: zodResolver(guestbookFormSchema),
     // Sin defaultValues a propósito: al registrar cada campo, react-hook-form toma lo que ya hay en el
@@ -68,9 +67,11 @@ export function GuestbookForm({ token }: { token: string }) {
           />
         )}
       </Field>
+      <NoScriptNotice />
+      {/* Deshabilitado hasta hidratar: el envío nativo iría a la URL con el nombre y el mensaje (ver method="post"). */}
       <SubmitButton
+        waitForHydration
         pending={pending}
-        disabled={pending || !hydrated}
         pendingText="Enviando…"
         className="w-full sm:w-auto"
         size="lg"

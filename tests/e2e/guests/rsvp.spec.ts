@@ -10,10 +10,13 @@ import {
   createEventFixture,
   createGuestFixture,
   describe as d,
+  expectGuardedBeforeHydration,
   fillBeforeHydration,
   holdPageChunk,
   token,
+  trySubmitBeforeHydration,
   waitHydrated,
+  watchRequests,
 } from "../events/_helpers";
 
 async function openRsvp(page: Page, path: string) {
@@ -196,6 +199,55 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     expect(sent.map((m) => m.body)).toEqual([honoree]);
     await page.waitForURL(new RegExp(`/e/${ev.micrositeSlug}/${guest.token}`));
     await expect(page.getByRole("heading", { name: "¡Gracias, Ximena! Te esperamos" })).toBeVisible();
+  });
+
+  test("[GST-028] antes de que la página hidrate el RSVP no se envía de forma nativa: el nombre y el correo de la invitada nunca terminan en la URL", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence, browserName }) => {
+    evidence("invitada", "Link general con el JS de la página retenido › nombre y email › Enter y clic en «Enviar mi respuesta» › hidrata › ¡Sí, ahí estaré! › Enviar mi respuesta");
+    // Sin method y con el botón activo antes de hidratar, el navegador enviaba el formulario por GET a la URL actual:
+    // /e/…?name=…&email=… quedaba en el historial, en los logs del servidor y del proxy y en el Referer.
+    test.info().annotations.push({ type: "regression", description: "envío nativo por GET antes de hidratar dejaba datos personales en la URL" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const name = `Valeria ${uniq("Priv")}`;
+    const email = uniqEmail("valeria");
+    const page = await anonPage();
+    const requests = watchRequests(page);
+    // Celular lento simulado de forma determinista: el chunk de la página (el formulario) no llega hasta que la
+    // invitada ya escribió e intentó enviar; el resto de la app sí carga.
+    const held = await holdPageChunk(page, "(experience)/e/[slug]/[token]");
+    await page.goto(ev.invitePath, { waitUntil: "domcontentloaded" }); // "load" esperaría al chunk retenido
+    await held.requested();
+    // Antes de hidratar, en WebKit el formulario (segmento en streaming) existe pero sigue oculto: ver fillBeforeHydration.
+    const before = page.getByRole("region", { name: "Confirmación de asistencia", includeHidden: true });
+    const nameBefore = before.getByRole("textbox", { name: "Tu nombre", includeHidden: true });
+    const submitBefore = before.getByRole("button", { name: "Enviar mi respuesta", includeHidden: true });
+    await fillBeforeHydration(nameBefore, name, browserName);
+    await fillBeforeHydration(before.getByLabel("Tu email (opcional)"), email, browserName);
+    await trySubmitBeforeHydration({ enterIn: nameBefore, submit: submitBefore, requests }, browserName);
+    await expectGuardedBeforeHydration(before.locator("form"), submitBefore);
+
+    held.release();
+    const section = page.getByRole("region", { name: "Confirmación de asistencia" });
+    const submit = section.getByRole("button", { name: "Enviar mi respuesta" });
+    // El botón se habilita al terminar de hidratar.
+    await expect(submit).toBeEnabled();
+    expect(requests.documents, "ningún envío nativo: la pestaña sólo cargó la invitación").toEqual([{ method: "GET", path: ev.invitePath }]);
+    expect(new URL(page.url()).search, "la URL no lleva query").toBe("");
+    await expect(section.getByRole("textbox", { name: "Tu nombre" }), "lo escrito sigue ahí").toHaveValue(name);
+    await expect(section.getByLabel("Tu email (opcional)")).toHaveValue(email);
+
+    // Ya hidratado, el envío normal funciona y se guarda.
+    await section.getByText("¡Sí, ahí estaré!").click();
+    await submit.click();
+    await expect.poll(() => db.eventGuest.count({ where: { eventId: ev.id, name } })).toBe(1);
+    const guest = await db.eventGuest.findFirstOrThrow({ where: { eventId: ev.id, name } });
+    expect(guest).toMatchObject({ source: "SELF_RSVP", rsvpStatus: "ATTENDING", email });
+    await page.waitForURL(new RegExp(`/e/${ev.micrositeSlug}/${guest.token}`));
+    await expect(page.getByRole("heading", { name: "¡Gracias, Valeria! Te esperamos" })).toBeVisible();
+    expect(requests.documents, "sólo la invitación y el link personal, sin query").toEqual([
+      { method: "GET", path: ev.invitePath },
+      { method: "GET", path: `/e/${ev.micrositeSlug}/${guest.token}` },
+    ]);
+    expect(requests.leaking(name, email), "ninguna URL pedida lleva el nombre ni el correo").toEqual([]);
   });
 
   test("[GST-014] con el link general, escribir el nombre de otra invitada NO debe sobrescribir su respuesta ni entregar su link personal", { tag: ["@P0", "@permissions", "@regression"] }, async ({ anonPage, db, evidence }) => {

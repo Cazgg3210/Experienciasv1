@@ -7,6 +7,7 @@ import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/forms/field";
+import { NoScriptNotice } from "@/components/forms/noscript-notice";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { handleActionResult } from "@/components/forms/action-result";
 import { portalAccessFormSchema, type PortalAccessFormValues } from "../schemas";
@@ -60,7 +61,14 @@ export function AccessForm() {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
+    <form
+      onSubmit={form.handleSubmit(onSubmit)}
+      // POST (no GET) y botón deshabilitado hasta hidratar: si alguien envía antes de que cargue el JS, su correo
+      // nunca termina en la URL (historial, logs, Referer).
+      method="post"
+      noValidate
+      className="space-y-4"
+    >
       <Field label="Tu correo" required error={form.formState.errors.email?.message}>
         {(p) => (
           <Input
@@ -76,7 +84,8 @@ export function AccessForm() {
           />
         )}
       </Field>
-      <SubmitButton pending={pending} pendingText="Enviando…" size="xl" className="w-full">
+      <NoScriptNotice>Para recibir tu enlace activa JavaScript en tu navegador.</NoScriptNotice>
+      <SubmitButton waitForHydration pending={pending} pendingText="Enviando…" size="xl" className="w-full">
         Enviarme mi enlace
       </SubmitButton>
     </form>
