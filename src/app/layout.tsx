@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, DM_Sans } from "next/font/google";
+import { NavigationGuardBridge } from "@/components/navigation/navigation-guard-bridge";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           Saltar al contenido
         </a>
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        <NavigationGuardBridge />
         <Toaster
           position="top-center"
           richColors

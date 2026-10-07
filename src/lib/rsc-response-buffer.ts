@@ -1,5 +1,6 @@
 /**
- * BUG-006 — Mitigación para transiciones del App Router que se quedan colgadas.
+ * BUG-006 — Mitigación para transiciones del App Router que se quedan colgadas (funciones puras; el
+ * instalador que las conecta a `window` está en src/components/navigation/navigation-guard.ts).
  *
  * Síntoma: navegar a la MISMA ruta cambiando sólo `searchParams` (calendario, filtros, paginación),
  * `router.refresh()` o aplicar la respuesta de una Server Action que revalida deja la transición
@@ -15,9 +16,11 @@
  * 3. Al adjuntar el ping (`attachPingListener` → `chunk.then`) el chunk se inicializa y llama al ping de
  *    forma síncrona, en plena fase de render y con estado `RootSuspendedWithDelay`: `pingSuspendedRoot`
  *    lo descarta. La raíz queda con `suspendedLanes` y sin ping: nada vuelve a intentar el render.
- * Evidencia y experimentos: docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»).
+ * Corrección en React: facebook/react#36134 (commit c0d218f, 2026-03-24: registra el ping en
+ * `workInProgressRootPingedLanes`). La traen react-dom 19.3.0 y Next ≥ 16.3.0; ninguna 15.5.x.
+ * Evidencia, experimentos y criterio de retiro: docs/qa/findings/events.md (EVX-BUG-02 › «Corrección (BUG-006)»).
  *
- * Mitigación (dos partes, ambas en el `fetch` del navegador; ver src/instrumentation-client.ts):
+ * Mitigación (dos partes en el `fetch` del navegador, más la red de seguridad de navigation-guard):
  * A. Entregar a React las respuestas RSC (`text/x-component`) ya completas. Con todo el cuerpo disponible,
  *    Flight procesa todas las filas antes de que React renderice, así que React nunca se suspende
  *    esperando datos de la red y la carrera no puede ocurrir. Aplica a navegaciones, prefetch,
@@ -27,12 +30,17 @@
  *    navegación a una ruta hermana (p. ej. /admin/settings → /admin/settings/pricing), el parche reemplaza
  *    la ruta nueva por la vieja (URL nueva, contenido viejo). El defecto ya existía, pero con (A) la
  *    ventana pasa de "primer byte" a "respuesta completa". Si otra navegación a otra URL empezó después
- *    de la petición, se entrega un payload RSC válido sin datos (`f: []`), que Next aplica sin cambios
- *    (igual que cuando la ruta del parche ya no coincide).
+ *    de la petición, se entrega un payload RSC válido sin datos (`f: []`), que Next aplica sin cambios.
+ *    Next sólo descarta así los parches cuya ruta ya no coincide; B lo extiende a rutas hermanas y a la
+ *    misma ruta, y deja el nodo de esa URL en el caché del router sin contenido (`rsc = null` con
+ *    `lazyData` ya resuelto): volver a ella mostraría el esqueleto de carga para siempre. Por eso cada
+ *    descarte se avisa (`onDiscard`) y navigation-guard recupera esa URL con `router.refresh()`.
+ *    Límite: sólo detecta navegaciones que empezaron DESPUÉS de emitir el lazy fetch (ver
+ *    `createRouterTransitions`).
  * Costo: las navegaciones del cliente ya no pintan por partes; la carga inicial (HTML) sigue en streaming.
  *
- * Retirar cuando se actualice a una versión de Next/React con la corrección, verificando antes con
- * tests/e2e CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022..024, NOT-002, SET-001 y CRIT-004.
+ * Retirar cuando se actualice a Next ≥ 16.3 (React con #36134), verificando antes con tests/e2e CAL-002,
+ * EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022..024, NOT-002, SET-001, SET-023/024 y CRIT-004.
  */
 
 export const RSC_CONTENT_TYPE = "text/x-component";
@@ -90,6 +98,20 @@ export function routerUrlKey(url: string | URL, base: string): string {
   return `${u.pathname}${u.search}`;
 }
 
+/** Método y cabeceras efectivos de `fetch(input, init)` (las de `init` mandan sobre las del `Request`). */
+function requestInfo(input: RequestInfo | URL, init?: RequestInit): { method: string; headers: Headers } {
+  const request = typeof Request !== "undefined" && input instanceof Request ? input : null;
+  const headers = new Headers(request?.headers);
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  return { method: (init?.method ?? request?.method ?? "GET").toUpperCase(), headers };
+}
+
+/** ¿Es una petición del router de Next (navegación, prefetch, refresh, lazy fetch) o una Server Action? */
+export function isRscRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+  const { headers } = requestInfo(input, init);
+  return headers.get("rsc") === "1" || headers.has("next-action");
+}
+
 type FlightRouterState = [unknown, Record<string, FlightRouterState>, ...unknown[]];
 
 function hasNestedRefetch(tree: FlightRouterState, depth = 0): boolean {
@@ -104,11 +126,8 @@ function hasNestedRefetch(tree: FlightRouterState, depth = 0): boolean {
  * ni Server Action, con el marcador `refetch` debajo de la raíz; `router.refresh()` lo pone en la raíz).
  */
 export function isLazySegmentFetch(input: RequestInfo | URL, init?: RequestInit): boolean {
-  const request = typeof Request !== "undefined" && input instanceof Request ? input : null;
-  const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+  const { method, headers } = requestInfo(input, init);
   if (method !== "GET") return false;
-  const headers = new Headers(request?.headers);
-  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
   if (headers.get("rsc") !== "1" || headers.has("next-router-prefetch") || headers.has("next-action")) return false;
   const rawTree = headers.get("next-router-state-tree");
   if (!rawTree) return false;
@@ -124,12 +143,21 @@ export function isLazySegmentFetch(input: RequestInfo | URL, init?: RequestInit)
 export type RouterTransitions = {
   /** Nueva navegación (push, replace o atrás/adelante) hacia `url`. */
   start(url: string): void;
-  /** Marca para comparar después con `supersedes`. */
+  /** Marca (secuencia de la última navegación) para comparar después con `supersedes`. */
   mark(): number;
   /** ¿Empezó después de `mark` una navegación hacia una URL distinta de `key`? */
   supersedes(mark: number, key: string): boolean;
 };
 
+/**
+ * Límite conocido (revisión adversarial, tercer menor): sólo cuentan las navegaciones que empezaron DESPUÉS
+ * de emitir el lazy fetch. Si React renderiza un estado ya superado después de que empezó la navegación Y,
+ * el lazy fetch de ese render toma la marca de Y y no se descarta (se aplica el parche obsoleto, como sin
+ * la mitigación). No se compara la URL del lazy fetch con el destino vigente porque no son equivalentes:
+ * tras una redirección (HTTP seguida por `fetch`, o de una Server Action, que no pasa por
+ * `onRouterTransitionStart`) la URL canónica del estado difiere del destino pedido, y descartar ese lazy
+ * fetch legítimo dejaría la página en el esqueleto de carga. Detalle en docs/qa/findings/events.md.
+ */
 export function createRouterTransitions(base: () => string): RouterTransitions {
   let seq = 0;
   let target: string | null = null;
@@ -143,40 +171,41 @@ export function createRouterTransitions(base: () => string): RouterTransitions {
   };
 }
 
+export type RscFetchHooks = {
+  /** Empezó (+1) o terminó (−1) una petición RSC: el cuerpo ya se leyó completo o falló. */
+  onActivity?(delta: 1 | -1): void;
+  /** Se descartó (B) la respuesta del lazy fetch de `key` (clave de `routerUrlKey`). */
+  onDiscard?(key: string): void;
+};
+
 /** `fetch` con las dos partes de la mitigación (A: bufferizar RSC; B: descartar lazy fetch obsoletos). */
-export function createRscFetch(original: typeof fetch, transitions: RouterTransitions, base: () => string): typeof fetch {
+export function createRscFetch(
+  original: typeof fetch,
+  transitions: RouterTransitions,
+  base: () => string,
+  hooks: RscFetchHooks = {},
+): typeof fetch {
   return async (input, init) => {
+    const tracked = isRscRequest(input, init);
     const lazyKey = isLazySegmentFetch(input, init)
       ? routerUrlKey(input instanceof Request ? input.url : input, base())
       : null;
     const mark = transitions.mark();
-    const res = await original(input, init);
-    if (!isFlightResponse(res)) return res;
-    const body = await res.arrayBuffer();
-    if (lazyKey !== null && transitions.supersedes(mark, lazyKey)) {
-      const noop = noopFlightResponse(res, new TextDecoder().decode(body));
-      if (noop) return noop;
+    if (tracked) hooks.onActivity?.(1);
+    try {
+      const res = await original(input, init);
+      if (!isFlightResponse(res)) return res;
+      const body = await res.arrayBuffer();
+      if (lazyKey !== null && transitions.supersedes(mark, lazyKey)) {
+        const noop = noopFlightResponse(res, new TextDecoder().decode(body));
+        if (noop) {
+          hooks.onDiscard?.(lazyKey);
+          return noop;
+        }
+      }
+      return rebuild(res, body);
+    } finally {
+      if (tracked) hooks.onActivity?.(-1);
     }
-    return rebuild(res, body);
   };
-}
-
-type FetchHost = { fetch: typeof fetch; location?: { href: string } };
-
-const INSTALLED = Symbol.for("ivonne-rosa.rsc-response-buffer");
-
-/**
- * Envuelve `host.fetch` (en el navegador, `window`). Idempotente: instalarlo dos veces no anida
- * envoltorios. Devuelve el registro de navegaciones que debe alimentar `onRouterTransitionStart`.
- */
-export function installRscResponseBuffer(host: FetchHost): RouterTransitions {
-  const marked = host as FetchHost & { [INSTALLED]?: RouterTransitions };
-  const existing = marked[INSTALLED];
-  if (existing) return existing;
-  const base = () => host.location?.href ?? "http://localhost/";
-  const transitions = createRouterTransitions(base);
-  const original = host.fetch;
-  host.fetch = createRscFetch((input, init) => original.call(host, input, init), transitions, base);
-  Object.defineProperty(marked, INSTALLED, { value: transitions });
-  return transitions;
 }

@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   bufferFlightResponse,
   createRouterTransitions,
   createRscFetch,
-  installRscResponseBuffer,
+  isRscRequest,
   isFlightResponse,
   isLazySegmentFetch,
   noopFlightResponse,
@@ -224,38 +224,59 @@ describe("createRscFetch", () => {
   });
 });
 
-describe("installRscResponseBuffer", () => {
-  it("envuelve fetch conservando argumentos y this, y devuelve el registro de navegaciones", async () => {
-    const calls: Array<{ self: unknown; args: unknown[] }> = [];
-    const host = {
-      location: { href: BASE },
-      fetch: function (this: unknown, ...args: unknown[]) {
-        calls.push({ self: this, args });
-        return Promise.resolve(streamedResponse(["0:{}\n", "1:[]\n"]).res);
-      } as unknown as typeof fetch,
-    };
-    const transitions = installRscResponseBuffer(host);
-    expect(typeof transitions.start).toBe("function");
-    const init = { headers: { RSC: "1" } };
-    const res = await host.fetch("/admin/calendar?_rsc=abc", init);
-    expect(await res.text()).toBe("0:{}\n1:[]\n");
-    expect(calls[0]).toEqual({ self: host, args: ["/admin/calendar?_rsc=abc", init] });
+describe("isRscRequest", () => {
+  it("reconoce las peticiones del router (RSC: 1) y las Server Actions (Next-Action)", () => {
+    expect(isRscRequest("/admin?_rsc=1", { headers: { RSC: "1" } })).toBe(true);
+    expect(isRscRequest("/admin", { headers: { RSC: "1", "Next-Router-Prefetch": "1" } })).toBe(true);
+    expect(isRscRequest("/admin", { method: "POST", headers: { "Next-Action": "abc" } })).toBe(true);
+    expect(isRscRequest(new Request("http://localhost:3000/admin?_rsc=1", { headers: { rsc: "1" } }))).toBe(true);
   });
 
-  it("es idempotente (no anida envoltorios y reutiliza el registro)", async () => {
-    const original = vi.fn(async () => new Response("ok", { headers: { "content-type": "text/plain" } }));
-    const host = { fetch: original as unknown as typeof fetch };
-    const first = installRscResponseBuffer(host);
-    const wrapped = host.fetch;
-    expect(installRscResponseBuffer(host)).toBe(first);
-    expect(host.fetch).toBe(wrapped);
-    await host.fetch("/x");
-    expect(original).toHaveBeenCalledTimes(1);
+  it("ignora el resto de fetch", () => {
+    expect(isRscRequest("/api/health")).toBe(false);
+    expect(isRscRequest("/api/media/upload", { method: "POST", body: "x" })).toBe(false);
+  });
+});
+
+describe("createRscFetch › avisos (onActivity, onDiscard)", () => {
+  function setup(make: () => Promise<Response>) {
+    const transitions = createRouterTransitions(base);
+    const activity: number[] = [];
+    const discarded: string[] = [];
+    const rscFetch = createRscFetch((async () => make()) as typeof fetch, transitions, base, {
+      onActivity: (delta) => activity.push(delta),
+      onDiscard: (key) => discarded.push(key),
+    });
+    return { transitions, activity, discarded, rscFetch };
+  }
+
+  it("cuenta cada petición RSC desde que sale hasta que su cuerpo se leyó completo", async () => {
+    const { res, state } = streamedResponse([PAYLOAD.slice(0, 20), PAYLOAD.slice(20)]);
+    const { rscFetch, activity } = setup(async () => res);
+    const pending = rscFetch("/admin/calendar?_rsc=1", { headers: { RSC: "1" } });
+    expect(activity).toEqual([1]);
+    await pending;
+    expect(state.closed).toBe(true);
+    expect(activity).toEqual([1, -1]);
   });
 
-  it("propaga los rechazos de fetch (p. ej. AbortError al salir de la página)", async () => {
-    const host = { fetch: (async () => Promise.reject(new DOMException("aborted", "AbortError"))) as unknown as typeof fetch };
-    installRscResponseBuffer(host);
-    await expect(host.fetch("/admin?_rsc=1")).rejects.toThrow("aborted");
+  it("también cierra la cuenta si fetch falla, y no cuenta lo que no es RSC", async () => {
+    const failing = setup(async () => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(failing.rscFetch("/admin?_rsc=1", { headers: { RSC: "1" } })).rejects.toThrow("Failed to fetch");
+    expect(failing.activity).toEqual([1, -1]);
+    const plain = setup(async () => new Response("{}", { headers: { "content-type": "application/json" } }));
+    await plain.rscFetch("/api/health");
+    expect(plain.activity).toEqual([]);
+  });
+
+  it("avisa la URL del lazy fetch descartado (y sólo de ese)", async () => {
+    const { rscFetch, transitions, discarded } = setup(async () => streamedResponse([PAYLOAD]).res);
+    transitions.start("/admin/settings");
+    const stale = rscFetch("/admin/settings?_rsc=1", lazyInit("page"));
+    transitions.start("/admin/settings/pricing");
+    expect(await (await stale).text()).toBe('0:{"b":"build-123","f":[]}\n');
+    expect(discarded).toEqual(["/admin/settings"]);
+    expect(await (await rscFetch("/admin/settings/pricing?_rsc=2", lazyInit("page"))).text()).toBe(PAYLOAD);
+    expect(discarded).toEqual(["/admin/settings"]);
   });
 });
