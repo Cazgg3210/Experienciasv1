@@ -33,7 +33,8 @@ test.describe("Memory Capsule · admin", { tag: ["@module:memory"] }, () => {
     await page.getByRole("textbox", { name: "Título" }).fill(`Recuerdos ${uniq("Cap")}`);
     await create.click();
     await expect(page.getByText("Memory Capsule creada")).toBeVisible();
-    await expect(page.getByText("En preparación")).toBeVisible();
+    // Insignia de estado (texto exacto): las ayudas de Ajustes y Compartir también mencionan "en preparación".
+    await expect(page.getByText("En preparación", { exact: true })).toBeVisible();
     const capsule = await db.memoryCapsule.findUnique({ where: { eventId: ev.id } });
     expect(capsule).toMatchObject({ published: false, allowGuestUploads: true });
     expect(capsule?.shareToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
