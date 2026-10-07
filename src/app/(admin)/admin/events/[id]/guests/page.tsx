@@ -45,7 +45,7 @@ export default async function EventGuestsPage({ params }: { params: Promise<{ id
       dietaryNotes: g.dietaryNotes,
       comment: g.comment,
       source: g.source,
-      possibleDuplicate: possibleDuplicates.has(g.id),
+      duplicateOf: possibleDuplicates.get(g.id) ?? [],
       respondedAtLabel: g.respondedAt ? formatDateTime(g.respondedAt) : null,
       rsvpUrl,
       whatsappUrl: g.phone ? whatsappLink(g.phone, text) : null,

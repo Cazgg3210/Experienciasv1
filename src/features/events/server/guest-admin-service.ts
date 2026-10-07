@@ -8,7 +8,7 @@ import { generateToken } from "@/lib/tokens";
 import { audit } from "@/server/audit";
 import type { SessionUser } from "@/server/auth/session";
 import { notify } from "@/features/notifications/server/notification-service";
-import { possibleDuplicateIds } from "@/features/guests/domain/rsvp";
+import { possibleDuplicateMatches } from "@/features/guests/domain/rsvp";
 import { blankToNull } from "../domain/event-changes";
 import {
   GUEST_CSV_HEADERS,
@@ -71,12 +71,16 @@ export async function getGuestsOverview(eventId: string) {
     },
   });
   if (!event) return null;
+  const matches = possibleDuplicateMatches(event.guests);
   return {
     event,
     summary: summarizeRsvp(event.guests),
     dietary: aggregateDietary(event.guests),
-    /** Auto-registros del link general que coinciden con otra invitada (revisión del equipo) */
-    possibleDuplicates: possibleDuplicateIds(event.guests),
+    /**
+     * Auto-registros del link general que coinciden con otra invitada (revisión del equipo): id de la
+     * invitada marcada → nombres de las invitadas con que coincide.
+     */
+    possibleDuplicates: new Map<string, string[]>([...matches].map(([id, found]) => [id, found.map((g) => g.name)])),
   };
 }
 export type GuestsOverview = NonNullable<Awaited<ReturnType<typeof getGuestsOverview>>>;

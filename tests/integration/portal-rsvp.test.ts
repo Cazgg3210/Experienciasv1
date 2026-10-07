@@ -18,6 +18,7 @@ import {
 } from "@/features/portal/server/host-service";
 import { addGuestAsHost, removeGuestAsHost } from "@/features/guests/server/guest-service";
 import { submitRsvp } from "@/features/guests/server/rsvp-service";
+import { getGuestsOverview } from "@/features/events/server/guest-admin-service";
 import { getInviteCalendar, getInviteView } from "@/features/guests/server/invite-queries";
 import { PORTAL_ACCESS_NEUTRAL_MESSAGE } from "@/features/portal/domain/portal";
 import type { RsvpFormValues } from "@/features/guests/schemas";
@@ -187,16 +188,18 @@ describe("RSVP del micrositio", () => {
       [second.guestId, "Te quiero", "GUEST"],
     ]);
 
-    // Rastro para el equipo y marca visible para la anfitriona (sólo en la segunda)
+    // Rastro para el equipo (al registrarse la segunda) y marca visible para la anfitriona. Las dos se
+    // registraron solas con el link general: ninguna probó ser quien dice, así que se marcan las DOS y
+    // cada una dice con quién coincide (el orden de llegada no decide cuál es la original).
     const audits = await prisma.auditLog.findMany({ where: { action: "guest.possible_duplicate", entityId: second.guestId } });
     expect(audits).toHaveLength(1);
     expect(audits[0]!.ip).toBe("203.0.113.7");
     expect(audits[0]!.after).toMatchObject({ eventId: ev.id, matchedGuestIds: [first.guestId] });
     expect(await prisma.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: first.guestId } })).toBe(0);
     const dashboard = await getPortalDashboard(ev.portalToken);
-    expect(dashboard?.guests.map((g) => [g.id, g.possibleDuplicate])).toEqual([
-      [first.guestId, false],
-      [second.guestId, true],
+    expect(dashboard?.guests.map((g) => [g.id, g.possibleDuplicate, g.duplicateHint])).toEqual([
+      [first.guestId, true, "Coincide con «camila TORRES» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro."],
+      [second.guestId, true, "Coincide con «Camila Torres» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro."],
     ]);
 
     const tracked = await prisma.analyticsEvent.count({ where: { type: "RSVP_SUBMIT", eventId: ev.id } });
@@ -244,6 +247,36 @@ describe("RSVP del micrositio", () => {
     const view = await getInviteView(ev.micrositeSlug, byName.guestToken);
     expect(view?.guest).toMatchObject({ name: "valentina ortega", rsvpStatus: "NOT_ATTENDING", dietaryNotes: null, comment: null });
     expect(JSON.stringify(view)).not.toContain("Alergia severa a la nuez");
+  });
+
+  it("amiga agregada por la anfitriona que responde con el link general: se marca con quién coincide y la anfitriona puede quitar el pendiente", async () => {
+    const ev = await makeEvent();
+    const friend = await addGuestAsHost(ev.portalToken, { name: "Lucía Vega", contact: "lucia.vega@example.test" });
+    const answered = await submitRsvp({
+      slug: ev.micrositeSlug,
+      token: ev.inviteToken,
+      rsvp: rsvp({ name: "Lucía Vega", rsvpStatus: "ATTENDING" }),
+    });
+    expect(answered.possibleDuplicate).toBe(true);
+    // La auditoría se escribe en la misma transacción que la invitada (visible en cuanto responde).
+    expect(await prisma.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: answered.guestId } })).toBe(1);
+
+    const rows = new Map((await getPortalDashboard(ev.portalToken))!.guests.map((g) => [g.id, g]));
+    expect(rows.get(friend.id)).toMatchObject({ possibleDuplicate: false, duplicateHint: null, canRemove: true });
+    expect(rows.get(answered.guestId)).toMatchObject({
+      possibleDuplicate: true,
+      canRemove: false,
+      duplicateHint: "Coincide con «Lucía Vega» de tu lista. Si es la misma persona, quita el registro pendiente de «Lucía Vega» para dejar uno solo.",
+    });
+    // El equipo ve lo mismo en el admin (con quién coincide), sin marcar a la que agregó la anfitriona.
+    const overview = await getGuestsOverview(ev.id);
+    expect(overview!.possibleDuplicates.get(answered.guestId)).toEqual(["Lucía Vega"]);
+    expect(overview!.possibleDuplicates.has(friend.id)).toBe(false);
+
+    // La anfitriona quita el registro pendiente: queda uno solo y ya no hay posible duplicado.
+    await removeGuestAsHost(ev.portalToken, friend.id);
+    const after = await getPortalDashboard(ev.portalToken);
+    expect(after!.guests.map((g) => [g.id, g.possibleDuplicate, g.duplicateHint])).toEqual([[answered.guestId, false, null]]);
   });
 
   it("token personal actualiza a la invitada correcta y no toca a las demás", async () => {

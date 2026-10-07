@@ -3,7 +3,8 @@
  *  - submitRsvpAction: 10 respuestas / 10 min por IP (src/features/guests/server/actions.ts).
  * Desde BUG-003 cada respuesta con el link general crea una invitada nueva (nunca toma a otra): este límite
  * y el cupo de 60 invitadas ([GST-021]) son los que frenan que alguien llene la lista desde el link general.
- * La base del carril se re-siembra (TRUNCATE) por invocación: la cubeta de esta acción empieza vacía.
+ * La base del carril se re-siembra (TRUNCATE) por invocación, pero un reintento de esta prueba (E2E_RETRIES)
+ * encontraría la cubeta ya gastada por el intento anterior: por eso la prueba la vacía al empezar.
  */
 import { expect, test, uniq } from "../fixtures";
 import { callAction, createEventFixture, describe as d } from "../events/_helpers";
@@ -30,6 +31,8 @@ function rsvpInput(slug: string, token: string, name: string) {
 test.describe("RSVP público — rate limit", { tag: ["@module:guests"] }, () => {
   test("[GST-024] link general: 10 respuestas por IP en 10 min; la 11ª responde RATE_LIMITED y no crea invitada", { tag: ["@P2", "@negative"] }, async ({ apiAs, db, evidence }) => {
     evidence("invitada", "submitRsvpAction con el link general × 11 desde la misma IP");
+    // Cubeta propia de esta acción (clave "action:<nombre>:<ip>"): vacía también en un reintento.
+    await db.rateLimitBucket.deleteMany({ where: { key: { startsWith: "action:guests.submit_rsvp:" } } });
     const ev = await createEventFixture(db, { status: "CONFIRMED" });
     const api = await apiAs(null);
     const codes: string[] = [];
