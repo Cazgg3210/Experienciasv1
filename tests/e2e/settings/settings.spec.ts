@@ -29,6 +29,18 @@ async function teamUser(db: PrismaClient, role: "OWNER" | "STAFF" = "STAFF") {
 
 const usersList = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Cuentas del equipo" });
 
+/** ¿Es el "lazy fetch" del layout-router (GET RSC, sin prefetch, con `refetch` debajo de la raíz del árbol)? */
+function isLazySegmentRequest(req: import("@playwright/test").Request): boolean {
+  const h = req.headers();
+  if (req.method() !== "GET" || h["rsc"] !== "1" || h["next-router-prefetch"] || h["next-action"]) return false;
+  try {
+    const tree = JSON.parse(decodeURIComponent(h["next-router-state-tree"] ?? "")) as unknown[];
+    return tree[3] !== "refetch" && JSON.stringify(tree).includes('"refetch"');
+  } catch {
+    return false;
+  }
+}
+
 test.describe("Ajustes · páginas", { tag: ["@module:settings"] }, () => {
   test("[SET-001] todas las secciones de configuración cargan desde la navegación lateral", { tag: ["@P1", "@smoke", "@regression"] }, async ({ rolePage, evidence }) => {
     evidence("superadmin", "/admin/settings › cada sección del menú");
@@ -51,6 +63,73 @@ test.describe("Ajustes · páginas", { tag: ["@module:settings"] }, () => {
       await expect(page.getByRole("heading", { level: 2, name: heading, exact: true })).toBeVisible();
     }
   });
+
+  /**
+   * BUG-006, parte B: si el "lazy fetch" de «Negocio» llega después de que empezó la navegación a «Precios»,
+   * se descarta (para que no reemplace la página nueva) y el nodo de «Negocio» queda en el caché del router
+   * sin contenido. Volver a esa URL con Atrás se quedaba en el esqueleto de carga (SET-023; antes de la
+   * recuperación de src/lib/navigation-guard.ts: FAIL). Con el enlace, Next crea un nodo nuevo (SET-024,
+   * caso de control: debe seguir funcionando). La respuesta lenta se reproduce de forma determinista
+   * reteniendo esa petición hasta que la navegación a «Precios» terminó.
+   */
+  for (const [id, how, tags] of [
+    ["SET-023", "Atrás", ["@P2", "@regression"]],
+    ["SET-024", "el enlace «Negocio»", ["@P2"]],
+  ] as const) {
+    test(`[${id}] volver a «Negocio» con ${how} tras saltar rápido a «Precios» muestra la página, no el esqueleto`, { tag: [...tags] }, async ({ rolePage, evidence }) => {
+      evidence("owner", `/admin/settings › «Negocio» (respuesta lenta) → «Precios y márgenes» → ${how}`);
+      test.info().annotations.push({
+        type: id === "SET-023" ? "regression" : "related",
+        description: "BUG-006 (parte B: lazy fetch descartado → esqueleto infinito al volver)",
+      });
+      const page = await rolePage("owner");
+      const recoveries: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.text().startsWith("[navegación]")) recoveries.push(msg.text());
+      });
+      let held: import("@playwright/test").Request | null = null;
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      await page.route(
+        (url) => url.pathname === "/admin/settings" && url.searchParams.has("_rsc"),
+        async (route) => {
+          if (!held && isLazySegmentRequest(route.request())) {
+            held = route.request();
+            await released;
+          }
+          await route.continue();
+        },
+      );
+
+      await page.goto("/admin/settings");
+      await expect(page.getByRole("heading", { level: 2, name: "Negocio", exact: true })).toBeVisible();
+      await page.waitForLoadState("networkidle"); // prefetch de los enlaces ya resuelto
+      const nav = page.getByRole("navigation", { name: "Secciones de configuración" });
+      await (await ready(nav.getByRole("link", { name: "Negocio", exact: true }))).click();
+      await expect.poll(() => held !== null, { message: "el clic en «Negocio» pidió el segmento faltante (lazy fetch)" }).toBe(true);
+
+      await nav.getByRole("link", { name: "Precios y márgenes", exact: true }).click();
+      await expect(page).toHaveURL(/\/admin\/settings\/pricing$/);
+      await expect(page.getByRole("heading", { level: 2, name: "Precios y márgenes", exact: true })).toBeVisible();
+      release();
+      await (await held!.response())?.finished(); // la respuesta obsoleta de «Negocio» llegó después
+
+      await page.evaluate(() => Object.assign(window, { __e2eSinRecarga: true }));
+      if (how === "Atrás") await page.goBack();
+      else await nav.getByRole("link", { name: "Negocio", exact: true }).click();
+
+      await expect(page).toHaveURL(/\/admin\/settings$/);
+      await expect(page.getByRole("heading", { level: 2, name: "Negocio", exact: true })).toBeVisible();
+      await expect(page.getByLabel("Nombre de la marca")).toBeVisible();
+      // El esqueleto (PageSkeleton de loading.tsx) no tiene rol propio: se identifica por aria-busy.
+      await expect(page.locator("main [aria-busy='true']"), "sin esqueleto de carga").toHaveCount(0);
+      // Recuperación sin recarga completa (se conserva el estado del cliente).
+      expect(await page.evaluate(() => (window as unknown as { __e2eSinRecarga?: boolean }).__e2eSinRecarga)).toBe(true);
+      // Con Atrás, la respuesta de «Negocio» sí se descartó y la salvaguarda lo recuperó con router.refresh().
+      if (id === "SET-023") expect(recoveries, "recuperación del segmento descartado").toEqual([expect.stringContaining("router.refresh()")]);
+      else expect(recoveries).toEqual([]);
+    });
+  }
 
   test("[SET-021] Integraciones muestra proveedores, webhooks, cron y prueba de mensajes", { tag: ["@P2"] }, async ({ rolePage, evidence }) => {
     evidence("owner", "/admin/settings/integrations");
