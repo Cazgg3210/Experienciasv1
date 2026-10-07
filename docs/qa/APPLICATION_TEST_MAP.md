@@ -18,7 +18,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 - **Origen:** 719 filas en los 6 carriles (acceso 256, venta pública 89, comercial 91, eventos 72, operación 154, transversal 57) → **509 filas consolidadas** (`MAP-001`…`MAP-509`), agrupadas por módulo. La actualización del 2026-10-07 suma **19 filas (`MAP-510`…`MAP-528`)**. La numeración continúa, pero cada fila nueva se ubicó dentro de su módulo, al final del grupo; por eso el resumen muestra dos rangos en esos módulos. **Total: 528 filas.**
 - **Deduplicación entre carriles:** cuando dos o más carriles describen el mismo flujo con el mismo rol (p. ej. smoke + prueba funcional + recorrido crítico, o la matriz de permisos + la prueba de IDOR del módulo) queda una sola fila; su columna **Pruebas** lista todos los IDs y su prioridad es la más alta de los orígenes.
 - **Agrupación dentro de un carril:** la matriz rol × página se agrupa por sección del panel (cada ruta aparece explícita); también se agrupan los métodos HTTP no soportados, las variantes de `callbackUrl` malicioso y las acciones de administración expuestas en páginas públicas o del portal. Las 169 Server Actions se nombran en la columna «Página/Flujo» del flujo que las ejerce.
-- **Pruebas:** IDs de las matrices `docs/qa/findings/*-coverage.md` y, para las nuevas, de los títulos `[XXX-NNN]` de `tests/e2e` (`git diff 8020b91..HEAD -- tests/e2e`). Hay 886 IDs y cada uno aparece al menos una vez: los 838 de la auditoría (836 pruebas automatizadas más M3-106 y M3-107, que son IDs de cobertura) y los 48 nuevos. Las 884 pruebas automatizadas coinciden con los IDs ejecutados en la regresión final (`test-results/l1…l6`, `global` y `ratelimit`). NAV-034 está duplicado en el código (nota ¹ al pie del mapa). Los resultados (PASS/FAIL/FLAKY) viven en `TEST_COVERAGE_MATRIX.md` y en los hallazgos de cada carril, no en este mapa.
+- **Pruebas:** IDs de las matrices `docs/qa/findings/*-coverage.md` y, para las nuevas, de los títulos `[XXX-NNN]` de `tests/e2e` (`git diff 8020b91..HEAD -- tests/e2e`). Hay 887 IDs y cada uno aparece al menos una vez: los 838 de la auditoría (836 pruebas automatizadas más M3-106 y M3-107, que son IDs de cobertura) y los 49 nuevos. Las 885 pruebas automatizadas coinciden con los IDs ejecutados en la regresión final (`test-results/l1…l6`, `global` y `ratelimit`); ahí las de hidratación todavía se llamaban NAV-034…036 (nota ¹ al pie del mapa). Los resultados (PASS/FAIL/FLAKY) viven en `TEST_COVERAGE_MATRIX.md` y en los hallazgos de cada carril, no en este mapa.
 - **Roles:** Anónimo (sin sesión) · Clienta (token) = anfitriona con enlace de cotización/portal · Invitada (token) = enlace del micrositio o de la cápsula · Staff (Lupita = `staff@`, Carlos = `staff2@`) · Owner (Ivonne = `ivonne@`, Rosa = `rosa@`) · SuperAdmin · Proveedor/Cron = llamadas máquina a máquina. «A → B» indica un flujo que cruza roles.
 - **«(global)»** marca escenarios que cambian ajustes globales (suite `E2E_SUITE=global`, 1 worker).
 
@@ -30,8 +30,8 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | APIs (route handlers) | 13/13 | `/admin/finance/export`, `/e/[slug]/[token]/calendar.ics`, `/api/admin/leads-export`, `/api/analytics/track`, `/api/auth/[...nextauth]`, `/api/cron/notifications`, `/api/events/[id]/guests.csv`, `/api/health/db`, `/api/health`, `/api/media/upload`, `/api/media/[id]`, `/api/memory/[token]/upload`, `/api/webhooks/payments/[provider]` |
 | Server Actions | 169/169 | 148 protegidas + 21 públicas, más `loginAction` (función de servidor sin wrapper); cada una se nombra en la columna «Página/Flujo» del flujo que la ejerce (`searchCustomersAction` existe en eventos y en cotizaciones y aparece en ambos). |
 | Pruebas de la auditoría | 838/838 | IDs de los 6 `*-coverage.md` |
-| Pruebas nuevas desde `8020b91` | 48/48 | AUTH-033…038, AUTH-053…059, AUTH-064…072, CONF-024, CONF-025, EVT-039, GST-023…028, MEM-021, NAV-034…036, PAY-023…025, PORT-021…025, PUB-048, PUB-049, SET-023, SET-024, STF-025 |
-| **Total de IDs** | **886/886** | 884 pruebas automatizadas + M3-106/M3-107; NAV-034 = 2 pruebas con el mismo ID (¹) |
+| Pruebas nuevas desde `8020b91` | 49/49 | AUTH-033…038, AUTH-053…059, AUTH-064…072, CONF-024, CONF-025, EVT-039, GST-023…028, MEM-021, NAV-034, NAV-037…039, PAY-023…025, PORT-021…025, PUB-048, PUB-049, SET-023, SET-024, STF-025 |
+| **Total de IDs** | **887/887** | 885 pruebas automatizadas + M3-106/M3-107; cada prueba con su propio ID (¹) |
 
 ## Resumen por módulo y prioridad
 
@@ -41,7 +41,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | Autorización (MAP-037–069) | 33 | 23 | 6 | 4 | 0 | 110 |
 | Accesos por token (MAP-070–080) | 11 | 5 | 5 | 1 | 0 | 17 |
 | API (route handlers) (MAP-081–104) | 24 | 9 | 6 | 7 | 2 | 40 |
-| Navegación (MAP-105–124, MAP-515–516) | 22 | 1 | 6 | 11 | 4 | 37 |
+| Navegación (MAP-105–124, MAP-515–516) | 22 | 1 | 6 | 11 | 4 | 38 |
 | Sitio público y contacto (MAP-125–147, MAP-517–518) | 25 | 7 | 12 | 6 | 0 | 55 |
 | Configurador (MAP-148–171, MAP-519) | 25 | 4 | 15 | 5 | 1 | 29 |
 | Diseñador IA (MAP-172–180) | 9 | 0 | 7 | 2 | 0 | 10 |
@@ -66,7 +66,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | Contenido (MAP-476–486) | 11 | 0 | 7 | 4 | 0 | 14 |
 | Ajustes y usuarios (MAP-487–503) | 17 | 4 | 10 | 3 | 0 | 24 |
 | Transversal (responsive y accesibilidad) (MAP-504–509) | 6 | 0 | 1 | 5 | 0 | 17 |
-| **Total** | **528** | **121** | **269** | **121** | **17** | **886** |
+| **Total** | **528** | **121** | **269** | **121** | **17** | **887** |
 
 «Pruebas distintas» cuenta IDs únicos por módulo; cada prueba quedó asignada a un solo módulo, así que la suma coincide con los 886 IDs únicos (838 de la auditoría + 48 nuevos). Una prueba puede aparecer en varias filas del mismo módulo cuando cubre varios flujos.
 
@@ -203,8 +203,8 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-122 | Navegación | Menú móvil público (390 y 768 px) | Anónimo | Abrir, navegar y cerrar | `aria-expanded` correcto, el foco regresa al botón, navega y cierra; en 1440 px la navegación es visible sin botón | P1 | NAV-031, PUB-012, RESP-007 |
 | MAP-123 | Navegación | Migas de pan en `/experiencias/[slug]` | Anónimo | Leer | Inicio › Experiencias › nombre | P2 | NAV-032 |
 | MAP-124 | Navegación | Enlace «Saltar al contenido» | Anónimo | Tab + Enter | Es el primer foco y lleva a `main#contenido` | P2 | NAV-033, A11Y-023 |
-| MAP-515 | Navegación | 404 real en rutas públicas y por token: `/experiencias/[slug]`, `/cotizacion/[token]`, `/mi-evento/[token]`, `/mi-evento/[token]/resumen`, `/e/[slug]/[token]`, `/memory/[token]`, `/pago/mock/[checkoutId]`, `/pago/resultado` | Anónimo | GET directo (sin seguir redirects) con un slug o token inexistente | HTTP 404 en las 8 rutas, no soft-404. Lo complementa el contrato estático `tests/unit/route-not-found-contract.test.ts` (`@regression` BUG-013) | P3 | NAV-034 ¹ |
-| MAP-516 | Navegación | Hidratación con el chunk de `error.tsx` del segmento retrasado: `/pago/mock/[checkoutId]`, `/crear-experiencia`, `/admin/quotes` | Clienta (token) · Anónimo · Owner | Abrir la página reteniendo sólo el chunk de `error.tsx` (en Firefox llegaba tarde) | Sin `pageerror` (React #418); `<main id=contenido>` es el mismo nodo que llegó del servidor (no se vuelve a pintar en el cliente) | P0 | NAV-034 ¹, NAV-035, NAV-036 |
+| MAP-515 | Navegación | 404 real en rutas públicas y por token: `/experiencias/[slug]`, `/cotizacion/[token]`, `/mi-evento/[token]`, `/mi-evento/[token]/resumen`, `/e/[slug]/[token]`, `/memory/[token]`, `/pago/mock/[checkoutId]`, `/pago/resultado` | Anónimo | GET directo (sin seguir redirects) con un slug o token inexistente | HTTP 404 en las 8 rutas, no soft-404. Lo complementa el contrato estático `tests/unit/route-not-found-contract.test.ts` (`@regression` BUG-013) | P3 | NAV-034 |
+| MAP-516 | Navegación | Hidratación con el chunk de `error.tsx` del segmento retrasado: `/pago/mock/[checkoutId]`, `/crear-experiencia`, `/admin/quotes` | Clienta (token) · Anónimo · Owner | Abrir la página reteniendo sólo el chunk de `error.tsx` (en Firefox llegaba tarde) | Sin `pageerror` (React #418); `<main id=contenido>` es el mismo nodo que llegó del servidor (no se vuelve a pintar en el cliente) | P0 | NAV-037, NAV-038, NAV-039 ¹ |
 | MAP-125 | Sitio público y contacto | `/` | Anónimo | Abrir el inicio | 200, un H1, landmarks (banner, nav, main, footer), sin errores de consola/red | P0 | PUB-001, SMK-010 |
 | MAP-126 | Sitio público y contacto | `/experiencias` | Anónimo | Abrir el catálogo | 200 y exactamente las experiencias activas de la base, cada una enlazada a su detalle | P0 | PUB-002, PUB-014, SMK-011, SMK-020 |
 | MAP-127 | Sitio público y contacto | `/experiencias/[slug]` | Anónimo | Abrir el detalle de una experiencia activa | H1 = nombre, «Desde» con precio base en MXN, rango de personas, JSON-LD Service y CTA «Diseña esta experiencia» → configurador con la experiencia preseleccionada | P0 | PUB-003, PUB-015, SMK-012 |
@@ -603,7 +603,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-508 | Transversal (responsive y accesibilidad) | Imágenes (sitio público) | Anónimo | Buscar `<img>` sin alt | Ninguna (o marcada como decorativa) | P2 | A11Y-026 |
 | MAP-509 | Transversal (responsive y accesibilidad) | `prefers-reduced-motion` | Anónimo | Emular reduce | Animaciones y transiciones ≤ 1 ms | P2 | A11Y-027 |
 
-¹ **NAV-034 está duplicado en el código.** Dos pruebas distintas usan el mismo ID: `tests/e2e/navigation/not-found.spec.ts` (404 real, MAP-515, agregada en `4a7a780`) y `tests/e2e/navigation/hydration.spec.ts` (hidratación de `/pago/mock`, MAP-516, agregada en `a3309b7`). Ambas pasan en la regresión final. Hay que renombrar una, por ejemplo la de hidratación a NAV-037, en `tests/e2e`; mientras tanto, en este mapa NAV-034 cuenta como un solo ID y dos pruebas.
+¹ **NAV-034 estaba duplicado (resuelto).** Dos pruebas usaban el mismo ID: `tests/e2e/navigation/not-found.spec.ts` (404 real, MAP-515, agregada en `4a7a780`) y `tests/e2e/navigation/hydration.spec.ts` (hidratación de `/pago/mock`, MAP-516, agregada en `a3309b7`). Las tres pruebas de hidratación se renumeraron: NAV-034 → NAV-037 (`/pago/mock`), NAV-035 → NAV-038 (sitio público) y NAV-036 → NAV-039 (panel). NAV-034 queda sólo para el 404 real. NAV-035 y NAV-036 quedan retirados y no se reutilizan, porque la regresión final y los informes anteriores los citan con su significado viejo.
 
 ## Recorridos críticos (P0)
 

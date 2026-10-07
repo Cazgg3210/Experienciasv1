@@ -726,7 +726,7 @@ Interacción del router del App Router de Next 15.5 (navegación a la misma ruta
 **Riesgos residuales y criterio de retiro.**
 - **Criterio de retiro (decisión del usuario): actualizar a Next ≥ 16.3.0.** Es un cambio de versión mayor y no se hizo. Después habría que:
   1. quitar `installNavigationGuard` de `src/instrumentation-client.ts` y `<NavigationGuardBridge />` del layout raíz;
-  2. correr CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022…024, NOT-002, SET-001, SET-023/024 y CRIT-004 con `--repeat-each=5 --retries=0`, más NAV-034…036 de BUG-020 en Firefox.
+  2. correr CAL-002, EVT-038, LEAD-037, INV-025, GST-011/012/015, CNT-022…024, NOT-002, SET-001, SET-023/024 y CRIT-004 con `--repeat-each=5 --retries=0`, más NAV-037…039 de BUG-020 en Firefox.
 - **Costo aceptado.** Las navegaciones del cliente, `router.refresh()` y las Server Actions ya no pintan por partes: los Suspense internos, como `PaymentsPanel`, esperan la respuesta completa. El HTML inicial sigue en streaming. El envoltorio de `window.fetch` aplica a todo el sitio. Conviene medir en producción el tiempo hasta el contenido en páginas lentas.
 - **Lazy fetch de un layout.** La recuperación se busca por URL. Un lazy fetch descartado de un **layout** (raro) dejaría el esqueleto bajo ese layout y **no tiene recuperación automática**: la red de seguridad no vigila Atrás/Adelante y, con push, la URL sí cambia. Sólo se resuelve recargando. `docs/qa/findings/events.md` › Endurecimiento › 2 todavía atribuye ese caso a la red de seguridad, y no es exacto.
 - **Obsolescencia por URL, no implementada a propósito.** Si React renderiza un estado ya superado después de que empezó otra navegación, se aplica el parche obsoleto. Es el comportamiento de Next sin la mitigación, así que no hay regresión.
@@ -1322,7 +1322,7 @@ Agregar `src/app/(public)/experiencias/[slug]/layout.tsx` que valide el slug (ac
 **Riesgos residuales.**
 - **Soft-404 interno.** Las rutas con sesión `/admin/**/[id]` (19) y `/staff/events/[id]` siguen respondiendo 200 con `noindex` y «No encontramos…». No afecta SEO ni seguridad; es una mejora opcional.
 - **Navegación a una ficha.** En el cliente, ahora espera la consulta del layout (en caché) antes de mostrar el esqueleto.
-- **ID duplicado.** [NAV-034] colisiona con la prueba de hidratación de BUG-020 (ver «Notas de reporters y ejecución»).
+- **ID duplicado — resuelto.** La prueba de hidratación de BUG-020 que también se llamaba NAV-034 ahora es [NAV-037]. NAV-034 queda sólo para este 404 real (ver «Notas de reporters y ejecución», nota 10).
 - **Meta robots duplicado.** No se verificó por separado en las páginas 404: PUB-016 usa `.first()`.
 
 ---
@@ -1794,7 +1794,7 @@ Los formularios dependían del JS para interceptar el envío y no bloqueaban el 
 - Sobre la base `86b60de`: EVT-024 2/5 y PAY-001 7/15.
 - Determinista con el chunk de `error.tsx` retrasado: 4/4 en pago, 4/4 en el sitio público y 3/3 en el panel.
 
-**Test:** [NAV-034], [NAV-035], [NAV-036] tests/e2e/navigation/hydration.spec.ts (describe `@regression`; ver la colisión de ID en «Notas de reporters y ejecución») · [PAY-001] tests/e2e/payments/payments.spec.ts · [EVT-024] tests/e2e/events/event-status.spec.ts
+**Test:** [NAV-037], [NAV-038], [NAV-039] tests/e2e/navigation/hydration.spec.ts (describe `@regression`; antes NAV-034…036, renumeradas por la colisión con el NAV-034 de BUG-013) · [PAY-001] tests/e2e/payments/payments.spec.ts · [EVT-024] tests/e2e/events/event-status.spec.ts
 **Fuentes:** endurecimiento cross-browser (carril 2, punto 4a) y hallazgo del carril 3 al endurecer pagos
 
 ### Preconditions
@@ -1811,7 +1811,7 @@ La hidratación termina sin errores y React conserva el HTML del servidor.
 `pageerror`: «Minified React error #418» (hydration mismatch, «HTML»). React descarta el HTML del servidor y re-pinta todo en el cliente: parpadeo, pérdida de foco y de estado, y trabajo extra en celulares. El guard hacía fallar PAY-001 y EVT-024 aunque todos sus asserts pasaban.
 
 ### Evidence
-- Sin la corrección: NAV-034…036 FAIL 3/3 en Firefox (`test-results/l2-evidence/HYDRATION-418/`, worktree del carril 2).
+- Sin la corrección: NAV-037…039 (entonces NAV-034…036) FAIL 3/3 en Firefox (`test-results/l2-evidence/HYDRATION-418/`, worktree del carril 2).
 - Sobre la base `86b60de`: `test-results/l3-evidence/minors/{xb-fail,xb-repeat-artifacts,pay001-firefox-artifacts,base-86b60de-firefox}` (worktree del carril 3).
 - Instrumentación temporal de `react-dom` (una copia del chunk, después restaurada y comparada con `cmp`): el fallo sale de `replaySuspendedUnitOfWork` → `beginWork(HostComponent)`.
 
@@ -1843,18 +1843,18 @@ Evitar que el hijo directo del elemento HTML sea el nodo perezoso del router, co
 
 **Commits.** `a3309b7` (merge `f0cb1b1`).
 
-**Pruebas @regression.** [NAV-034], [NAV-035] y [NAV-036] tests/e2e/navigation/hydration.spec.ts (`@P0`). Retrasan sólo el chunk de `error.tsx` y exigen cero `pageerror` y que `<main id="contenido">` sea el mismo nodo que llegó del servidor.
+**Pruebas @regression.** [NAV-037], [NAV-038] y [NAV-039] tests/e2e/navigation/hydration.spec.ts (`@P0`; antes NAV-034…036). Retrasan sólo el chunk de `error.tsx` y exigen cero `pageerror` y que `<main id="contenido">` sea el mismo nodo que llegó del servidor.
 
 **Verificación.**
-- Sin la corrección, NAV-034…036 FAIL 3/3 en Firefox. Con ella pasan en Firefox, WebKit y Chromium con `--repeat-each=5`.
+- Sin la corrección, NAV-037…039 FAIL 3/3 en Firefox. Con ella pasan en Firefox, WebKit y Chromium con `--repeat-each=5`.
 - PAY-001 en Firefox: 5/5 (antes fallaba 3 de 5). Diagnóstico por clic: 0/12 con error (antes 8/12).
 - Carpetas requeridas con `E2E_CROSS_BROWSER=1`: 355 PASS, 1 FLAKY (QUO-018, corregido después) y 1 omitida.
 - Carpetas relacionadas: 234/234. Suites globales: 24/24.
 
 **Riesgos residuales y decisiones.**
-- **Al actualizar Next** (ver BUG-006): comprobar NAV-034…036 en Firefox **sin** el envoltorio antes de quitarlo.
+- **Al actualizar Next** (ver BUG-006): comprobar NAV-037…039 en Firefox **sin** el envoltorio antes de quitarlo.
 - **Convención para layouts nuevos.** Todo layout nuevo con `error.tsx` hermano que pinte `children` dentro de un elemento HTML debe usar `<SegmentChildren>`. Conviene anotarlo en CLAUDE.md, que no se editó.
-- **ID duplicado.** NAV-034 de esta prueba colisiona con el de BUG-013.
+- **ID duplicado — resuelto.** Estas pruebas pasaron de NAV-034…036 a NAV-037…039, porque NAV-034 ya era el 404 real de BUG-013. NAV-035 y NAV-036 quedan retirados y no se reutilizan.
 
 ---
 
@@ -1953,7 +1953,7 @@ Quitar de `defaultValues` los campos de texto vacíos (o leer el DOM al montar) 
   - GST-026, PORT-021 y PORT-022 no comprueban que el campo siga sin hidratar al escribir (PUB-049 y MEM-021 sí).
   - Opinión, dirección y diseñadora no tienen regresión propia.
   - El commit dice 35/35 para chromium + firefox, pero con 5 repeticiones serían 40: GST-027 no entró en esa repetición.
-  - MEM-021 sigue omitida en WebKit, aunque `fillBeforeHydration` ya permitiría correrla.
+  - MEM-021 seguía omitida en WebKit. **Resuelto:** ahora corre ahí con `fillBeforeHydration` (ver «Notas de reporters y ejecución», nota 11).
 - **Pendiente de decisión:** los formularios del panel admin conservan el mismo patrón de `defaultValues` vacíos (observación de los carriles 3, 4 y 5).
 
 ---
@@ -2207,7 +2207,7 @@ Los 31 IDs provisionales de los carriles de la auditoría (fuente: `docs/qa/.bug
 | BUG-017 | Revisión de BUG-008 (ronda 1) → endurecimiento del carril 3 | `findings/commercial.md` › COM-BUG-02 › Resolution («Riesgo real corregido») | [PUB-048], [CONF-021] |
 | BUG-018 | Endurecimiento de sesión y login (carril 4), hallazgo nuevo | `findings/access.md` › Seguimiento de BUG-001/004/005 («Hallazgo nuevo») | integración `operations-staff.test.ts` |
 | BUG-019 | Pendiente de `e2f3699` y su revisión | Sólo en este documento y en el commit `d96a82a` (no se actualizó `findings/`) | [GST-028], [PORT-023], [PORT-024], [PORT-025], [CONF-025] |
-| BUG-020 | Endurecimiento cross-browser (carril 2) y carril 3 | `findings/sales.md` › SAL-BUG-01 › Revisión adversarial propia (todavía figura como «hallazgo abierto»; se corrigió en `a3309b7`) | [NAV-034]…[NAV-036] (hydration.spec.ts) |
+| BUG-020 | Endurecimiento cross-browser (carril 2) y carril 3 | `findings/sales.md` › SAL-BUG-01 › Revisión adversarial propia (todavía figura como «hallazgo abierto»; se corrigió en `a3309b7`) | [NAV-037]…[NAV-039] (hydration.spec.ts; antes NAV-034…036) |
 | BUG-021 | Endurecimiento cross-browser (CRIT-008) y `e2f3699` | Sólo en este documento y en los commits `0e35e58` y `e2f3699` | [MEM-021], [PUB-049], [GST-026], [GST-027], [PORT-021], [PORT-022] |
 | BUG-022 | Revisión de BUG-004 (ronda 1) → endurecimiento del carril 4 | `findings/access.md` › Seguimiento de BUG-001/004/005 | [AUTH-064] |
 | BUG-023 | Revisión de BUG-001 (ronda 1) → endurecimiento del carril 4 | `findings/access.md` › Seguimiento de BUG-001/004/005 | [AUTH-059] |
@@ -2353,9 +2353,13 @@ No son bugs de la app; afectan la ejecución de las pruebas. ENV-01 y ENV-02 se 
   - Chromium: 0 en 4,900.
 - **Mitigación.** `playwright.config.ts` limita el proyecto firefox a **1 worker** (`E2E_FIREFOX_WORKERS`, `3823a75`), lo que bajó los fallos de 22/48 a 3/48. El límite es por invocación, así que **no corras carriles con `E2E_CROSS_BROWSER=1` en paralelo**: dos Firefox separados se congelan juntos.
 - **Efecto en el gate.** Un FLAKY de Firefox se clasifica como ENVIRONMENT, y no como bug de la app, sólo si su traza muestra la ausencia total de frames.
+- **Endurecimiento posterior.**
+  - `ready()` (`tests/e2e/operations/_helpers.ts`) compite la espera dentro de la página con un temporizador de Node que vence en el tope (15 s) + 1 s. Si la página se congela, falla con «la página no respondió» en vez de consumir los 90 s de la prueba.
+  - `playwright.config.ts` valida `E2E_FIREFOX_WORKERS` igual que `E2E_LANE`: entero ≥ 1 o error explícito.
+  - La regla y la forma de clasificar quedaron en `references/runbook.md` › Notas operativas.
 
 ### Otras notas de entorno vistas durante las correcciones
-- **WebKit en Windows hidrata muy lento algunos formularios del panel.** «Agregar costo» de [FIN-006] tarda 20–25 s en hidratar en WebKit, más que el tope de 15 s de `ready()`; la medición (MessageChannel a ~33 ms por salto) apunta al entorno. FIN-006 en WebKit queda como **inestabilidad abierta clasificada como ENVIRONMENT**. No se subió el tope sin evidencia versionada.
+- **WebKit en Windows hidrata muy lento algunos formularios del panel.** «Agregar costo» de [FIN-006] tarda 20–25 s en hidratar en WebKit, más que el tope de 15 s de `ready()`; la medición (MessageChannel a ~33 ms por salto) apunta al entorno. FIN-006 en WebKit queda como **inestabilidad abierta clasificada como ENVIRONMENT**. No se subió el tope sin evidencia versionada. Al verificar el `ready()` con temporizador de Node (ENV-04), FIN-006 en WebKit pasó 3/3 con `--retries=0`, sin subir el tope; la clasificación no cambia.
 - **Caídas del worker de Node en Windows** (`0xC0000409` / `3221226505`) antes de ejecutar código de prueba, a 0 ms: AUTH-035 una vez y PAY-003 una vez. No se repitieron al correrlas aisladas; son ENVIRONMENT.
 - **Sello del build E2E con archivos sin seguimiento.** `scripts/e2e-server.mjs` no detectaba cambios en archivos nuevos sin commit y reutilizaba un build viejo. Se corrigió en `86b60de`.
 - **Contratos de integración.** `devops.test.ts` esperaba `output: "standalone"` literal, y `memory-capsule.test.ts` esperaba 403 en la prueba CSRF del upload. Fallaban en todas las ramas de la ronda 1 y se alinearon en `86b60de`; después, `pnpm test:integration` pasó 318/318 y 324/324.
@@ -2370,7 +2374,7 @@ No son bugs de la app; afectan la ejecución de las pruebas. ENV-01 y ENV-02 se 
 4. **`getByRole("alert")` es ambiguo:** el anunciador de rutas de Next tiene `role="alert"`; acotar a `page.getByRole("main")` o filtrar por texto (documentado en el runbook). *(carril 2)*
 5. **`replayServerAction.classify`** trataba cualquier `ok:false` con código `NOT_FOUND` como «denied», mezclando autorización con recurso inexistente (el carril 4 usó su propio `callAction`). `references/test-design.md` distingue ahora `wasDenied` / `wasForbidden` / `wasBlocked`. *(carril 4)*
 6. **`mode: "serial"` en `*.global.spec.ts`:** un fallo dejaba el resto del archivo sin ejecutar (6 NOT TESTED en la primera corrida global del carril 5). Con `E2E_SUITE=global` ya hay 1 worker; `references/test-design.md` indica ahora no usar `serial`. *(carril 5)*
-7. **Fuente abortada en Firefox** (`downloadable font … status=2152398850` = `NS_BINDING_ABORTED`) después de la redirección del login. Se agregó un patrón `BENIGN` acotado a ese código y a `/_next/static/media/*.woff2` (`7dbe8a1`). Pendiente, menor: la expresión acepta cualquier origen, aunque el comentario dice que otro origen sigue siendo un error. Conviene anclar el host o corregir el comentario. *(carril 2, endurecimiento)*
+7. **Fuente abortada en Firefox** (`downloadable font … status=2152398850` = `NS_BINDING_ABORTED`) después de la redirección del login. Se agregó un patrón `BENIGN` acotado a ese código y a `/_next/static/media/*.woff2` (`7dbe8a1`). Pendiente, menor: la expresión acepta cualquier origen, aunque el comentario dice que otro origen sigue siendo un error. Conviene anclar el host o corregir el comentario. *(carril 2, endurecimiento)* **Resuelta:** el patrón exige `source: http(s)://localhost` o `127.0.0.1`, con puerto opcional, antes de `/_next/static/media/*.woff2`; una fuente de otro origen (incluido `localhost.otro-dominio`) sigue siendo violación. Comentario de `guard.ts` y `references/test-design.md` actualizados.
 
 ### Notas de reporters y ejecución
 
@@ -2383,5 +2387,6 @@ No son bugs de la app; afectan la ejecución de las pruebas. ENV-01 y ENV-02 se 
 7. **Hidratación:** interactuar antes de hidratar pierde el cambio; conviene un helper compartido tipo `gotoReady()` (espera red en reposo) en los fixtures. *(carriles 3, 4 y 5)* **Actualización:** `gotoReady()` espera ahora la hidratación real (`waitForHydration()`: `<main>` y los controles con `__reactProps$`) en lugar de `networkidle`, que no es confiable en Firefox ([QUO-019], `ae351f7`). En los formularios públicos, interactuar antes de hidratar resultó ser un bug de la app (BUG-021).
 8. **WebKit en Windows guarda la cookie sin SameSite** y `context.cookies()` devuelve `None`. [AUTH-001]…[AUTH-005] verifican ahora `HttpOnly`, `SameSite=Lax` y `Path=/` en el `Set-Cookie` real del login (`682b043`).
 9. **`page.reload` después de un `router.refresh()` en Firefox** termina en `NS_BINDING_ABORTED`. Hay que esperar el cuerpo completo del refresh antes de recargar (`routerRefreshed()`, [OPS-010], `b453d6f`). El mismo síntoma aparece en las inestabilidades de la regresión final (STF-003 y PUR-005 en Firefox), que se están corrigiendo en paralelo.
-10. **ID de prueba duplicado: [NAV-034].** Existe en `tests/e2e/navigation/not-found.spec.ts:36` (404 real, BUG-013) y en `tests/e2e/navigation/hydration.spec.ts:56` (hidratación de `/pago/mock`, BUG-020). Las dos ramas de endurecimiento lo asignaron en paralelo. Pendiente: renumerar las pruebas de hidratación (por ejemplo, NAV-035…037 o el siguiente libre) y actualizar las referencias en `docs/qa`.
-11. **MEM-021 sigue omitida en WebKit** (NOT APPLICABLE con anotación). `fillBeforeHydration` (`e2f3699`) ya permitiría correrla ahí.
+10. **ID de prueba duplicado: [NAV-034].** Existe en `tests/e2e/navigation/not-found.spec.ts:36` (404 real, BUG-013) y en `tests/e2e/navigation/hydration.spec.ts:56` (hidratación de `/pago/mock`, BUG-020). Las dos ramas de endurecimiento lo asignaron en paralelo. **Resuelta:** las pruebas de hidratación pasaron a NAV-037 (`/pago/mock`), NAV-038 (sitio público) y NAV-039 (panel). NAV-034 queda para el 404 real; NAV-035 y NAV-036 quedan retirados. Se actualizaron `docs/qa`, `references/{project-profile,test-design}.md` y el comentario de `segment-children.tsx`. Con `playwright test --list` de las tres suites (sin `E2E_SUITE`, `global` y `ratelimit`, incluidos los títulos generados en bucles) no queda ningún otro ID duplicado. El comando de `references/test-design.md` ahora también cubre `A11Y` y los títulos entre comillas simples o backticks.
+11. **MEM-021 sigue omitida en WebKit** (NOT APPLICABLE con anotación). `fillBeforeHydration` (`e2f3699`) ya permitiría correrla ahí. **Resuelta:** MEM-021 corre ahora en WebKit con `holdPageChunk` + `fillBeforeHydration` y locators `includeHidden`, igual que GST-026 y PORT-022, y sin el `skip`. En WebKit, la prueba anota que asignó los valores en el DOM. Verificación: `tests/e2e/memory` en WebKit 4/4 (las @P0), y MEM-021 ×3 sin reintentos en chromium, mobile-chrome, firefox y webkit, 12/12. Mutación: con `defaultValues: { name: "", body: "" }` en `guestbook-form.tsx`, MEM-021 falla en WebKit y en Chromium («Tu nombre» queda vacío); restaurado.
+12. **[CNT-010] FLAKY en chromium por una carrera de la prueba (TEST BUG, corregido).** `finalizeGalleryUpload` escribe la auditoría `media.uploaded` después de fijar `sortOrder`. La prueba leía la auditoría una sola vez, justo después de ver el `sortOrder`, y a veces encontraba 0. Ahora la espera con `expect.poll`; secuencial, 6/6. Riesgo conocido: CNT-010 compara con la galería global (`before.length + 1`, `maxOrder + 1`), así que con `--repeat-each` y varios workers dos copias chocan entre sí. Repítela con `E2E_WORKERS=1`.
