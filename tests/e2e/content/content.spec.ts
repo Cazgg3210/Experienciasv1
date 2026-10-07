@@ -147,7 +147,9 @@ test.describe("Contenido · galería", { tag: ["@module:content"] }, () => {
     await expect.poll(async () => (await db.mediaAsset.findUnique({ where: { id: created.id } }))?.sortOrder).toBe(maxOrder + 1);
     const asset = await db.mediaAsset.findUniqueOrThrow({ where: { id: created.id } });
     expect(asset).toMatchObject({ visibility: "PUBLIC", approved: true, featured: false, mimeType: "image/png" });
-    expect(await auditCount(db, "media.uploaded", asset.id)).toBe(1);
+    // finalizeGalleryUpload escribe la auditoría DESPUÉS de fijar sortOrder: leerla una sola vez justo después de
+    // ver el sortOrder era una carrera (0 en vez de 1, FLAKY en chromium).
+    await expect.poll(() => auditCount(db, "media.uploaded", asset.id)).toBe(1);
     // La tarjeta nueva es la última y avisa que falta texto alternativo
     await expect(page.getByText(/sin texto alternativo/)).toBeVisible();
     const card = page.getByRole("listitem").filter({ has: page.locator(`#alt-${asset.id}`) }); // id del input de alt (sin texto visible propio)
