@@ -202,6 +202,31 @@ test.describe("Eventos · alta manual", { tag: ["@module:events"] }, () => {
     await expect(page.getByRole("table", { name: "Listado de eventos" })).toContainText("Sin reserva");
   });
 
+  test("[EVT-040] «Nueva clienta» deja Nombre, WhatsApp y Correo con su etiqueta aunque los ids del HTML y de React difieran", { tag: ["@P2", "@regression", "@a11y"] }, async ({ rolePage, evidence }) => {
+    evidence("owner", "Nuevo evento › (ids pintados por el servidor ≠ ids de useId en el cliente) › Nueva clienta");
+    test.info().annotations.push({ type: "regression", description: "EVT-005 (Firefox): «Nombre» sin etiqueta tras elegir Nueva clienta" });
+    const page = await rolePage("owner");
+    await openNew(page);
+    // En Firefox, cuando la hidratación se reparte en varias pasadas, useId calcula en el cliente otro id que el
+    // del HTML del servidor y React no reescribe atributos ya pintados: el <label for> y el <input id> del DOM
+    // quedan con el valor del servidor y React guarda otro. Se reproduce aquí de forma determinista.
+    const search = page.getByLabel("Buscar clienta");
+    await search.evaluate((input) => {
+      const label = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
+      if (!label) throw new Error("«Buscar clienta» no tiene <label for>");
+      input.id = "id-pintado-por-el-servidor";
+      label.setAttribute("for", "id-pintado-por-el-servidor");
+    });
+    await expect(search, "el campo de búsqueda sigue etiquetado antes del cambio").toBeVisible();
+    await page.getByRole("button", { name: "Nueva clienta" }).click();
+    for (const name of ["Nombre", "WhatsApp", "Correo"]) {
+      await expect(page.getByRole("textbox", { name, exact: true }), `«${name}» con etiqueta asociada`).toBeVisible();
+    }
+    // La etiqueta lleva el foco a su campo (asociación real, no sólo nombre accesible).
+    await page.locator("label", { hasText: /^Nombre/ }).click();
+    await expect(page.getByRole("textbox", { name: "Nombre", exact: true })).toBeFocused();
+  });
+
   test("[EVT-006] crear evento para una clienta existente (búsqueda) la vincula sin duplicarla", { tag: ["@P1"] }, async ({ rolePage, db, evidence }) => {
     evidence("owner", "Nuevo evento › Buscar clienta › elegir resultado");
     const customer = await createCustomer(db, { name: `Mariela ${uniq("Busq")}` });

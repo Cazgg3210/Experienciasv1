@@ -212,9 +212,15 @@ export function NewEventForm({
           ))}
         </div>
 
+        {/*
+          Cada variante lleva su `key`: al cambiar de modo se montan campos nuevos en lugar de reutilizar el
+          <Field> de «Buscar clienta» para «Nombre». Reutilizado, el <label> conservaba el `for` del HTML del
+          servidor mientras el <input> nuevo tomaba el id de useId del cliente; cuando ambos difieren (Firefox,
+          hidratación en varias pasadas) «Nombre» quedaba sin etiqueta asociada (EVT-005).
+        */}
         {mode === "existing" ? (
           selected ? (
-            <div className="bg-sand-soft/60 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+            <div key="selected" className="bg-sand-soft/60 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
               <div className="min-w-0">
                 <p className="truncate font-medium">{selected.name}</p>
                 <p className="text-muted-foreground truncate text-xs">
@@ -228,7 +234,7 @@ export function NewEventForm({
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div key="search" className="space-y-2">
               <Field
                 label="Buscar clienta"
                 required
@@ -293,7 +299,7 @@ export function NewEventForm({
             </div>
           )
         ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div key="new" className="grid gap-4 sm:grid-cols-3">
             <Field label="Nombre" required error={errors.newCustomer?.name?.message}>
               {(p) => (
                 <Input
