@@ -366,10 +366,13 @@ const PAGE_UNRESPONSIVE = "la página no respondió";
  * más de 30 s y `ready()` vencía (FIN-006, STF-021). Si React reemplaza el nodo, se vuelve a resolver.
  *
  * Un solo tope para todo: la página recibe el instante límite (reloj de la máquina, el mismo del navegador) y no
- * espera más allá de él aunque resolver el nodo haya tardado, así que `ready()` no pasa de HYDRATION_TIMEOUT_MS.
- * Si la página deja de contestar (Firefox congelado, ENV-04: sus temporizadores no corren y `evaluate` no
- * regresa nunca), un temporizador de Node corta la espera al límite + PAGE_ANSWER_MARGIN_MS con
- * «la página no respondió», en lugar de consumir el tope de la prueba completa.
+ * espera más allá de él aunque resolver el nodo haya tardado: la espera dentro de la página no pasa de
+ * HYDRATION_TIMEOUT_MS, y `ready()` completo como máximo HYDRATION_TIMEOUT_MS + PAGE_ANSWER_MARGIN_MS (más el
+ * `toBeVisible` previo). Si la página deja de contestar (Firefox congelado, ENV-04: sus temporizadores no corren y
+ * `evaluate` no regresa nunca), un temporizador de Node corta la espera en ese límite con «la página no respondió»,
+ * en lugar de consumir el tope de la prueba completa. Ojo: una tarea larga (> 1 s) del hilo principal justo en el
+ * límite (p. ej. WebKit con traza) también daría «la página no respondió» sin congelamiento real; por eso un FLAKY
+ * sólo se clasifica como ENV-04 en Firefox y con la traza sin frames (runbook).
  */
 export async function ready(locator: Locator): Promise<Locator> {
   await expect(locator).toBeVisible();

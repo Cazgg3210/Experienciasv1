@@ -89,9 +89,8 @@ test.describe("callbackUrl", { tag: ["@module:auth", "@auth"] }, () => {
       if (controlChars) test.info().annotations.push({ type: "regression", description: "BUG-005 (validación propia de loginAction)" });
       const user = await createTeamUser(db, { role: "OWNER" });
       guard.allow(/status of 404/); // sólo para "/%2F%2Fevil.example" (404 de la app, mismo origen)
-      // Firefox: la redirección tras el login aborta la descarga en curso de la fuente (NS_BINDING_ABORTED =
-      // 2152398850). Es ruido del navegador, no un error de la app (mismo origen de las fallas de AUTH-046/049/050).
-      guard.allow(/downloadable font: download failed .*status=2152398850/);
+      // La fuente abortada de Firefox tras la redirección (NS_BINDING_ABORTED = 2152398850) ya es BENIGN en
+      // fixtures/guard.ts, anclada a localhost/127.0.0.1: una fuente de otro origen sigue siendo violación.
       evidence("owner", `campo oculto callbackUrl=${JSON.stringify(target)} alterado antes de enviar el formulario de /login`);
       const origin = new URL(baseUrl()).origin;
       const page = await anonPage();

@@ -2158,7 +2158,7 @@ Mitigar en la app: si el id con el que el servidor pintó el grupo difiere del g
 **Riesgos residuales.**
 - Radix: `aria-controls` de Dialog/Select/Popover y el nombre de los paneles de Tabs/Accordion montados después no se pueden fijar sin envolver la librería (severidad baja).
 - Se revisaron más de 15 consumidores directos de `useId` y hoy no se rompen: son pares estáticos o se montan en el cliente. Un componente nuevo que mezcle una descripción pintada por el servidor con un error condicional debe usar `usePaintedId` (regla en `CLAUDE.md`).
-- **Criterio de retiro:** quitar el hook cuando Next incluya un React que conserve *Forked* al reiniciar una fibra durante la hidratación y CUST-017 y EVT-040 pasen en Firefox sin él.
+- **Criterio de retiro:** quitar el hook cuando Next incluya un React que conserve *Forked* al reiniciar una fibra durante la hidratación. Se mide con la divergencia **natural** en Firefox sin el hook: los ids de `/admin/events/new` coinciden entre servidor y cliente (hoy 30 de 32 difieren) y EVT-005 sin reescritura pasa `--repeat-each=8` sin campos sin etiqueta. CUST-017 no sirve como criterio, porque provoca la divergencia a propósito; al retirar el hook hay que quitarla o rehacerla. EVT-040 prueba la `key` de `new-event-form`, no el hook.
 
 ---
 
@@ -2292,7 +2292,7 @@ Los agentes de corrección los vieron en barridos temporales o en revisión de c
 
 | # | Decisión | Contexto | Bug |
 |---|---|---|---|
-| 1 | **Actualizar a Next ≥ 16.3.0** (cambio mayor) para retirar la mitigación de navegación | facebook/react#36134 sólo llega con el React que incluye Next 16.3.0 o posterior; subir `react`/`react-dom` no sirve con Next 15.5. Después: quitar `installNavigationGuard` y `<NavigationGuardBridge />`, correr las pruebas de BUG-006 con `--repeat-each=5 --retries=0` y verificar NAV-034…036 en Firefox sin `<SegmentChildren>` | BUG-006, BUG-020 |
+| 1 | **Actualizar a Next ≥ 16.3.0** (cambio mayor) para retirar la mitigación de navegación | facebook/react#36134 sólo llega con el React que incluye Next 16.3.0 o posterior; subir `react`/`react-dom` no sirve con Next 15.5. Después: quitar `installNavigationGuard` y `<NavigationGuardBridge />`, correr las pruebas de BUG-006 con `--repeat-each=5 --retries=0` y verificar NAV-037…039 en Firefox sin `<SegmentChildren>` | BUG-006, BUG-020 |
 | 2 | **Revocación por dispositivo en lugar de por cuenta** | Hoy «Cerrar sesión» cierra todas las sesiones de la cuenta en todos los dispositivos, y ningún texto lo avisa. La alternativa es revocar por `jti`/`sid` con una lista de revocadas hasta `exp` y dejar `sessionVersion` para reset, desactivación y rol. Requiere cambio de esquema | BUG-001, BUG-004 |
 | 3 | **Formularios del panel admin con el mismo patrón de antes de hidratar** | Siguen con `defaultValues` vacíos (registrado en la observación de los carriles 3, 4 y 5 y en el pendiente de `e2f3699`). Decidir si se aplica el mismo tratamiento que en BUG-021 (y el de envío de BUG-019) o se acepta, porque son usuarias del equipo con sesión. En la regresión final, EVT-005 y PUR-002 agotaron `locator.fill` en Firefox (carriles 4 y 5); su causa está en análisis por las inestabilidades en curso y no está atribuida a este patrón | BUG-021, BUG-019 |
 | 4 | Reembolso automático de cobros tardíos sobre reservas canceladas | Hoy el equipo reembolsa desde el panel después del aviso | BUG-002 |
@@ -2300,7 +2300,7 @@ Los agentes de corrección los vieron en barridos temporales o en revisión de c
 | 6 | Tope de auto-registros por evento relativo a `guestCount`, y recuperación segura de un link personal perdido | Hoy sólo hay un cupo de 60 por evento y 10 por IP cada 10 min | BUG-003 |
 | 7 | Copia del aviso para la anfitriona ante un posible duplicado | Hoy le pide quitar su registro pendiente (el confiable); la revisión sugiere pedirle antes «confírmalo con ella» | BUG-003 |
 | 8 | Expirar la sesión del proveedor cuando un pago manual cambia el saldo | Hoy esa sesión sigue cobrable hasta que vence a la hora, y el excedente se avisa al equipo | BUG-002 |
-| 9 | Convención en CLAUDE.md: los layouts con `error.tsx` hermano que pinten `children` dentro de un elemento HTML deben usar `<SegmentChildren>` | CLAUDE.md no se editó | BUG-020 |
+| 9 | ~~Convención en CLAUDE.md: los layouts con `error.tsx` hermano que pinten `children` dentro de un elemento HTML deben usar `<SegmentChildren>`~~ | **Resuelto:** `CLAUDE.md` › UI/UX ya la incluye (junto con `usePaintedId`, BUG-024) | BUG-020 |
 | 10 | Soft-404 de las rutas internas `/admin/**/[id]` y `/staff/events/[id]` | Es una mejora opcional; hoy responden 200 con `noindex` | BUG-013 |
 | 11 | Re-sembrar las bases de desarrollo y demo (`pnpm db:setup`) | Hace falta para que lleguen los enlaces corregidos del seed | BUG-016 |
 

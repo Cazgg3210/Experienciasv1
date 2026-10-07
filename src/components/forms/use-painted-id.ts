@@ -20,8 +20,12 @@ import * as React from "react";
  * ambos ids coinciden, devuelve `generated` sin volver a renderizar.
  *
  * Criterio de retiro: quitar el hook (y volver a `React.useId()` / el `id` explícito en sus consumidores) cuando
- * Next incluya un React que conserve *Forked* al reiniciar una fibra durante la hidratación, y CUST-017 y EVT-040
- * pasen en Firefox sin él.
+ * Next incluya un React que conserve *Forked* al reiniciar una fibra durante la hidratación. Hay que medir la
+ * divergencia NATURAL en Firefox sin el hook: en `/admin/events/new`, los atributos de id del HTML del servidor
+ * deben coincidir con los del cliente (hoy difieren 30 de 32), y EVT-005 sin reescritura debe pasar
+ * `--repeat-each=8` sin campos sin etiqueta. CUST-017 NO sirve como criterio: provoca la divergencia a propósito
+ * (reescribe los ids antes de hidratar), así que sin el hook falla siempre; al retirar el hook hay que quitarla o
+ * rehacerla. EVT-040 prueba la `key` de new-event-form (montaje en el cliente), no este hook.
  *
  * @param generated id calculado en el cliente (normalmente `React.useId()` o el `id` explícito del componente).
  * @param ref elemento pintado por el servidor que lleva `${id}${suffix}` en el atributo `attr`.

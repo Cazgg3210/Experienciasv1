@@ -68,7 +68,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | Transversal (responsive y accesibilidad) (MAP-504–509) | 6 | 0 | 1 | 5 | 0 | 17 |
 | **Total** | **528** | **121** | **269** | **121** | **17** | **887** |
 
-«Pruebas distintas» cuenta IDs únicos por módulo; cada prueba quedó asignada a un solo módulo, así que la suma coincide con los 886 IDs únicos (838 de la auditoría + 48 nuevos). Una prueba puede aparecer en varias filas del mismo módulo cuando cubre varios flujos.
+«Pruebas distintas» cuenta IDs únicos por módulo; cada prueba quedó asignada a un solo módulo, así que la suma coincide con los 887 IDs únicos (838 de la auditoría + 49 nuevos). Una prueba puede aparecer en varias filas del mismo módulo cuando cubre varios flujos.
 
 ## Mapa
 
@@ -299,6 +299,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-213 | Clientas | `/admin/customers` (orden y paginación) | Owner | Nombre A–Z, recientes, página 2 | Orden y paginación correctos | P3 | CUST-003, CUST-004 |
 | MAP-214 | Clientas | `/admin/customers/[id]` | Owner | Abrir ficha con historial (seed) | Leads, cotizaciones, eventos, pagos, total pagado y motivos que bloquean el borrado | P1 | CUST-005 |
 | MAP-215 | Clientas | `/admin/customers/[id]` (perfil) · `updateCustomerAction` | Owner | Editar el perfil | Normaliza correo e Instagram, guarda opt-in, auditoría before/after | P1 | CUST-006 |
+| MAP-530 | Clientas | `/admin/customers/[id]` (perfil, accesibilidad de `Field`) | Owner | Enviar un WhatsApp inválido con los ids del servidor y del cliente divergentes (BUG-024) | Descripción + error en la descripción accesible, nombre accesible, `aria-invalid` y foco por la etiqueta | P2 | CUST-017 |
 | MAP-216 | Clientas | `/admin/customers/[id]` (perfil) | Owner | Usar el correo de otra clienta | Error de campo; sin cambios | P1 | CUST-007 |
 | MAP-217 | Clientas | `/admin/customers/[id]` (perfil) | Owner | Datos inválidos (formulario y request directo) | Errores por campo; sin cambios | P1 | CUST-008, CUST-015 |
 | MAP-218 | Clientas | `/admin/customers/[id]` (teléfono) | Owner | Usar el teléfono de otra clienta | Se permite: no hay regla de unicidad de teléfono (ambigüedad documentada) | P3 | CUST-009 |
@@ -391,6 +392,7 @@ Fuente: inventario `docs/qa/.discovery/inventory.json` del 2026-10-06 (generado 
 | MAP-303 | Eventos | `/admin/events` | Owner | Listar y filtrar por estado, periodo («Pasados») y búsqueda; «Limpiar filtros» | Filtros en URL compartible y resultados correctos; «Pasados» sólo completados; estado vacío «No hay eventos con estos filtros»; «Limpiar filtros» vuelve al listado sin filtros | P1 | EVT-001, EVT-002, EVT-038 |
 | MAP-304 | Eventos | `/admin/events/[id]` (+ pestañas) | Owner | Ver el detalle y navegar Resumen / Invitadas / Operaciones / Finanzas / Memory | Encabezado y estado; pestaña activa con `aria-current`; «Cumpleaños de Sofía» con panel de Pagos | P1 | EVT-003, SMK-024 |
 | MAP-305 | Eventos | `/admin/events/new` · `createEventAction`, `searchCustomersAction` | Owner | Alta manual con nueva clienta y con clienta existente (búsqueda) | Evento INQUIRY con tokens de 256 bits; clienta creada o vinculada sin duplicar; auditoría `event.created`; aparece en el listado | P0 | EVT-005, EVT-006 |
+| MAP-529 | Eventos | `/admin/events/new` (bloque «Clienta») | Owner | Cambiar de «Buscar clienta» a «Nueva clienta» con los ids del servidor y del cliente divergentes (BUG-024) | «Nombre», «WhatsApp» y «Correo» conservan su etiqueta y el foco por la etiqueta | P2 | EVT-040 |
 | MAP-306 | Eventos | `/admin/events/new` · `checkEventAvailabilityAction` | Owner | Disponibilidad en vivo (lleno, cerrado, pasado, fuera de horario, anticipación) | Indicador correcto; una fecha no disponible exige «Crear de todos modos» y el override se audita | P1 | EVT-007, EVT-010 |
 | MAP-307 | Eventos | `/admin/events/new` (validaciones) | Owner | Formulario y request directo inválidos (clienta, título, fecha) | Errores por campo; la base no cambia | P1 | EVT-008, EVT-009 |
 | MAP-308 | Eventos | `/admin/events/new` | Owner | Doble clic en «Crear evento» | Un solo evento | P3 | EVT-011 |
