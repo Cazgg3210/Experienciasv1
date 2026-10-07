@@ -23,9 +23,9 @@
 | BLOCKER | 0 | 0 | — |
 | CRITICAL | 3 | 0 | BUG-001, BUG-002, BUG-003 |
 | HIGH | 4 | 0 | BUG-004, BUG-005, BUG-006 (mitigado), BUG-017 |
-| MEDIUM | 8 | 0 | BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-018, BUG-019, BUG-020 |
+| MEDIUM | 9 | 0 | BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-018, BUG-019, BUG-020, BUG-024 |
 | LOW | 8 | 0 | BUG-012, BUG-013, BUG-014, BUG-015, BUG-016, BUG-021, BUG-022, BUG-023 |
-| **Total** | **23** | **0** | 16 de la auditoría (31 IDs provisionales de 6 carriles, deduplicados) + 7 nuevos (BUG-017…BUG-023) |
+| **Total** | **24** | **0** | 16 de la auditoría (31 IDs provisionales de 6 carriles, deduplicados) + 8 nuevos (BUG-017…BUG-024) |
 
 | BUG | Severidad | Prioridad | Estado | Título | Módulo | Corrección |
 |---|---|---|---|---|---|---|
@@ -52,6 +52,7 @@
 | BUG-021 | LOW | P2 | Verified | Lo escrito antes de hidratar se borraba en formularios públicos y del portal | memory / marketing / guests / portal / ai-designer | `0e35e58`, `e2f3699` |
 | BUG-022 | LOW | P3 | Verified | Restablecer la propia contraseña desde Staff revocaba la sesión en silencio | staff | `ebb5fac` |
 | BUG-023 | LOW | P3 | Verified | `GET /api/auth/session` re-emitía la cookie de sesión (latente) | auth | `28fb8d3` |
+| BUG-024 | MEDIUM | P2 | Verified | Firefox: etiquetas, descripciones y `aria-controls` desligados cuando el `useId` del cliente difiere del HTML del servidor | formularios (transversal) | `4b79477`, `412c035` |
 
 **Criterios de consolidación (auditoría).** Cuando dos carriles vieron el mismo defecto se conserva la severidad más alta justificada por la regla del gate (seguridad o datos de terceros ⇒ CRITICAL; cobro indebido ⇒ CRITICAL). Reclasificaciones respecto a los IDs provisionales: SAL-BUG-03 (HIGH) y TRV-BUG-06 (HIGH) suben a CRITICAL al fusionarse con EVX-BUG-01 y ACC-BUG-01; COM-BUG-03 y OPX-BUG-02 (MEDIUM) se integran en BUG-006 (HIGH); SAL-BUG-04 (LOW) se integra en BUG-009 (MEDIUM); EVX-BUG-05 y TRV-BUG-04 (LOW) se integran en BUG-010 (MEDIUM). La parte de contraste de OPX-BUG-05 se documenta en BUG-009; el ID se asigna a BUG-011 según el mapa.
 
@@ -2090,6 +2091,77 @@ Envolver el GET de `/session` con el mismo filtro, o prohibir `SessionProvider`/
 
 ---
 
+## BUG-024 — Firefox: etiquetas, descripciones y `aria-controls` desligados cuando el `useId` del cliente difiere del HTML del servidor
+
+**Severity:** MEDIUM
+**Priority:** P2
+**Status:** Verified
+**Type:** APPLICATION BUG (accesibilidad; desencadenado por un defecto de React 19.2-canary incluido en Next 15.5.27)
+**Module:** formularios compartidos (`Field`, `FieldGroup`, `ChipFrame`, `NpsScale`, `CustomerPicker`) y alta de evento
+**Role:** OWNER/SUPER_ADMIN (panel), clienta (portal), visitante (diseñadora IA)
+**Environment:** TEST — build de producción local, carriles 3–5; Firefox (~10 % de las cargas); reproducible de forma determinista en Chromium simulando la divergencia
+**Reproducible:** Sí. [EVT-005] en Firefox 1/8 («Nombre» sin etiqueta); [CUST-017] 0/2 con el build anterior
+**Test:** [EVT-040] tests/e2e/events/events.spec.ts · [CUST-017] tests/e2e/customers/customers.spec.ts
+**Fuentes:** inestabilidad de [EVT-005] en la regresión final (Firefox) → corrección de inestables
+
+### Preconditions
+Firefox; una página del panel, del portal o de la diseñadora IA cuya hidratación todavía encuentra pendiente un hijo lazy de RSC.
+
+### Steps to reproduce
+1. Abrir `/admin/events/new` en Firefox. También se puede simular la divergencia reescribiendo los `for`/`id` del HTML antes de hidratar, como hacen EVT-040 y CUST-017.
+2. Elegir «Nueva clienta», o provocar un error de validación en un campo con descripción.
+3. Revisar el nombre accesible de «Nombre» y la descripción accesible del campo con error.
+
+### Expected result
+Cada campo conserva su etiqueta (`<label for>` = `id` del input), su descripción y su error en `aria-describedby`, y `aria-controls` apunta a la lista correcta.
+
+### Actual result
+- «Nombre» queda sin etiqueta asociada: un lector de pantalla lo anuncia sin nombre y el clic en la etiqueta no lo enfoca.
+- Al aparecer un error, la descripción deja de anunciarse.
+- En `CustomerPicker`, `aria-controls` apunta a un id inexistente.
+
+Medido: 30 de 32 atributos de id de `/admin/events/new` difieren entre servidor y cliente.
+
+### Evidence
+Commits `4b79477` y `412c035` (mensajes con la medición). EVT-005 en Firefox: 1/8 antes. CUST-017: 0/2 antes y 4/4 después. EVT-040: 16/16 después.
+
+### Console errors
+Ninguno: React no avisa, porque no reescribe atributos ya pintados.
+
+### Network errors
+Ninguno.
+
+### Technical analysis
+Ocurre en el React 19.2.0-canary-0bdb9206 que trae Next 15.5.27:
+1. Durante la hidratación, una fibra que no es función (Provider, Fragment o host) e hija de un arreglo se suspende al reconciliar un hijo lazy de RSC.
+2. `replayBeginWork` la reinicia con `resetWorkInProgress`. La máscara borra el flag *Forked*, así que `beginWork` ya no llama a `pushTreeId`.
+3. Todo el subárbol calcula otros `useId`. React conserva los atributos ya pintados, pero usa SU id en lo que monta o actualiza después.
+
+`OuterLayoutRouter` de Next devuelve justo ese arreglo de `TemplateContext.Provider`, y la app no lo controla. Es la misma familia de defecto que BUG-020 (`SegmentChildren`).
+
+### Suspected root cause
+Defecto de React/Next: el replay de una fibra suspendida durante la hidratación pierde el árbol de ids. La app no puede corregirlo en su origen.
+
+### Recommended fix
+Mitigar en la app: si el id con el que el servidor pintó el grupo difiere del generado, adoptarlo.
+
+### Fix
+
+**Corrección.**
+- `4b79477`: cada variante del bloque «Clienta» de `new-event-form.tsx` lleva su `key`, así que al cambiar de modo se montan campos nuevos con label e input del mismo id.
+- `412c035`: hook `usePaintedId(generated, ref, { attr, suffix })` en `src/components/forms/use-painted-id.ts`. Al hidratar lee el id pintado por el servidor y, si difiere, lo adopta para todo el grupo; en un montaje normal no hace nada. Se aplicó a `Field` (etiqueta), `FieldGroup` y `ChipFrame` (descripción), `NpsScale` (pista) y `CustomerPicker` (`aria-controls`).
+
+**Pruebas @regression.** [EVT-040] (@a11y) y [CUST-017] (@a11y, @P2). Las dos simulan la divergencia de forma determinista y exigen etiqueta, descripción + error, `aria-invalid` y foco por la etiqueta.
+
+**Verificación.** CUST-017 pasa de 0/2 a 4/4. EVT-040: 16/16. EVT-005 sin fallos de etiqueta en 16 corridas. Revisión adversarial: *approve*, sin problemas blocker ni major.
+
+**Riesgos residuales.**
+- Radix: `aria-controls` de Dialog/Select/Popover y el nombre de los paneles de Tabs/Accordion montados después no se pueden fijar sin envolver la librería (severidad baja).
+- Se revisaron más de 15 consumidores directos de `useId` y hoy no se rompen: son pares estáticos o se montan en el cliente. Un componente nuevo que mezcle una descripción pintada por el servidor con un error condicional debe usar `usePaintedId` (regla en `CLAUDE.md`).
+- **Criterio de retiro:** quitar el hook cuando Next incluya un React que conserve *Forked* al reiniciar una fibra durante la hidratación y CUST-017 y EVT-040 pasen en Firefox sin él.
+
+---
+
 ## Mapa de IDs provisionales
 
 Los 31 IDs provisionales de los carriles de la auditoría (fuente: `docs/qa/.bug-map.json`). Todos los bugs finales están en estado **Verified**; BUG-006, **Verified (mitigado)**. Cada hallazgo de `docs/qa/findings/*.md` lleva una sección «Resolution», «Fix», «Corrección» o «Seguimiento» con su detalle.
@@ -2212,6 +2284,10 @@ Los agentes de corrección los vieron en barridos temporales o en revisión de c
 
 ---
 
+### Observaciones de la última ronda (revisión adversarial)
+- **Next 15.5 + Firefox: navegar mientras sigue en vuelo un `router.refresh()`.** Firefox aborta el fetch y Next cae a «Falling back to browser navigation» hacia la URL actual, lo que anula la navegación de la usuaria. En las pruebas ([PUR-005], [STF-003], [OPS-010]) se sincroniza con `routerRefreshed()` (TEST BUG), pero el mecanismo puede afectar a una usuaria real en Firefox. Es una observación de baja prioridad del framework y se retira con la actualización de Next (ver BUG-006).
+- **Login antes de hidratar:** [STF-021] ahora espera la hidratación antes de pulsar «Entrar». El envío nativo antes de hidratar sigue cubierto por las pruebas de AUTH.
+
 ## Pendientes que requieren decisión del usuario
 
 | # | Decisión | Contexto | Bug |
@@ -2266,7 +2342,20 @@ No son bugs de la app; afectan la ejecución de las pruebas. ENV-01 y ENV-02 se 
 - **Efecto.** Fallas sin relación con el código que no deben clasificarse como bugs ni como pruebas inestables.
 - **Resolución.** La regresión final se corrió **con los carriles en secuencia**. El runbook (`.claude/skills/e2e-quality-gate/references/runbook.md`, «Límite de paralelismo en esta máquina») recomienda como máximo 3 carriles a la vez, o carriles uno tras otro con `E2E_WORKERS=4`, y repetir un carril afectado solo antes de clasificar una falla. También anota que cada commit reconstruye el build E2E, porque el sello incluye `git HEAD`.
 
+### ENV-04 — Firefox de Playwright se congela con varias páginas abiertas a la vez — MITIGADA
+
+- **Tipo:** ENVIRONMENT ISSUE (Windows 11 + Playwright 1.63 / Firefox 1543). **Detectado en:** la regresión final, donde EVT-005/017, PUR-002/005, STF-003 y SET-015 eran inestables sólo en Firefox.
+- **Descripción.** Con varias páginas de Firefox abiertas a la vez (en uno o en varios navegadores), todas dejan de producir frames y de atender a Playwright y a la red al mismo tiempo durante 6–270 s.
+- **Reproducción aislada, sin la app** (página mínima servida por un http de Node):
+  - dos Firefox en paralelo: congelamiento en 6/6 corridas;
+  - un Firefox con dos páginas: 3/3;
+  - un Firefox con una página: 0 en 4,900 llamadas;
+  - Chromium: 0 en 4,900.
+- **Mitigación.** `playwright.config.ts` limita el proyecto firefox a **1 worker** (`E2E_FIREFOX_WORKERS`, `3823a75`), lo que bajó los fallos de 22/48 a 3/48. El límite es por invocación, así que **no corras carriles con `E2E_CROSS_BROWSER=1` en paralelo**: dos Firefox separados se congelan juntos.
+- **Efecto en el gate.** Un FLAKY de Firefox se clasifica como ENVIRONMENT, y no como bug de la app, sólo si su traza muestra la ausencia total de frames.
+
 ### Otras notas de entorno vistas durante las correcciones
+- **WebKit en Windows hidrata muy lento algunos formularios del panel.** «Agregar costo» de [FIN-006] tarda 20–25 s en hidratar en WebKit, más que el tope de 15 s de `ready()`; la medición (MessageChannel a ~33 ms por salto) apunta al entorno. FIN-006 en WebKit queda como **inestabilidad abierta clasificada como ENVIRONMENT**. No se subió el tope sin evidencia versionada.
 - **Caídas del worker de Node en Windows** (`0xC0000409` / `3221226505`) antes de ejecutar código de prueba, a 0 ms: AUTH-035 una vez y PAY-003 una vez. No se repitieron al correrlas aisladas; son ENVIRONMENT.
 - **Sello del build E2E con archivos sin seguimiento.** `scripts/e2e-server.mjs` no detectaba cambios en archivos nuevos sin commit y reutilizaba un build viejo. Se corrigió en `86b60de`.
 - **Contratos de integración.** `devops.test.ts` esperaba `output: "standalone"` literal, y `memory-capsule.test.ts` esperaba 403 en la prueba CSRF del upload. Fallaban en todas las ramas de la ronda 1 y se alinearon en `86b60de`; después, `pnpm test:integration` pasó 318/318 y 324/324.
