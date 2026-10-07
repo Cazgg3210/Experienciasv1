@@ -8,7 +8,7 @@
  *    dinero en centavos y horas en zona America/Mexico_City.
  *  - Nada aquí toca código de la app: sólo Prisma sobre la base E2E del carril y utilidades puras de src/lib.
  */
-import type { APIRequestContext, Browser, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Browser, Locator, Page, Response } from "@playwright/test";
 import type { EventStatus, Prisma, PrismaClient, StaffFunction } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
@@ -356,6 +356,24 @@ export async function ready(locator: Locator): Promise<Locator> {
     })
     .toBe(true);
   return locator;
+}
+
+/**
+ * Fetch RSC con que `router.refresh()` vuelve a pedir `pathname` después de una acción, ya descargado COMPLETO.
+ * Regístralo ANTES de disparar la acción y espéralo antes de `page.reload()`: si la recarga arranca con ese
+ * fetch en vuelo (el payload RSC llega en streaming, después de los encabezados), Firefox lo aborta, Next cae a
+ * una navegación completa ("Falling back to browser navigation") y la recarga de la prueba termina en
+ * NS_BINDING_ABORTED (OPS-010). Excluye prefetches.
+ */
+export async function routerRefreshed(page: Page, pathname: string): Promise<Response> {
+  const res = await page.waitForResponse((r) => {
+    const req = r.request();
+    const headers = req.headers();
+    return req.method() === "GET" && headers["rsc"] === "1" && !headers["next-router-prefetch"] && new URL(r.url()).pathname === pathname;
+  });
+  const failure = await res.finished(); // el cuerpo en streaming terminó de llegar
+  expect(failure, "el refresh RSC terminó sin error").toBeNull();
+  return res;
 }
 
 /** Toast de sonner con el texto indicado. */

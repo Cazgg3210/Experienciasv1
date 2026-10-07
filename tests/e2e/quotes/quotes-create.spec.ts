@@ -17,6 +17,7 @@ import {
   pricingSettings,
   totalsValue,
   waitForDetail,
+  waitForHydration,
 } from "./_helpers";
 
 test.describe("Cotizaciones · creación", { tag: ["@module:quotes"] }, () => {
@@ -33,7 +34,7 @@ test.describe("Cotizaciones · creación", { tag: ["@module:quotes"] }, () => {
     await gotoReady(page, `/admin/leads/${lead.id}`);
     await page.getByRole("link", { name: "Crear cotización" }).first().click();
     await page.waitForURL((u) => u.pathname === "/admin/quotes/new" && u.searchParams.get("leadId") === lead.id);
-    await page.waitForLoadState("networkidle");
+    await waitForHydration(page);
     await expect(page.getByText(`A partir del lead ${lead.code}`, { exact: false })).toBeVisible();
     const customer = await db.customer.findUniqueOrThrow({ where: { id: lead.customerId! } });
     await expect(page.getByText(customer.name, { exact: true }).first()).toBeVisible(); // clienta precargada

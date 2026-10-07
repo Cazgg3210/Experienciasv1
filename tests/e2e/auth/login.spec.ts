@@ -3,7 +3,7 @@
  * Fuente: src/features/auth/server/actions.ts (loginAction), src/auth.ts (authorize), src/app/(auth)/login/page.tsx.
  */
 import { ACCOUNTS, PASSWORD, expect, scanA11y, test, uniqEmail, type E2ERole } from "../fixtures";
-import { SESSION_COOKIE, createTeamUser, loginViaUi, sessionCookie } from "../permissions/_helpers";
+import { SESSION_COOKIE, createTeamUser, loginViaUi, sessionCookie, waitForSessionSetCookie } from "../permissions/_helpers";
 
 const GENERIC_ERROR = "Correo o contraseña incorrectos.";
 
@@ -21,6 +21,7 @@ test.describe("Login del equipo", { tag: ["@module:auth", "@auth"] }, () => {
       evidence(role, `Login › ${account.email} → ${account.home}`);
       const before = await db.user.findUniqueOrThrow({ where: { email: account.email }, select: { lastLoginAt: true } });
       const page = await anonPage();
+      const setCookie = waitForSessionSetCookie(page);
       await loginViaUi(page, account.email, PASSWORD);
       await page.waitForURL((u) => u.pathname === account.home, { timeout: 30_000 });
       // UI: shell del portal correcto con el nombre de la persona
@@ -33,11 +34,20 @@ test.describe("Login del equipo", { tag: ["@module:auth", "@auth"] }, () => {
         await expect(page.getByText(`Hola, ${account.name.split(" ")[0]}`, { exact: true })).toBeVisible();
         await expect(page.getByRole("navigation", { name: "Staff" })).toBeVisible();
       }
-      // Cookie de sesión: httpOnly + SameSite=Lax (no accesible desde JS)
+      // Cookie de sesión: HttpOnly + SameSite=Lax + Path=/ (no accesible desde JS). Los atributos se verifican
+      // en el Set-Cookie real del login, independiente del motor: WebKit en Windows guarda las cookies sin
+      // SameSite y context.cookies() reporta "None" aunque el servidor envíe SameSite=Lax.
+      const emitted = await setCookie;
+      expect(emitted.value, "valor de la cookie de sesión").not.toBe("");
+      expect(emitted.attributes["httponly"], "Set-Cookie: HttpOnly").toBe(true);
+      expect(String(emitted.attributes["samesite"]).toLowerCase(), "Set-Cookie: SameSite").toBe("lax");
+      expect(emitted.attributes["path"], "Set-Cookie: Path").toBe("/");
+      // El navegador guardó esa misma cookie como httpOnly y no la expone a JavaScript.
       const cookie = (await page.context().cookies()).find((c) => c.name === SESSION_COOKIE);
       expect(cookie, "cookie de sesión").toBeTruthy();
+      expect(cookie!.value, "la cookie guardada es la emitida por el login").toBe(emitted.value);
       expect(cookie!.httpOnly).toBe(true);
-      expect(cookie!.sameSite).toBe("Lax");
+      expect(cookie!.path).toBe("/");
       expect(await page.evaluate(() => document.cookie)).not.toContain(SESSION_COOKIE);
       // Base: lastLoginAt actualizado
       const after = await db.user.findUniqueOrThrow({ where: { email: account.email }, select: { lastLoginAt: true } });

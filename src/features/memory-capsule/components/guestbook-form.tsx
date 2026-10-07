@@ -20,7 +20,8 @@ export function GuestbookForm({ token }: { token: string }) {
   const hydrated = useHydrated();
   const form = useForm<GuestbookFormValues>({
     resolver: zodResolver(guestbookFormSchema),
-    defaultValues: { name: "", body: "" },
+    // Sin defaultValues a propósito: al registrar cada campo, react-hook-form toma lo que ya hay en el
+    // DOM. Con "" vaciaría lo que la invitada escribió antes de que la página hidratara (celular lento).
   });
   const body = form.watch("body") ?? "";
   const remaining = GUESTBOOK_BODY_MAX - body.length;
