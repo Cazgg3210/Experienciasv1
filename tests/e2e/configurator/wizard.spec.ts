@@ -509,6 +509,9 @@ test.describe("Configurador — wizard", { tag: ["@module:configurator"] }, () =
       await held.requested();
       // Antes de hidratar, en WebKit el paso (segmento en streaming) existe pero sigue oculto: ver trySubmitBeforeHydration.
       const nextBefore = page.getByRole("button", { name: "Siguiente", includeHidden: true });
+      // Fuera de WebKit, React revela el segmento en streaming con un breve retraso: esperar a que el botón sea
+      // visible (sigue sin hidratar: el chunk está retenido) para que el intento no choque con el esqueleto.
+      if (browserName !== "webkit") await expect(nextBefore).toBeVisible();
       await trySubmitBeforeHydration({ submit: nextBefore, requests }, browserName);
       await expectGuardedBeforeHydration(page.locator("form").filter({ has: nextBefore }), nextBefore);
 
