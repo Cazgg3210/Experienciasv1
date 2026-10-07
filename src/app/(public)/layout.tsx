@@ -4,6 +4,7 @@ import { WhatsAppFab } from "@/components/site/whatsapp-fab";
 import { WHATSAPP_DEFAULT_MESSAGE } from "@/components/site/nav-config";
 import { getSiteSettings } from "@/features/marketing/server/queries";
 import { whatsappLink } from "@/server/providers/whatsapp/links";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 /**
  * Layout del sitio público (marketing + configurador).
@@ -16,7 +17,7 @@ export default async function PublicLayout({ children }: { children: React.React
     <div className="bg-background flex min-h-dvh flex-col">
       <SiteHeader brandName={business.brandName} whatsappHref={whatsappHref} />
       <main id="contenido" tabIndex={-1} className="flex-1 focus:outline-none">
-        {children}
+        <SegmentChildren>{children}</SegmentChildren>
       </main>
       <SiteFooter
         brandName={business.brandName}

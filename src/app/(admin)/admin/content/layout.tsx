@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/layout/page-header";
 import { requirePagePermission } from "@/server/auth/session";
 import { SubNav } from "@/features/settings/components/sub-nav";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 export const metadata: Metadata = { title: "Contenido" };
 
@@ -24,7 +25,7 @@ export default async function ContentLayout({ children }: { children: React.Reac
           { href: "/admin/content/gallery", label: "Galería", icon: "gallery" },
         ]}
       />
-      {children}
+      <SegmentChildren>{children}</SegmentChildren>
     </div>
   );
 }

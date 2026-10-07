@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { requirePagePermission } from "@/server/auth/session";
 import { can, type Permission } from "@/server/auth/permissions";
 import { SubNav, type SubNavItem } from "@/features/settings/components/sub-nav";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 export const metadata: Metadata = { title: "Configuración" };
 
@@ -31,7 +32,9 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
           <SubNav items={items} label="Secciones de configuración" />
         </aside>
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0">
+          <SegmentChildren>{children}</SegmentChildren>
+        </div>
       </div>
     </div>
   );

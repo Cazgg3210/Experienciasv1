@@ -4,6 +4,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { getCurrentUser } from "@/server/auth/session";
 import { isBackofficeRole } from "@/server/auth/permissions";
 import { providerStatus } from "@/server/providers";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 export const metadata: Metadata = {
   title: { default: "Panel", template: "%s · Panel Ivonne & Rosa" },
@@ -31,7 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <AdminShell user={{ name: user.name, email: user.email, role: user.role }} mockProviders={mockProviders}>
-      {children}
+      <SegmentChildren>{children}</SegmentChildren>
     </AdminShell>
   );
 }

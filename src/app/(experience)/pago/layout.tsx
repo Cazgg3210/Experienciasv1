@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 /** Layout de checkout/resultado de pago: marca, contenido centrado y aviso de pago seguro. */
 export default function PagoLayout({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,9 @@ export default function PagoLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
       <main id="contenido" className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6 sm:py-16">
-        <div className="w-full max-w-xl">{children}</div>
+        <div className="w-full max-w-xl">
+          <SegmentChildren>{children}</SegmentChildren>
+        </div>
       </main>
       <footer className="text-muted-foreground px-4 pb-8 text-center text-xs">
         Nunca te pediremos datos de tu tarjeta por WhatsApp ni por correo.

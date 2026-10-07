@@ -1,5 +1,6 @@
 import { requirePagePermission } from "@/server/auth/session";
 import { CatalogNav } from "@/features/catalog/components/catalog-nav";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function CatalogLayout({ children }: { children: React.Reac
   return (
     <div className="min-w-0">
       <CatalogNav />
-      {children}
+      <SegmentChildren>{children}</SegmentChildren>
     </div>
   );
 }

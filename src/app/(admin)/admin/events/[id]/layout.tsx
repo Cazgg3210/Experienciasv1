@@ -3,6 +3,7 @@ import { hasPermission, requirePagePermission } from "@/server/auth/session";
 import { getEventHeader } from "@/features/events/server/event-queries";
 import { EventHeader } from "@/features/events/components/event-header";
 import { EventTabs } from "@/features/events/components/event-tabs";
+import { SegmentChildren } from "@/components/layout/segment-children";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,9 @@ export default async function EventLayout({
           { href: `${base}/memory`, label: "Memory Capsule" },
         ]}
       />
-      <div>{children}</div>
+      <div>
+        <SegmentChildren>{children}</SegmentChildren>
+      </div>
     </div>
   );
 }
