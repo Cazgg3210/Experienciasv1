@@ -21,6 +21,7 @@ import {
   dayKey,
   localInput,
   ready,
+  routerRefreshed,
   staffMemberOf,
   swapInBody,
   toast,
@@ -259,8 +260,10 @@ test.describe("Operaciones · staff del evento", { tag: ["@module:operations"] }
     const dialog = page.getByRole("dialog", { name: "Asignar staff" });
     await dialog.getByLabel("Integrante").selectOption(lupita.id);
     await expect(dialog.getByLabel("Función en este evento")).toHaveValue("COORDINATOR");
+    const refreshed = routerRefreshed(page, opsUrl(ev.id));
     await dialog.getByRole("button", { name: "Asignar", exact: true }).click();
     await expect(toast(page, "Staff asignado y notificado")).toBeVisible();
+    await refreshed; // el router.refresh() posterior a la acción terminó: la recarga ya no compite con él
     const a = await db.staffAssignment.findFirstOrThrow({ where: { eventId: ev.id, staffMemberId: lupita.id } });
     expect(a.function).toBe("COORDINATOR");
     expect(a.amountCents, "tarifa por evento de Lupita").toBe(lupita.rateCents);
