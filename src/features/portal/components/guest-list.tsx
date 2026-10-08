@@ -36,7 +36,7 @@ export type GuestRow = {
   canRemove: boolean;
   /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
   possibleDuplicate: boolean;
-  /** Con quién coincide y qué hacer (p. ej. quitar el registro pendiente que agregó la anfitriona). */
+  /** Con quién coincide y qué hacer: confirmarlo con su invitada y nunca quitar el registro que ella agregó. */
   duplicateHint: string | null;
 };
 

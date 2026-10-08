@@ -8,7 +8,7 @@ import { prisma } from "@/db";
 import { generateToken } from "@/lib/tokens";
 import { dateOnly, zonedDateTime, localDateKey } from "@/lib/dates";
 import { AppError } from "@/lib/errors";
-import { uid } from "./helpers";
+import { testOwner, uid } from "./helpers";
 import { getPortalDashboard, requestPortalAccess, resolveInvite, resolvePortalEvent } from "@/features/portal/server/portal-service";
 import {
   sendHostMessage,
@@ -18,7 +18,7 @@ import {
 } from "@/features/portal/server/host-service";
 import { addGuestAsHost, removeGuestAsHost } from "@/features/guests/server/guest-service";
 import { submitRsvp } from "@/features/guests/server/rsvp-service";
-import { getGuestsOverview } from "@/features/events/server/guest-admin-service";
+import { deleteGuest, getGuestsOverview } from "@/features/events/server/guest-admin-service";
 import { getInviteCalendar, getInviteView } from "@/features/guests/server/invite-queries";
 import { PORTAL_ACCESS_NEUTRAL_MESSAGE } from "@/features/portal/domain/portal";
 import type { RsvpFormValues } from "@/features/guests/schemas";
@@ -44,6 +44,7 @@ async function makeEvent(opts: {
   status?: EventStatus;
   daysFromNow?: number;
   micrositeEnabled?: boolean;
+  guestCount?: number;
 } = {}) {
   const customerId = opts.customerId ?? (await makeCustomer()).id;
   const startsAt = new Date(Date.now() + (opts.daysFromNow ?? 20) * DAY);
@@ -58,7 +59,7 @@ async function makeEvent(opts: {
       eventDate: dateOnly(dateKey),
       startsAt: start,
       endsAt: new Date(start.getTime() + 4 * 60 * 60 * 1000),
-      guestCount: 8,
+      guestCount: opts.guestCount ?? 8,
       addressLine: "Lope de Vega 214, depto. 5",
       neighborhood: "Polanco V Sección",
       postalCode: "11560",
@@ -198,8 +199,8 @@ describe("RSVP del micrositio", () => {
     expect(await prisma.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: first.guestId } })).toBe(0);
     const dashboard = await getPortalDashboard(ev.portalToken);
     expect(dashboard?.guests.map((g) => [g.id, g.possibleDuplicate, g.duplicateHint])).toEqual([
-      [first.guestId, true, "Coincide con «camila TORRES» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro."],
-      [second.guestId, true, "Coincide con «Camila Torres» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro."],
+      [first.guestId, true, "Coincide con «camila TORRES» de tu lista. Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro."],
+      [second.guestId, true, "Coincide con «Camila Torres» de tu lista. Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro."],
     ]);
 
     const tracked = await prisma.analyticsEvent.count({ where: { type: "RSVP_SUBMIT", eventId: ev.id } });
@@ -249,7 +250,7 @@ describe("RSVP del micrositio", () => {
     expect(JSON.stringify(view)).not.toContain("Alergia severa a la nuez");
   });
 
-  it("amiga agregada por la anfitriona que responde con el link general: se marca con quién coincide y la anfitriona puede quitar el pendiente", async () => {
+  it("amiga agregada por la anfitriona que responde con el link general: se marca con quién coincide y el aviso pide confirmarlo y conservar el registro de la anfitriona", async () => {
     const ev = await makeEvent();
     const friend = await addGuestAsHost(ev.portalToken, { name: "Lucía Vega", contact: "lucia.vega@example.test" });
     const answered = await submitRsvp({
@@ -266,17 +267,121 @@ describe("RSVP del micrositio", () => {
     expect(rows.get(answered.guestId)).toMatchObject({
       possibleDuplicate: true,
       canRemove: false,
-      duplicateHint: "Coincide con «Lucía Vega» de tu lista. Si es la misma persona, quita el registro pendiente de «Lucía Vega» para dejar uno solo.",
+      duplicateHint:
+        "Coincide con «Lucía Vega» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «Lucía Vega».",
     });
     // El equipo ve lo mismo en el admin (con quién coincide), sin marcar a la que agregó la anfitriona.
     const overview = await getGuestsOverview(ev.id);
     expect(overview!.possibleDuplicates.get(answered.guestId)).toEqual(["Lucía Vega"]);
     expect(overview!.possibleDuplicates.has(friend.id)).toBe(false);
 
-    // La anfitriona quita el registro pendiente: queda uno solo y ya no hay posible duplicado.
-    await removeGuestAsHost(ev.portalToken, friend.id);
+    // Si el auto-registro no era de ella, el equipo lo quita (la anfitriona no puede): queda el registro que ella
+    // agregó, con su link personal, y ya no hay posible duplicado.
+    await deleteGuest({ eventId: ev.id, guestId: answered.guestId }, await testOwner());
     const after = await getPortalDashboard(ev.portalToken);
-    expect(after!.guests.map((g) => [g.id, g.possibleDuplicate, g.duplicateHint])).toEqual([[answered.guestId, false, null]]);
+    expect(after!.guests.map((g) => [g.id, g.possibleDuplicate, g.duplicateHint, g.canRemove])).toEqual([[friend.id, false, null, true]]);
+  });
+
+  // Tope del link general (pendiente #6 de BUG-003): la lista no pasa de guestCount + margen (techo 60).
+  async function fillGuests(eventId: string, count: number, source: "HOST" | "SELF_RSVP" = "SELF_RSVP") {
+    await prisma.eventGuest.createMany({
+      data: Array.from({ length: count }, (_, i) => ({
+        eventId,
+        name: `Relleno ${source} ${i + 1} ${uid()}`,
+        token: generateToken(),
+        source,
+        rsvpStatus: source === "SELF_RSVP" ? ("ATTENDING" as const) : ("PENDING" as const),
+      })),
+    });
+  }
+
+  it("link general: con la lista en guestCount + margen rechaza con GUEST_LIMIT y no crea; el link personal y la anfitriona siguen", async () => {
+    const ev = await makeEvent({ guestCount: 8 }); // tope = 8 + máx(5, ⌈4⌉) = 13
+    const host = await addGuestAsHost(ev.portalToken, { name: "Amiga Agregada", contact: "" });
+    await fillGuests(ev.id, 11); // 12 en la lista: una abajo del tope
+    expect((await getPortalDashboard(ev.portalToken))!.invitationFull).toBe(false);
+
+    const last = await submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name: "La Trece" }) });
+    expect(last.outcome).toBe("created");
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(13);
+    expect((await getPortalDashboard(ev.portalToken))!.invitationFull).toBe(true);
+
+    // En el borde: rechazo cálido, sin números, igual con o sin coincidencia de nombre (sin enumeración)
+    for (const name of ["La Catorce", "Amiga Agregada"]) {
+      const err = await submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name }) }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AppError);
+      expect(err).toMatchObject({
+        code: "GUEST_LIMIT",
+        status: 409,
+        message:
+          "¡Gracias por querer acompañarnos! Este enlace ya no recibe más respuestas. Pídele a la anfitriona tu link personal y confirma desde ahí.",
+      });
+    }
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(13);
+    expect(await prisma.auditLog.count({ where: { action: "guest.possible_duplicate", after: { path: ["eventId"], equals: ev.id } } })).toBe(0);
+
+    // El link personal no cuenta contra el tope: actualiza a su invitada
+    const personal = await submitRsvp({ slug: ev.micrositeSlug, token: host.token, rsvp: rsvp({ name: "Amiga Agregada", rsvpStatus: "MAYBE" }) });
+    expect(personal).toMatchObject({ outcome: "updated", guestId: host.id, rsvpStatus: "MAYBE" });
+    // La anfitriona sigue agregando desde su portal (sólo la frena el techo de 60)
+    const more = await addGuestAsHost(ev.portalToken, { name: "Agregada Después del Tope", contact: "" });
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(14);
+    expect(await prisma.eventGuest.findUniqueOrThrow({ where: { id: more.id } })).toMatchObject({ source: "HOST", rsvpStatus: "PENDING" });
+  });
+
+  it("dos respuestas simultáneas por el link general en el borde del tope: sólo entra una", async () => {
+    const ev = await makeEvent({ guestCount: 10 }); // tope = 15
+    await fillGuests(ev.id, 14);
+    // Carrera escenificada de forma determinista: una transacción de la prueba retiene las escrituras en
+    // EventGuest (LOCK ... SHARE deja leer, no insertar) hasta que las dos respuestas estén esperando en la base.
+    // Sin el candado del evento (`lockEventGuests`) las dos leerían 14 y entrarían (16: comprobado quitándolo);
+    // con él, la segunda espera a que la primera confirme, ya cuenta 15 y recibe GUEST_LIMIT.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let markLocked!: () => void;
+    const locked = new Promise<void>((resolve) => (markLocked = resolve));
+    const holder = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(`LOCK TABLE "EventGuest" IN SHARE MODE`);
+        markLocked();
+        await gate;
+      },
+      { timeout: 30_000 },
+    );
+    await locked;
+    const settled = Promise.allSettled(
+      ["Carrera Uno", "Carrera Dos"].map((name) =>
+        submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name }) }),
+      ),
+    );
+    const waitingOnLocks = async () => {
+      const rows = await prisma.$queryRaw<Array<{ n: number }>>`
+        SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`;
+      return rows[0]?.n ?? 0;
+    };
+    try {
+      await expect.poll(waitingOnLocks, { timeout: 10_000, interval: 50 }).toBeGreaterThanOrEqual(2);
+    } finally {
+      release();
+      await holder;
+    }
+    const results = await settled;
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected.map((r) => (r.reason as AppError).code)).toEqual(["GUEST_LIMIT"]);
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(15);
+  });
+
+  it("guestCount grande: el techo de 60 manda", async () => {
+    const ev = await makeEvent({ guestCount: 100 });
+    await fillGuests(ev.id, 30, "HOST");
+    await fillGuests(ev.id, 29);
+    await submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name: "La Sesenta" }) });
+    await expect(
+      submitRsvp({ slug: ev.micrositeSlug, token: ev.inviteToken, rsvp: rsvp({ name: "La Sesenta y Uno" }) }),
+    ).rejects.toMatchObject({ code: "GUEST_LIMIT" });
+    expect(await prisma.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
   });
 
   it("token personal actualiza a la invitada correcta y no toca a las demás", async () => {

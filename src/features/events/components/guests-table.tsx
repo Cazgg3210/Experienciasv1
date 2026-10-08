@@ -212,8 +212,10 @@ export function GuestsTable({
               {duplicates === 1
                 ? "1 invitada que se registró con el link general coincide con otra de la lista (mismo nombre o email) y está marcada"
                 : `${duplicates} invitadas que se registraron con el link general coinciden con otras de la lista (mismo nombre o email) y están marcadas`}{" "}
-              como «{GUEST_POSSIBLE_DUPLICATE_LABEL}» (cada una dice con quién coincide). Revisa si es la misma persona y
-              quita el registro que sobre.
+              como «{GUEST_POSSIBLE_DUPLICATE_LABEL}» (cada una dice con quién coincide). Antes de quitar algo,
+              confírmalo con la anfitriona o con la invitada. Conserva el registro que agregó la anfitriona o el equipo
+              (tiene su link personal) y quita el marcado; si sí era ella, pasa antes su respuesta al registro que se
+              queda.
             </p>
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

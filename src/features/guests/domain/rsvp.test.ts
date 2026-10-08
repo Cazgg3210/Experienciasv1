@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  GENERAL_INVITE_FULL_MESSAGE,
+  MAX_GUESTS_PER_EVENT,
+  SELF_RSVP_MARGIN_BPS,
+  SELF_RSVP_MIN_MARGIN,
   canHostRemoveGuest,
   canSeeFullAddress,
+  canSelfRegister,
   confirmationCopy,
   findPossibleDuplicates,
   firstName,
@@ -13,6 +18,7 @@ import {
   possibleDuplicateIds,
   possibleDuplicateMatches,
   rsvpStats,
+  selfRsvpGuestLimit,
   sortDietary,
 } from "./rsvp";
 import { rsvpFormSchema } from "../schemas";
@@ -137,17 +143,105 @@ describe("textos de posible duplicado", () => {
     expect(duplicateNamesLabel(["Ana", "Bety", "Caro"])).toBe("«Ana», «Bety» y «Caro»");
   });
 
-  it("si la coincidencia es una invitada pendiente que agregó la anfitriona, le dice que la quite", () => {
-    expect(hostDuplicateHint([{ name: "Ana Paz", removable: true }])).toBe(
-      "Coincide con «Ana Paz» de tu lista. Si es la misma persona, quita el registro pendiente de «Ana Paz» para dejar uno solo.",
+  // Revisión de BUG-003: el registro que agregó la anfitriona (o el equipo) es el confiable; el aviso nunca le
+  // pide quitarlo. Primero que lo confirme con su invitada y, si el auto-registro no es suyo, lo quitamos nosotras.
+  it("si coincide con una invitada que agregó la anfitriona: confirmarlo con ella, quitar el auto-registro y nunca el suyo", () => {
+    const hint = hostDuplicateHint([{ name: "Ana Paz", source: "HOST" }]);
+    expect(hint).toBe(
+      "Coincide con «Ana Paz» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «Ana Paz».",
+    );
+    expect(hint).not.toMatch(/quita (el|los) registros? (pendientes? )?de/);
+  });
+
+  it("el registro que agregó el equipo también se conserva (aunque ya haya respondido)", () => {
+    expect(hostDuplicateHint([{ name: "Ana Paz", source: "ADMIN" }])).toBe(
+      "Coincide con «Ana Paz» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «Ana Paz».",
     );
   });
 
-  it("si no la puede quitar ella, le pide que nos escriba", () => {
-    expect(hostDuplicateHint([{ name: "Ana Paz", removable: false }])).toBe(
-      "Coincide con «Ana Paz» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.",
+  it("con varias coincidencias habla en plural y sólo pide conservar las confiables", () => {
+    expect(
+      hostDuplicateHint([
+        { name: "Ana Paz", source: "HOST" },
+        { name: "Bety Paz", source: "SELF_RSVP" },
+      ]),
+    ).toBe(
+      "Coincide con «Ana Paz» y «Bety Paz» de tu lista. Primero confírmalo con ellas: si este registro no es de ninguna, escríbenos y lo quitamos; si es de alguna, pídele que responda desde su link personal. No quites el registro de «Ana Paz».",
+    );
+    expect(
+      hostDuplicateHint([
+        { name: "Ana Paz", source: "HOST" },
+        { name: "Bety Paz", source: "ADMIN" },
+      ]),
+    ).toContain("No quites los registros de «Ana Paz» y «Bety Paz».");
+  });
+
+  it("si sólo coincide con otros auto-registros (nadie es el confiable), confirmarlo y escribirnos", () => {
+    expect(hostDuplicateHint([{ name: "Ana Paz", source: "SELF_RSVP" }])).toBe(
+      "Coincide con «Ana Paz» de tu lista. Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro.",
+    );
+    expect(
+      hostDuplicateHint([
+        { name: "Ana Paz", source: "SELF_RSVP" },
+        { name: "Ana P.", source: "SELF_RSVP" },
+      ]),
+    ).toBe(
+      "Coincide con «Ana Paz» y «Ana P.» de tu lista. Primero confírmalo con ellas y, si es la misma persona, escríbenos y dejamos un solo registro.",
     );
     expect(hostDuplicateHint([])).toBe("");
+  });
+});
+
+describe("tope de auto-registros del link general (guestCount + margen, techo 60)", () => {
+  it("las constantes son explícitas: 50 % de margen, mínimo 5 y techo de 60", () => {
+    expect(SELF_RSVP_MARGIN_BPS).toBe(5_000);
+    expect(SELF_RSVP_MIN_MARGIN).toBe(5);
+    expect(MAX_GUESTS_PER_EVENT).toBe(60);
+  });
+
+  it("evento chico: el margen mínimo de 5 manda", () => {
+    expect(selfRsvpGuestLimit(1)).toBe(6);
+    expect(selfRsvpGuestLimit(4)).toBe(9);
+    expect(selfRsvpGuestLimit(6)).toBe(11);
+    expect(selfRsvpGuestLimit(10)).toBe(15); // 50 % de 10 = 5 = mínimo
+  });
+
+  it("evento mediano y grande: 50 % de margen, redondeado hacia arriba", () => {
+    expect(selfRsvpGuestLimit(11)).toBe(17); // 11 + ⌈5.5⌉
+    expect(selfRsvpGuestLimit(12)).toBe(18);
+    expect(selfRsvpGuestLimit(20)).toBe(30);
+    expect(selfRsvpGuestLimit(39)).toBe(59);
+  });
+
+  it("nunca pasa del techo absoluto de 60", () => {
+    expect(selfRsvpGuestLimit(40)).toBe(60);
+    expect(selfRsvpGuestLimit(41)).toBe(60);
+    expect(selfRsvpGuestLimit(60)).toBe(60);
+    expect(selfRsvpGuestLimit(200)).toBe(60);
+  });
+
+  it("guestCount inválido (0, negativo, decimal o NaN) no abre la lista: queda en el margen mínimo", () => {
+    expect(selfRsvpGuestLimit(0)).toBe(5);
+    expect(selfRsvpGuestLimit(-3)).toBe(5);
+    expect(selfRsvpGuestLimit(Number.NaN)).toBe(5);
+    expect(selfRsvpGuestLimit(10.9)).toBe(15);
+  });
+
+  it("justo debajo del tope admite una más; en el borde y arriba ya no", () => {
+    // guestCount 10 → tope 15
+    expect(canSelfRegister(0, 10)).toBe(true);
+    expect(canSelfRegister(14, 10)).toBe(true);
+    expect(canSelfRegister(15, 10)).toBe(false);
+    expect(canSelfRegister(16, 10)).toBe(false);
+    // guestCount grande → techo 60
+    expect(canSelfRegister(59, 80)).toBe(true);
+    expect(canSelfRegister(60, 80)).toBe(false);
+    expect(canSelfRegister(61, 80)).toBe(false);
+  });
+
+  it("el mensaje del tope es cálido, dice qué hacer y no revela cuántas ni quiénes", () => {
+    expect(GENERAL_INVITE_FULL_MESSAGE).toContain("Pídele a la anfitriona tu link personal");
+    expect(GENERAL_INVITE_FULL_MESSAGE).not.toMatch(/\d/);
   });
 });
 

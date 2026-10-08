@@ -374,6 +374,12 @@ function InvitationBox({ data }: { data: PortalDashboard }) {
           Compártela en tu grupo: cada amiga confirma con su nombre y sus restricciones alimentarias.
         </p>
       </div>
+      {data.invitationFull ? (
+        <p className="bg-background/80 rounded-xl px-3 py-2 text-sm">
+          Tu invitación general ya no recibe más respuestas: llegó al tope de registros para tu experiencia. Si
+          alguien más quiere confirmar, agrégala a tu lista y mándale su link personal.
+        </p>
+      ) : null}
       <div className="bg-background/80 rounded-xl px-3 py-2">
         <p className="text-muted-foreground line-clamp-3 text-sm whitespace-pre-line">{data.invitationText}</p>
       </div>

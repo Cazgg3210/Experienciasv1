@@ -12,6 +12,7 @@ import { notify } from "@/features/notifications/server/notification-service";
 import { netPaidCents } from "@/features/payments/domain/payment-status";
 import {
   canHostRemoveGuest,
+  canSelfRegister,
   firstName,
   hostDuplicateHint,
   possibleDuplicateMatches,
@@ -210,6 +211,11 @@ export type PortalDashboard = {
   /** invite/portal: URLs absolutas para compartir; *Path: rutas relativas para navegar */
   links: { invite: string; invitePath: string; portal: string; summary: string };
   invitationText: string;
+  /**
+   * La invitación general ya no recibe respuestas: la lista llegó al tope del link general (guestCount +
+   * margen, techo 60). La anfitriona sigue pudiendo agregar invitadas y mandarles su link personal.
+   */
+  invitationFull: boolean;
   business: { brandName: string; contactEmail: string; whatsappNumber: string; whatsappUrl: string };
 };
 
@@ -343,7 +349,7 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       canRemove: canHostRemoveGuest(g),
       possibleDuplicate: duplicates.has(g.id),
       duplicateHint: duplicates.has(g.id)
-        ? hostDuplicateHint(duplicates.get(g.id)!.map((m) => ({ name: m.name, removable: canHostRemoveGuest(m) })))
+        ? hostDuplicateHint(duplicates.get(g.id)!.map((m) => ({ name: m.name, source: m.source })))
         : null,
     };
   });
@@ -441,6 +447,7 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       summary: `/mi-evento/${token}/resumen`,
     },
     invitationText: buildInvitationText({ ...invitationBase, url: inviteUrl }),
+    invitationFull: !canSelfRegister(event.guests.length, event.guestCount),
     business: {
       brandName: business.brandName,
       contactEmail: business.contactEmail,
