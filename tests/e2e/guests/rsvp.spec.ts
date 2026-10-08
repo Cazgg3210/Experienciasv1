@@ -355,7 +355,7 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     const hostItem = (name: string) => list.getByRole("listitem").filter({ has: host.getByText(name, { exact: true }) });
     // La original la agregó la anfitriona (HOST): el aviso pide confirmarlo con ella y nunca quitar su registro.
     await expect(hostItem("Alguien Más")).toContainText(
-      `Coincide con «${victim.name}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «${victim.name}».`,
+      `Coincide con «${victim.name}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal y escríbenos para dejar un solo registro: el que agregaste tú. No quites el registro de «${victim.name}».`,
     );
     // Nombre exacto (sensible a mayúsculas): el registro en MAYÚSCULAS es el duplicado, no la original
     await expect(hostItem(victim.name)).toHaveCount(1);
@@ -384,7 +384,7 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     const list = host.getByRole("list", { name: "Lista de invitadas" });
     await expect(list.getByText("Posible duplicado")).toHaveCount(1);
     await expect(list).toContainText(
-      `Coincide con «${friendName}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «${friendName}».`,
+      `Coincide con «${friendName}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal y escríbenos para dejar un solo registro: el que agregaste tú. No quites el registro de «${friendName}».`,
     );
     await expect(list, "el aviso ya no sugiere quitar el registro que agregó la anfitriona").not.toContainText("quita el registro pendiente");
     // Ella sólo puede quitar su pendiente (PORT-013); el auto-registro no tiene botón para ella
@@ -566,39 +566,121 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
   });
 
-  test("[GST-029] link general con la lista en su tope (guestCount + margen): la respuesta se rechaza con un aviso cálido en pantalla y la base no cambia", { tag: ["@P1", "@negative", "@regression", "@mobile"] }, async ({ anonPage, apiAs, db, evidence }) => {
-    evidence("invitada", "Evento de 6 personas con 10 en la lista › submitRsvpAction (entra la 11ª) › link general › ¡Sí, ahí estaré! › Enviar mi respuesta (rechazo) + submitRsvpAction con el nombre de una invitada");
-    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #6: tope del link general relativo a guestCount" });
+  test("[GST-029] link general que llega a su tope (guestCount + margen) con el formulario abierto: la respuesta se rechaza con un aviso cálido en pantalla y la base no cambia", { tag: ["@P1", "@negative", "@regression", "@mobile"] }, async ({ anonPage, apiAs, db, evidence }) => {
+    evidence("invitada", "Evento de 6 personas con 9 en la lista › link general (formulario) › mientras tanto entran la 10.ª (nombre de una invitada: posible duplicado auditado) y la 11.ª › ¡Sí, ahí estaré! › Enviar mi respuesta (rechazo) + submitRsvpAction con el nombre de una invitada › recargar");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #6: tope del link general relativo a guestCount (el servidor valida al enviar aunque el formulario se haya pintado con lugar)" });
+    const startedAt = new Date();
     const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 6 }); // tope = 6 + máx(5, ⌈3⌉) = 11
     const known = await createGuestFixture(db, ev, { name: `Brenda Tope ${uniq("K")}`, source: "HOST" });
-    await fillGuestList(db, ev.id, 9); // 10 en la lista: una abajo del tope
-    const api = await apiAs(null);
-    const below = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: `La Once ${uniq("T")}` }), { path: ev.invitePath });
-    expect(below.outcome, d(below)).toBe("accepted"); // justo abajo del tope: entra
-    const before = await db.eventGuest.findMany({ where: { eventId: ev.id }, orderBy: { id: "asc" } });
-    expect(before).toHaveLength(11); // en el borde
+    await fillGuestList(db, ev.id, 8); // 9 en la lista: el link general todavía pinta el formulario
 
+    // La invitada abre la invitación con lugar y empieza a llenar el formulario
     const name = `Nueva ${uniq("Tope")}`;
     const page = await anonPage();
     const section = await openRsvp(page, ev.invitePath);
     await section.getByRole("textbox", { name: "Tu nombre" }).fill(name);
     await section.getByText("¡Sí, ahí estaré!").click();
+
+    // Mientras tanto la lista llega al tope por el link general: la 10.ª con el nombre de una invitada (posible
+    // duplicado: deja su auditoría) y la 11.ª, justo abajo del tope.
+    const api = await apiAs(null);
+    const dup = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: known.name }), { path: ev.invitePath });
+    expect(dup.outcome, d(dup)).toBe("accepted");
+    const below = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: `La Once ${uniq("T")}` }), { path: ev.invitePath });
+    expect(below.outcome, d(below)).toBe("accepted"); // justo abajo del tope: entra
+    const before = await db.eventGuest.findMany({ where: { eventId: ev.id }, orderBy: { id: "asc" } });
+    expect(before).toHaveLength(11); // en el borde
+
+    // Auditorías de ESTE evento escritas desde que empezó la prueba (cualquier acción y cualquier invitada, también
+    // una que el intento rechazado hubiera creado). Control positivo: la consulta sí ve la auditoría del posible
+    // duplicado que entró; si un intento rechazado dejara una, la vería igual y la prueba fallaría.
+    const eventAudits = () =>
+      db.auditLog.findMany({
+        where: { createdAt: { gte: startedAt }, after: { path: ["eventId"], equals: ev.id } },
+        orderBy: { id: "asc" },
+      });
+    const dupGuest = before.find((g) => g.source === "SELF_RSVP" && g.name === known.name);
+    expect(dupGuest, "la 10.ª quedó como auto-registro con el nombre de la invitada").toBeDefined();
+    const auditsBefore = await eventAudits();
+    expect(auditsBefore.map((a) => [a.action, a.entityId]), "control positivo: se ve la auditoría del posible duplicado").toEqual([
+      ["guest.possible_duplicate", dupGuest!.id],
+    ]);
+
+    // Envía con el formulario que se pintó cuando había lugar: el servidor valida y rechaza (carrera)
     await section.getByRole("button", { name: "Enviar mi respuesta" }).click();
     await expect(section.getByRole("alert").filter({ hasText: GENERAL_INVITE_FULL })).toBeVisible();
     await expect(section.getByRole("textbox", { name: "Tu nombre" }), "lo escrito sigue ahí").toHaveValue(name);
     expect(new URL(page.url()).pathname, "no recibe link personal: se queda en la invitación").toBe(ev.invitePath);
 
-    // Sin enumeración: con el nombre de alguien de la lista la respuesta es la misma
+    // Sin enumeración: con el nombre de alguien de la lista la respuesta es la misma (y no audita un posible duplicado)
     const same = await callAction(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: known.name }), { path: ev.invitePath });
     expect(same.code, d(same)).toBe("GUEST_LIMIT");
     expect(same.error).toBe(GENERAL_INVITE_FULL);
 
-    // La base no cambia (ni invitadas ni rastro de posible duplicado)
+    // La base no cambia: ni invitadas ni auditorías nuevas del evento (ningún guest.possible_duplicate ni otra acción)
     expect(await db.eventGuest.findMany({ where: { eventId: ev.id }, orderBy: { id: "asc" } })).toEqual(before);
-    expect(await db.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: { in: before.map((g) => g.id) } } })).toBe(0);
-    await page.reload();
-    await expect(page.getByRole("region", { name: "Confirmación de asistencia" }).getByRole("textbox", { name: "Tu nombre" })).toBeVisible();
+    expect(await eventAudits(), "los intentos rechazados no dejan auditoría").toEqual(auditsBefore);
     expect(await db.eventGuest.count({ where: { eventId: ev.id, name } })).toBe(0);
+
+    // Al recargar, el servidor ya pinta el aviso en lugar del formulario (GST-031)
+    await page.reload();
+    const region = page.getByRole("region", { name: "Confirmación de asistencia" });
+    await expect(region).toContainText(GENERAL_INVITE_FULL);
+    await expect(region.getByRole("textbox", { name: "Tu nombre" })).toHaveCount(0);
+  });
+
+  test("[GST-031] con la lista en su tope, el link general muestra desde el servidor el aviso de enlace cerrado en lugar del formulario", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, apiAs, db, evidence }) => {
+    evidence("invitada", "Evento de 6 personas: link general con 10 en la lista (formulario) y con 11 (aviso en el HTML del servidor) + submitRsvpAction directo + link personal + se libera un lugar");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · revisión de #6: el link general en el tope mostraba el formulario completo y sólo avisaba al enviar" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 6 }); // tope = 11
+    const known = await createGuestFixture(db, ev, { name: `Julieta Cierre ${uniq("K")}`, source: "HOST" });
+    await fillGuestList(db, ev.id, 9); // 10: una abajo del tope
+    const api = await apiAs(null);
+
+    // Con lugar, el HTML del servidor trae el formulario y no el aviso
+    const open = await api.get(ev.invitePath);
+    expect(open.status()).toBe(200);
+    const openHtml = await open.text();
+    expect(openHtml).toContain("Enviar mi respuesta");
+    expect(openHtml).not.toContain(GENERAL_INVITE_FULL);
+
+    await fillGuestList(db, ev.id, 1); // 11: en el tope
+    // En el tope, el aviso llega en el HTML del servidor (render inicial, sin depender del JS) en lugar del formulario
+    const closed = await api.get(ev.invitePath);
+    expect(closed.status()).toBe(200);
+    const html = await closed.text();
+    expect(html, "el aviso viene en el HTML del servidor").toContain(GENERAL_INVITE_FULL);
+    expect(html, "sin formulario").not.toContain("Enviar mi respuesta");
+    expect(html, "sin campos del RSVP").not.toContain('name="rsvpStatus"');
+    expect(html, "sin nombres de la lista").not.toContain(known.name);
+
+    const page = await anonPage();
+    await page.goto(ev.invitePath);
+    const region = page.getByRole("region", { name: "Confirmación de asistencia" });
+    await expect(region.getByRole("heading", { name: "Confirma desde tu link personal" })).toBeVisible();
+    await expect(region).toContainText(GENERAL_INVITE_FULL);
+    expect(await region.innerText(), "el aviso no revela cuántas personas hay ni el tope").not.toMatch(/\d/);
+    await expect(region.getByRole("textbox")).toHaveCount(0);
+    await expect(region.getByRole("button")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Confirmar asistencia" }), "sin CTA para confirmar aquí").toHaveCount(0);
+
+    // El servidor sigue validando al enviar (p. ej. un formulario abierto antes de llenarse la lista)
+    const direct = await callAction(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: `Directa ${uniq("T")}` }), { path: ev.invitePath });
+    expect(direct.code, d(direct)).toBe("GUEST_LIMIT");
+    expect(direct.error).toBe(GENERAL_INVITE_FULL);
+    expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(11);
+
+    // El link personal no cuenta contra el tope: sigue mostrando su formulario
+    await page.goto(known.path);
+    await expect(page.getByRole("heading", { name: "Julieta, ¿nos acompañas?" })).toBeVisible();
+    await expect(page.getByText(GENERAL_INVITE_FULL)).toHaveCount(0);
+
+    // Si el equipo libera un lugar, el link general vuelve a recibir respuestas
+    const filler = await db.eventGuest.findFirstOrThrow({ where: { eventId: ev.id, source: "SELF_RSVP" } });
+    await db.eventGuest.delete({ where: { id: filler.id } });
+    const reopened = await openRsvp(page, ev.invitePath);
+    await expect(reopened.getByRole("textbox", { name: "Tu nombre" })).toBeVisible();
+    await expect(reopened.getByText(GENERAL_INVITE_FULL)).toHaveCount(0);
   });
 
   test("[GST-030] con la lista en el tope del link general, el link personal sigue respondiendo", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence }) => {
