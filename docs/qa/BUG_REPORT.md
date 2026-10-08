@@ -32,7 +32,7 @@
 |---|---|---|---|---|---|---|
 | BUG-001 | CRITICAL | P0 | Verified | «Cerrar sesión» no es definitivo: las respuestas en vuelo re-emiten la cookie y no hay revocación en servidor | auth | `b24c695`, `28fb8d3` |
 | BUG-002 | CRITICAL | P0 | Verified | Un checkout de anticipo abierto se puede cobrar después de cancelar el evento | events / payments | `78573ad`, `568d92d`, `445645c` |
-| BUG-003 | CRITICAL | P0 | Verified | Link general de invitación: el nombre de otra invitada sobrescribe su RSVP y entrega su link personal | guests | `e8165ae`, `760e7d2` |
+| BUG-003 | CRITICAL | P0 | Verified | Link general de invitación: el nombre de otra invitada sobrescribe su RSVP y entrega su link personal | guests | `e8165ae`, `760e7d2`; mejoras #6/#7 `60125a6` |
 | BUG-004 | HIGH | P1 | Verified | Una cookie copiada antes del logout sigue dando acceso | auth | `b24c695`, `28fb8d3`, `ebb5fac` |
 | BUG-005 | HIGH | P1 | Verified | `callbackUrl` con caracteres de control evade `safeCallback` | auth | `ee67039`, `28fb8d3` |
 | BUG-006 | HIGH | P0 | Verified (mitigado) | Navegación a la misma ruta / `router.refresh()` colgada (filtros, paginación, calendario, contenido, bandeja, RSVP) | transversal (App Router) | `5fc2435`, `b15324a`, `be55029`, `d87814d` |
@@ -396,12 +396,41 @@ Con el link general: si hay coincidencia por nombre con una invitada que ya resp
 - **Después:** GST-014 y GST-023 pasan 3/3 y GST-024 pasa. La regresión de guests, portal, critical/experience y permissions/public-actions-idor no tuvo fallas nuevas: sólo BUG-006 y BUG-010, entonces abiertos, y PORT-020, que también era intermitente en la base. `portal-rsvp`: 21/21.
 - **Endurecimiento** (carril 3): GST-023 y GST-025 pasan 5/5 con `--repeat-each=5 --retries=0`. GST-024 pasa 3 veces seguidas en el mismo servidor. `portal-rsvp`: 22/22. Chromium: 231/231.
 
+**Mejoras posteriores: pendientes #6 y #7** (aprobadas por el usuario; rama `feature/invitaciones-guardas`, commits `60125a6`, `58b03e8` y `0ffc727`).
+- **#6 Tope del link general relativo a `guestCount`.**
+  - Fórmula: `selfRsvpGuestLimit(guestCount) = min(60, guestCount + max(5, ⌈guestCount × 50 %⌉))`. Las constantes de dominio son `SELF_RSVP_MARGIN_BPS = 5000`, `SELF_RSVP_MIN_MARGIN = 5` y el techo `MAX_GUESTS_PER_EVENT = 60`, en `src/features/guests/domain/rsvp.ts`. Ejemplos: 6 personas → 11, 10 → 15, 20 → 30, 40 o más → 60.
+  - Por qué ese margen: la lista siempre es más larga que la mesa. Ahí quedan quienes responden «No podré ir» o «Tal vez» y algún duplicado de quien ignoró su link personal. El mínimo de 5 da holgura a los eventos chicos.
+  - Cuenta la lista completa, porque protege que la lista no crezca sin control más allá de la experiencia contratada. Sólo frena al link general: el link personal actualiza a su propia invitada y la anfitriona sigue agregando desde su portal hasta el techo de 60.
+  - `maxStandardGuests` no aplica: es el umbral de «consulta especial» al cotizar, y un evento más grande ya lo aprobó el equipo. `guestCount` es la fuente de verdad: se valida de 1 a 200 en todas las altas, y un valor inválido cae al margen mínimo.
+  - Se valida en el servidor. `submitRsvp` lee `guestCount` y cuenta la lista dentro del `pg_advisory_xact_lock` del evento, así que dos respuestas simultáneas en el borde no lo rebasan. El rechazo va antes de buscar coincidencias: la respuesta es la misma con o sin coincidencia de nombre.
+  - Al llegar al tope (`GUEST_LIMIT`), la invitada ve un mensaje fijo junto al botón en lugar de un toast: «¡Gracias por querer acompañarnos! Este enlace ya no recibe más respuestas. Pídele a la anfitriona tu link personal y confirma desde ahí.» No lleva números ni nombres. El portal le avisa a la anfitriona que su invitación general ya no recibe respuestas y que agregue a su invitada para mandarle su link personal.
+- **#7 Texto del aviso de posible duplicado.** `hostDuplicateHint` recibe ahora el origen de cada coincidencia.
+  - Si coincide con alguien que agregó la anfitriona o el equipo, el aviso dice: «Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «…».»
+  - Si sólo coincide con otros auto-registros: «Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro.»
+  - Ningún aviso sugiere quitar el registro que ella agregó. El panel pide confirmarlo con la anfitriona o la invitada, conservar el registro de la anfitriona o del equipo (tiene su link personal) y quitar el marcado. La etiqueta y el tono siguen en `@/lib/labels`.
+- **Pruebas.**
+  - Unitarias del tope (debajo, borde, arriba, `guestCount` chico y grande, techo de 60, valores inválidos) y de los textos, en `rsvp.test.ts`.
+  - Integración (`portal-rsvp`, 25/25): tope con el link personal y la anfitriona, techo de 60, y una carrera determinista. En la carrera, `LOCK TABLE "EventGuest" IN SHARE MODE` retiene las dos respuestas en la base. Sin `lockEventGuests` entran las dos (falló 2/2); con él entra una.
+  - E2E `@regression`:
+    - [GST-029] el link general en el tope rechaza con el aviso y la base no cambia.
+    - [GST-030] el link personal responde con la lista llena.
+    - [PORT-026] la anfitriona ve el aviso, agrega una invitada y ésta confirma con su link.
+    - [PORT-027] textos del aviso en el portal.
+  - Ajustadas por el cambio de requisito, no debilitadas: [GST-025] ahora la anfitriona no quita su pendiente; el equipo quita el auto-registro desde el panel. [GST-023] texto nuevo. [GST-021] el techo de 60 con un evento de 100 personas y el mensaje nuevo.
+- **Verificación** (carril 7, `58b03e8`):
+  - typecheck, lint y unitarias (940/940) en verde; integración 333/333.
+  - Las 7 pruebas nuevas o ajustadas pasan 3/3 en Chromium con `--repeat-each=3 --retries=0`.
+  - Regresión de guests, portal, critical, `public-actions-idor` y `token-security` (Chromium, mobile-chrome, Firefox y WebKit): 166 PASS y 1 FLAKY. El FLAKY fue CRIT-006 en Firefox (`NS_BINDING_ABORTED` al recargar con el `router.refresh()` del pago manual en vuelo): TEST BUG ajeno a este cambio. Se corrigió en `0ffc727` con la receta de OPS-010 y pasa 5/5 en los tres motores con `--retries=0`.
+  - Suite `ratelimit`: 7/7, incluida GST-024.
+- **Fuera de alcance (sigue pendiente):** recuperar de forma segura un link personal perdido. Ver «Pendientes que requieren decisión del usuario», fila 12.
+
 **Riesgos residuales y decisiones.**
-- **Registros duplicados.** Una invitada real que ignora su link personal y responde por el general queda como un segundo registro marcado. Los conteos la cuentan dos veces hasta que la anfitriona o el equipo quitan uno.
+- **Registros duplicados.** Una invitada real que ignora su link personal y responde por el general queda como un segundo registro marcado. Los conteos la cuentan dos veces hasta que el equipo quita el auto-registro (desde #7 el aviso ya no le pide a la anfitriona quitar el suyo); también cuenta para el tope del link general.
 - **Recordatorios.** No se omiten automáticamente para esos pendientes. Es una decisión: si se omitieran, quien conozca un nombre podría silenciar los recordatorios de otra invitada.
-- **Texto de `hostDuplicateHint`.** Pide quitar el registro que agregó la anfitriona, que es el confiable y tiene contacto, y conservar el auto-registro. Si el auto-registro fuera una suplantación, la invitada real perdería su link. La revisión sugiere pedir antes «confírmalo con ella».
-- **Canal lateral de tiempo.** Queda uno mínimo (un INSERT), acotado por el rate limit, el cupo y el registro visible.
-- **Decisiones de producto pendientes:** un tope de auto-registros relativo a `guestCount` y una forma segura de recuperar un link personal perdido (enviarlo al contacto registrado). Con CGNAT, varias invitadas pueden compartir IP y cubeta.
+- ~~**Texto de `hostDuplicateHint`.** Pide quitar el registro que agregó la anfitriona, que es el confiable y tiene contacto, y conservar el auto-registro. Si el auto-registro fuera una suplantación, la invitada real perdería su link. La revisión sugiere pedir antes «confírmalo con ella».~~ **Resuelto (#7, `60125a6`):** primero pide confirmarlo con su invitada y nunca sugiere quitar el registro que ella agregó; el auto-registro lo quita el equipo.
+- **Canal lateral de tiempo.** Queda uno mínimo (un INSERT), acotado por el rate limit, el tope del link general y el registro visible.
+- **Decisiones de producto pendientes:** ~~un tope de auto-registros relativo a `guestCount`~~ (resuelto en #6, `60125a6`) y una forma segura de recuperar un link personal perdido (enviarlo al contacto registrado), que sigue pendiente (fila 12). Con CGNAT, varias invitadas pueden compartir IP y cubeta; ahora además el tope del link general corta a todas por igual cuando la lista se llena, y la salida es el link personal.
+- **Tope por lista completa.** Las altas de la anfitriona cuentan para el tope del link general: si ella llena la lista, el link general se cierra aunque nadie se haya registrado sola. Es intencional (lo que se protege es el tamaño de la lista) y el portal se lo avisa.
 
 ---
 
@@ -2298,12 +2327,13 @@ Los agentes de corrección los vieron en barridos temporales o en revisión de c
 | 3 | **Formularios del panel admin con el mismo patrón de antes de hidratar** | Siguen con `defaultValues` vacíos (registrado en la observación de los carriles 3, 4 y 5 y en el pendiente de `e2f3699`). Decidir si se aplica el mismo tratamiento que en BUG-021 (y el de envío de BUG-019) o se acepta, porque son usuarias del equipo con sesión. En la regresión final, EVT-005 y PUR-002 agotaron `locator.fill` en Firefox (carriles 4 y 5); su causa está en análisis por las inestabilidades en curso y no está atribuida a este patrón | BUG-021, BUG-019 |
 | 4 | Reembolso automático de cobros tardíos sobre reservas canceladas | Hoy el equipo reembolsa desde el panel después del aviso | BUG-002 |
 | 5 | Columna de teléfono normalizada e indexada, o normalizar los datos existentes | Quitaría el recorrido de `Customer` en el respaldo por dígitos; requiere `schema.prisma` o una migración de datos | BUG-008 |
-| 6 | Tope de auto-registros por evento relativo a `guestCount`, y recuperación segura de un link personal perdido | Hoy sólo hay un cupo de 60 por evento y 10 por IP cada 10 min | BUG-003 |
-| 7 | Copia del aviso para la anfitriona ante un posible duplicado | Hoy le pide quitar su registro pendiente (el confiable); la revisión sugiere pedirle antes «confírmalo con ella» | BUG-003 |
+| 6 | ~~Tope de auto-registros por evento relativo a `guestCount`~~ | **Resuelto** (`60125a6`, pruebas `58b03e8`): el link general no lleva la lista más allá de `min(60, guestCount + máx(5, ⌈50 %⌉))`, validado en el servidor dentro del candado del evento; el link personal y las altas de la anfitriona no se frenan. Unitarias en `rsvp.test.ts`, integración `portal-rsvp` (incluida la carrera en el borde) y GST-029, GST-030, PORT-026. La recuperación del link personal pasó a la fila 12 | BUG-003 |
+| 7 | ~~Copia del aviso para la anfitriona ante un posible duplicado~~ | **Resuelto** (`60125a6`, pruebas `58b03e8`): primero le pide confirmarlo con su invitada; si el auto-registro no es suyo lo quitamos nosotras y nunca le sugiere quitar el registro que ella agregó. El aviso del panel pide conservar el registro de la anfitriona o del equipo. Pruebas: `rsvp.test.ts`, `portal-rsvp`, PORT-027, GST-025 y GST-023 | BUG-003 |
 | 8 | Expirar la sesión del proveedor cuando un pago manual cambia el saldo | Hoy esa sesión sigue cobrable hasta que vence a la hora, y el excedente se avisa al equipo | BUG-002 |
 | 9 | ~~Convención en CLAUDE.md: los layouts con `error.tsx` hermano que pinten `children` dentro de un elemento HTML deben usar `<SegmentChildren>`~~ | **Resuelto:** `CLAUDE.md` › UI/UX ya la incluye (junto con `usePaintedId`, BUG-024) | BUG-020 |
 | 10 | Soft-404 de las rutas internas `/admin/**/[id]` y `/staff/events/[id]` | Es una mejora opcional; hoy responden 200 con `noindex` | BUG-013 |
 | 11 | Re-sembrar las bases de desarrollo y demo (`pnpm db:setup`) | Hace falta para que lleguen los enlaces corregidos del seed | BUG-016 |
+| 12 | Recuperación segura de un link personal perdido (antes, segunda parte de la fila 6) | Quedó fuera del alcance de #6. Hoy, quien perdió su link personal pide a la anfitriona que se lo reenvíe desde su portal; con el link general en el tope, ésa es la única vía. Propuesta: reenviarlo sólo al contacto registrado de la invitada (correo o WhatsApp), con una respuesta idéntica exista o no, y con rate limit | BUG-003 |
 
 ---
 
