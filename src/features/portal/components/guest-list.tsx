@@ -34,6 +34,8 @@ export type GuestRow = {
   inviteUrl: string;
   whatsappUrl: string;
   canRemove: boolean;
+  /** Texto del diálogo «¿Quitar a …?», calculado en el servidor (`hostRemoveGuestDescription`). */
+  removeDescription: string;
   /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
   possibleDuplicate: boolean;
   /** Con quién coincide y qué hacer: confirmarlo con su invitada y nunca quitar el registro que ella agregó. */
@@ -202,7 +204,7 @@ function GuestItem({
           <ConfirmDialog
             destructive
             title={`¿Quitar a ${guest.name}?`}
-            description="Su link personal dejará de funcionar. Puedes volver a agregarla cuando quieras."
+            description={guest.removeDescription}
             confirmLabel="Quitar de la lista"
             onConfirm={async () => {
               const res = await removeHostGuestAction({ token, guestId: guest.id });

@@ -31,7 +31,10 @@ export function ActionBar({
   summaryHref: string;
   pay: { kind: PayKind; label: string } | null;
   canAddGuests: boolean;
-  /** false si el micrositio está desactivado o el evento ya cerró: no se ofrecen links que darían 404 */
+  /**
+   * Compartir la invitación GENERAL. false si el micrositio está desactivado o el evento ya cerró (los links
+   * darían 404) o si la invitación general llegó a su tope (quien la reciba ya no podría responder).
+   */
   canShareInvites: boolean;
 }) {
   const { setAddGuestOpen } = usePortalUi();

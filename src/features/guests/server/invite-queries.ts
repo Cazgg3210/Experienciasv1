@@ -7,7 +7,7 @@ import { getSettings } from "@/features/settings/server/settings-service";
 import { resolveInvite } from "@/features/portal/server/portal-service";
 import { isRsvpOpen, mapsLink, safeExternalUrl } from "@/features/portal/domain/portal";
 import { buildMenuView, type MenuView } from "@/features/portal/domain/menu";
-import { canSeeFullAddress, firstName, maskEmail } from "../domain/rsvp";
+import { GENERAL_INVITE_FULL_MESSAGE, canSeeFullAddress, canSelfRegister, firstName, maskEmail } from "../domain/rsvp";
 import { buildIcs } from "../domain/ics";
 
 export type InviteView = {
@@ -58,6 +58,13 @@ export type InviteView = {
   calendarPath: string;
   shareUrl: string;
   brandName: string;
+  /**
+   * Link general con la lista en su tope (`canSelfRegister`: el mismo criterio con que `submitRsvp` rechaza con
+   * `GUEST_LIMIT`): el micrositio pinta este aviso desde el servidor en lugar del formulario. Es el mismo texto
+   * del error, sin números ni nombres. null con el link personal (no cuenta contra el tope) o si hay lugar. El
+   * servidor sigue validando al enviar: un formulario abierto antes de que la lista se llenara recibe `GUEST_LIMIT`.
+   */
+  generalInviteClosedNotice: string | null;
 };
 
 /** Datos públicos del micrositio. Nunca incluye datos de otras invitadas ni datos internos. */
@@ -67,7 +74,7 @@ export async function getInviteView(slug: string, token: string): Promise<Invite
   // Defensa en profundidad: la dirección exacta ni siquiera se lee si la invitada no confirmó.
   const full = canSeeFullAddress(resolved.guest);
 
-  const [event, business, honoree] = await Promise.all([
+  const [event, business, honoree, listSize] = await Promise.all([
     prisma.event.findUnique({
       where: { id: resolved.event.id },
       select: {
@@ -78,6 +85,7 @@ export async function getInviteView(slug: string, token: string): Promise<Invite
         eventDate: true,
         startsAt: true,
         endsAt: true,
+        guestCount: true,
         addressLine: full,
         addressNotes: full,
         neighborhood: true,
@@ -117,8 +125,14 @@ export async function getInviteView(slug: string, token: string): Promise<Invite
           select: { body: true },
         })
       : Promise.resolve(null),
+    // Sólo el link general cuenta contra el tope (lista completa, como `submitRsvp`)
+    resolved.via === "invite"
+      ? prisma.eventGuest.count({ where: { eventId: resolved.event.id } })
+      : Promise.resolve(null),
   ]);
   if (!event) return null;
+  const generalInviteClosedNotice =
+    listSize !== null && !canSelfRegister(listSize, event.guestCount) ? GENERAL_INVITE_FULL_MESSAGE : null;
 
   const g = resolved.guest;
   const coverSrc = isSafeImagePath(event.experience?.coverImageUrl)
@@ -182,6 +196,7 @@ export async function getInviteView(slug: string, token: string): Promise<Invite
     calendarPath: `/e/${event.micrositeSlug}/${token}/calendar.ics`,
     shareUrl: appUrl(`/e/${event.micrositeSlug}/${token}`),
     brandName: business.brandName,
+    generalInviteClosedNotice,
   };
 }
 

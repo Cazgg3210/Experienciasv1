@@ -207,7 +207,9 @@ function RsvpForm({
   const personal = !!guest;
   const honoree = honoreeName?.trim() || null;
   const [redirecting, setRedirecting] = React.useState(false);
-  // Link general con la lista en su tope: aviso fijo junto al botón (un toast se iría antes de leerlo).
+  // Link general que llegó a su tope DESPUÉS de abrir la página (carrera: si ya estaba lleno, el servidor pinta el
+  // aviso en lugar de este formulario, ver MicrositeView). El servidor rechaza con GUEST_LIMIT y aquí se muestra el
+  // mismo aviso fijo junto al botón (un toast se iría antes de leerlo), conservando lo escrito.
   const [fullNotice, setFullNotice] = React.useState<string | null>(null);
 
   async function onSubmit(values: RsvpFormValues) {

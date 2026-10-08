@@ -43,10 +43,34 @@ export function canSelfRegister(listSize: number, guestCount: number): boolean {
 
 /**
  * Lo que ve quien responde por el link general cuando la lista llegó al tope: cálido, con qué hacer, y sin
- * decir cuántas personas hay ni quiénes (la respuesta es la misma con o sin coincidencia de nombre).
+ * decir cuántas personas hay ni quiénes (la respuesta es la misma con o sin coincidencia de nombre). Es el
+ * error `GUEST_LIMIT` de `submitRsvp` y también el aviso que el micrositio pinta desde el servidor, en lugar del
+ * formulario, cuando el link general ya llegó al tope al abrirlo.
  */
 export const GENERAL_INVITE_FULL_MESSAGE =
   "¡Gracias por querer acompañarnos! Este enlace ya no recibe más respuestas. Pídele a la anfitriona tu link personal y confirma desde ahí.";
+
+/**
+ * Aviso para la anfitriona en el cuadro «Invitación general» de su portal cuando el link general ya no recibe
+ * respuestas (`null` mientras las recibe; mismo criterio que `submitRsvp`: `canSelfRegister`). Le dice qué hacer
+ * si alguien más quiere ir (agregarla y mandarle su link personal o, con la lista en el techo de 60, escribirnos,
+ * porque tampoco puede agregar) y que nos escriba si ve registros que no reconoce: sólo el equipo quita
+ * auto-registros, y así se liberan lugares.
+ */
+export function hostInvitationFullNotice(listSize: number, guestCount: number): string | null {
+  if (canSelfRegister(listSize, guestCount)) return null;
+  const unknown = "Si ves registros que no reconoces, escríbenos y los quitamos para liberar lugares.";
+  if (listSize >= MAX_GUESTS_PER_EVENT) {
+    return (
+      `Tu invitación general ya no recibe más respuestas y tu lista llegó al máximo de ${MAX_GUESTS_PER_EVENT} invitadas. ` +
+      `Si alguien más quiere venir, escríbenos y lo vemos juntas. ${unknown}`
+    );
+  }
+  return (
+    "Tu invitación general ya no recibe más respuestas: llegó al tope de registros para tu experiencia. " +
+    `Si alguien más quiere confirmar, agrégala a tu lista y mándale su link personal. ${unknown}`
+  );
+}
 
 /** Normaliza un nombre para comparar: sin acentos, minúsculas, espacios colapsados. */
 export function normalizeName(name: string): string {
@@ -150,8 +174,10 @@ export function duplicateNamesLabel(names: string[]): string {
  * Primero le pide confirmarlo con su invitada. Si coincide con alguien que agregó ella o el equipo (HOST/ADMIN),
  * ese registro es el confiable (tiene su link personal y su contacto): si el auto-registro no es de su invitada
  * se quita el AUTO-REGISTRO (lo quitamos nosotras: la anfitriona sólo puede quitar sus pendientes), y si sí es
- * suyo, que responda desde su link personal. Nunca le sugiere quitar el registro que ella agregó: si el
- * auto-registro fuera una suplantación, la invitada real perdería su link (revisión de BUG-003).
+ * suyo, que su invitada responda desde su link personal y nos escriba para dejar un solo registro, el confiable
+ * (si sólo respondiera desde su link, el auto-registro seguiría en la lista y contando para el tope del link
+ * general). Nunca le sugiere quitar el registro que ella agregó: si el auto-registro fuera una suplantación, la
+ * invitada real perdería su link (revisión de BUG-003).
  */
 export function hostDuplicateHint(matches: Array<{ name: string; source: GuestSource }>): string {
   if (!matches.length) return "";
@@ -161,13 +187,53 @@ export function hostDuplicateHint(matches: Array<{ name: string; source: GuestSo
   const trusted = matches.filter((m) => m.source !== "SELF_RSVP");
   if (trusted.length) {
     const keep = duplicateNamesLabel(trusted.map((m) => m.name));
+    const byHost = trusted.some((m) => m.source === "HOST");
+    const byTeam = trusted.some((m) => m.source === "ADMIN");
+    const keeper = byHost && byTeam ? "el que agregaste tú o el equipo" : byHost ? "el que agregaste tú" : "el que agregó el equipo";
     return (
       `Coincide con ${who} de tu lista. ${confirm}: si este registro no es ${several ? "de ninguna" : "suyo"}, ` +
-      `escríbenos y lo quitamos; si ${several ? "es de alguna" : "sí es suyo"}, pídele que responda desde su link personal. ` +
+      `escríbenos y lo quitamos; si ${several ? "es de alguna" : "sí es suyo"}, pídele que responda desde su link personal ` +
+      `y escríbenos para dejar un solo registro: ${keeper}. ` +
       `No quites ${trusted.length === 1 ? `el registro de ${keep}` : `los registros de ${keep}`}.`
     );
   }
   return `Coincide con ${who} de tu lista. ${confirm} y, si es la misma persona, escríbenos y dejamos un solo registro.`;
+}
+
+/** Texto del diálogo «¿Quitar a …?» del portal para una invitada sin posible duplicado ni homónimas. */
+export const HOST_REMOVE_GUEST_DESCRIPTION = "Su link personal dejará de funcionar. Puedes volver a agregarla cuando quieras.";
+
+/**
+ * Texto del diálogo «¿Quitar a …?» del portal (la anfitriona sólo quita sus pendientes: `canHostRemoveGuest`).
+ *  - Si algún auto-registro marcado como posible duplicado coincide con ella (`matches`, de
+ *    `possibleDuplicateMatches`), su registro es el confiable: lo agregó la anfitriona y tiene su link personal. Se
+ *    lo advierte y le pide escribirnos para dejar un solo registro en lugar de quitarlo (si lo quita y el
+ *    auto-registro era una suplantación, la invitada real pierde su link).
+ *  - «Puedes volver a agregarla» sólo cuando es cierto: `addGuestAsHost` rechaza un nombre (normalizado) que ya
+ *    está en la lista, así que con una homónima (p. ej. agregada por el equipo) no lo promete.
+ */
+export function hostRemoveGuestDescription(
+  guest: { id: string; name: string },
+  guests: Array<{ id: string; name: string }>,
+  matches: Map<string, Array<{ id: string }>>,
+): string {
+  let flagged = 0;
+  for (const found of matches.values()) if (found.some((m) => m.id === guest.id)) flagged += 1;
+  if (flagged) {
+    const which =
+      flagged === 1
+        ? "un registro de la invitación general coincide con ella"
+        : `${flagged} registros de la invitación general coinciden con ella`;
+    return (
+      `Su link personal dejará de funcionar. Ojo: ${which}, y el confiable es este, el que agregaste tú. ` +
+      "Si es la misma persona, no la quites: escríbenos y dejamos un solo registro."
+    );
+  }
+  const name = normalizeName(guest.name);
+  const homonym = guests.some((o) => o.id !== guest.id && normalizeName(o.name) === name);
+  return homonym
+    ? "Su link personal dejará de funcionar. Como ya hay otra invitada con su nombre en tu lista, no podrás volver a agregarla con ese nombre."
+    : HOST_REMOVE_GUEST_DESCRIPTION;
 }
 
 export type RsvpStats = {

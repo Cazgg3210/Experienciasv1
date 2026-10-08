@@ -77,6 +77,7 @@ export function PortalDashboardView({ data }: { data: PortalDashboard }) {
     inviteUrl: g.inviteUrl,
     whatsappUrl: g.whatsappUrl,
     canRemove: g.canRemove,
+    removeDescription: g.removeDescription,
     possibleDuplicate: g.possibleDuplicate,
     duplicateHint: g.duplicateHint,
   }));
@@ -196,7 +197,7 @@ export function PortalDashboardView({ data }: { data: PortalDashboard }) {
         title={event.title}
         invitationText={data.invitationText}
         inviteUrl={data.links.invite}
-        canShareInvites={canShareInvites}
+        canShareInvites={canShareInvites && !data.invitationFull}
         summaryHref={data.links.summary}
         pay={payment?.cta && payment.paymentsEnabled ? { kind: payment.cta.kind, label: payment.cta.label } : null}
         canAddGuests={permissions.editable}
@@ -366,38 +367,50 @@ function InvitationBox({ data }: { data: PortalDashboard }) {
     );
   }
   if (!data.permissions.editable) return null;
+  // En el tope ya no se ofrece copiar la invitación general (quien la reciba no podría responder): el aviso dice
+  // qué hacer y «Ver invitación» sigue para que vea lo mismo que sus invitadas.
+  const fullNotice = data.invitationFullNotice;
   return (
     <div className="bg-sand-soft/50 space-y-3 rounded-2xl border border-dashed p-4">
       <div>
         <p className="font-medium">Invitación general</p>
-        <p className="text-muted-foreground text-sm">
-          Compártela en tu grupo: cada amiga confirma con su nombre y sus restricciones alimentarias.
-        </p>
+        {fullNotice ? null : (
+          <p className="text-muted-foreground text-sm">
+            Compártela en tu grupo: cada amiga confirma con su nombre y sus restricciones alimentarias.
+          </p>
+        )}
       </div>
-      {data.invitationFull ? (
+      {fullNotice ? (
         <p className="bg-background/80 rounded-xl px-3 py-2 text-sm">
-          Tu invitación general ya no recibe más respuestas: llegó al tope de registros para tu experiencia. Si
-          alguien más quiere confirmar, agrégala a tu lista y mándale su link personal.
+          {fullNotice}{" "}
+          <a href="#mensajes" className="text-olive font-medium underline underline-offset-4">
+            Ir a Mensajes
+          </a>
         </p>
-      ) : null}
-      <div className="bg-background/80 rounded-xl px-3 py-2">
-        <p className="text-muted-foreground line-clamp-3 text-sm whitespace-pre-line">{data.invitationText}</p>
-      </div>
+      ) : (
+        <div className="bg-background/80 rounded-xl px-3 py-2">
+          <p className="text-muted-foreground line-clamp-3 text-sm whitespace-pre-line">{data.invitationText}</p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
-        <CopyButton
-          value={data.invitationText}
-          label="Copiar invitación"
-          copiedLabel="¡Copiada!"
-          toastMessage="Invitación copiada. Pégala en tu grupo de WhatsApp."
-          className="h-10 rounded-full px-4"
-        />
-        <CopyButton
-          value={data.links.invite}
-          label="Copiar link"
-          copiedLabel="¡Copiado!"
-          toastMessage="Link de la invitación copiado"
-          className="h-10 rounded-full px-4"
-        />
+        {fullNotice ? null : (
+          <>
+            <CopyButton
+              value={data.invitationText}
+              label="Copiar invitación"
+              copiedLabel="¡Copiada!"
+              toastMessage="Invitación copiada. Pégala en tu grupo de WhatsApp."
+              className="h-10 rounded-full px-4"
+            />
+            <CopyButton
+              value={data.links.invite}
+              label="Copiar link"
+              copiedLabel="¡Copiado!"
+              toastMessage="Link de la invitación copiado"
+              className="h-10 rounded-full px-4"
+            />
+          </>
+        )}
         <Button asChild variant="ghost" className="h-10 rounded-full px-4">
           <a href={data.links.invitePath} target="_blank" rel="noopener noreferrer">
             Ver invitación <ExternalLink aria-hidden />
