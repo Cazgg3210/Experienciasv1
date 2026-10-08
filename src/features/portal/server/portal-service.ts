@@ -14,6 +14,8 @@ import {
   canHostRemoveGuest,
   firstName,
   hostDuplicateHint,
+  hostInvitationFullNotice,
+  hostRemoveGuestDescription,
   possibleDuplicateMatches,
   rsvpStats,
   type RsvpStats,
@@ -139,6 +141,11 @@ export type PortalGuest = {
   inviteUrl: string;
   whatsappUrl: string;
   canRemove: boolean;
+  /**
+   * Texto del diálogo «¿Quitar a …?» (sólo se usa si `canRemove`): advierte si un auto-registro marcado coincide
+   * con ella (su registro es el confiable) y sólo promete «puedes volver a agregarla» cuando es cierto.
+   */
+  removeDescription: string;
   /** Se registró con la invitación general y coincide (nombre o email) con otra invitada */
   possibleDuplicate: boolean;
   /** Con quién coincide y qué puede hacer la anfitriona (null si no es un posible duplicado). */
@@ -210,6 +217,14 @@ export type PortalDashboard = {
   /** invite/portal: URLs absolutas para compartir; *Path: rutas relativas para navegar */
   links: { invite: string; invitePath: string; portal: string; summary: string };
   invitationText: string;
+  /**
+   * La invitación general ya no recibe respuestas: la lista llegó al tope del link general (guestCount +
+   * margen, techo 60). La anfitriona sigue pudiendo agregar invitadas (hasta 60) y mandarles su link personal;
+   * el portal deja de ofrecer «Copiar invitación» / «Copiar link» de la invitación general.
+   */
+  invitationFull: boolean;
+  /** Qué hacer cuando `invitationFull` (null mientras la invitación general recibe respuestas). */
+  invitationFullNotice: string | null;
   business: { brandName: string; contactEmail: string; whatsappNumber: string; whatsappUrl: string };
 };
 
@@ -322,6 +337,8 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
   };
 
   const duplicates = possibleDuplicateMatches(event.guests);
+  // Mismo criterio que `submitRsvp`: `canSelfRegister` sobre la lista completa y `guestCount`.
+  const invitationFullNotice = hostInvitationFullNotice(event.guests.length, event.guestCount);
   const guests: PortalGuest[] = event.guests.map((g) => {
     const url = appUrl(`/e/${event.micrositeSlug}/${g.token}`);
     const text = buildGuestInvitationText({ ...invitationBase, guestName: g.name, url });
@@ -341,9 +358,10 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       inviteUrl: url,
       whatsappUrl: whatsappLink(g.phone, text),
       canRemove: canHostRemoveGuest(g),
+      removeDescription: hostRemoveGuestDescription(g, event.guests, duplicates),
       possibleDuplicate: duplicates.has(g.id),
       duplicateHint: duplicates.has(g.id)
-        ? hostDuplicateHint(duplicates.get(g.id)!.map((m) => ({ name: m.name, removable: canHostRemoveGuest(m) })))
+        ? hostDuplicateHint(duplicates.get(g.id)!.map((m) => ({ name: m.name, source: m.source })))
         : null,
     };
   });
@@ -441,6 +459,8 @@ export async function getPortalDashboard(token: string, now: Date = new Date()):
       summary: `/mi-evento/${token}/resumen`,
     },
     invitationText: buildInvitationText({ ...invitationBase, url: inviteUrl }),
+    invitationFull: invitationFullNotice !== null,
+    invitationFullNotice,
     business: {
       brandName: business.brandName,
       contactEmail: business.contactEmail,

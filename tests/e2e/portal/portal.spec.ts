@@ -13,6 +13,7 @@ import {
   describe as d,
   expectGuardedBeforeHydration,
   fillBeforeHydration,
+  fillGuestList,
   formatMXN,
   holdPageChunk,
   lastAudit,
@@ -460,7 +461,9 @@ test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] },
     const remove = list.getByRole("button", { name: "Quitar a Pendiente Quitable de la lista" });
     await waitHydrated(remove);
     await remove.click();
-    await page.getByRole("alertdialog", { name: "¿Quitar a Pendiente Quitable?" }).getByRole("button", { name: "Quitar de la lista" }).click();
+    const confirm = page.getByRole("alertdialog", { name: "¿Quitar a Pendiente Quitable?" });
+    await expect(confirm).toContainText("Su link personal dejará de funcionar. Puedes volver a agregarla cuando quieras.");
+    await confirm.getByRole("button", { name: "Quitar de la lista" }).click();
     await expect(page.getByText("Pendiente Quitable ya no está en tu lista")).toBeVisible();
     expect(await db.eventGuest.count({ where: { id: pending.id } })).toBe(0);
     expect(await db.auditLog.count({ where: { action: "event.guest_removed_by_host", entityId: pending.id } })).toBe(1);
@@ -484,6 +487,127 @@ test.describe("Portal · cambios de la anfitriona", { tag: ["@module:portal"] },
     expect(r.code, d(r)).toBe("GUEST_LIMIT");
     expect(r.error).toBe("Tu lista llegó al máximo de 60 invitadas. Escríbenos si necesitas más.");
     expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
+  });
+
+  test("[PORT-026] con la lista en el tope del link general, la anfitriona ve el aviso, ya no se le ofrece copiar la invitación general y sigue agregando invitadas que confirman con su link personal; en el techo de 60 el aviso le pide escribirnos", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence }) => {
+    evidence("clienta", "Evento de 6 personas: portal con 10 en la lista (copiar invitación) y con 11 (aviso de tope, sin copiar) › Agregar invitada → la invitada confirma con su link personal › lista en 60 (aviso del techo)");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #6: el tope sólo frena al link general; revisión: sin «Copiar invitación/link» del link general en el tope, aviso de registros que no reconoce y del techo de 60" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 6 }); // tope = 6 + máx(5, ⌈3⌉) = 11
+    await fillGuestList(db, ev.id, 10);
+    const name = `Regina ${uniq("TopeHost")}`;
+    const page = await anonPage();
+    await page.goto(ev.portalPath);
+    const section = page.getByRole("region", { name: "Invitadas" });
+    // Control: con lugar se ofrece copiar la invitación general (cuadro y barra de acciones) y no hay aviso
+    const shareGeneral = [
+      page.getByRole("button", { name: "Copiar invitación", exact: true }),
+      page.getByRole("button", { name: "Copiar link", exact: true }),
+      page.getByRole("button", { name: "Copiar invitación para compartir" }),
+      page.getByRole("button", { name: "Copiar link de la invitación" }),
+    ];
+    for (const b of shareGeneral) await expect(b).toHaveCount(1);
+    await expect(section).not.toContainText("ya no recibe más respuestas");
+
+    await fillGuestList(db, ev.id, 1); // 11: en el tope
+    await page.reload();
+    await expect(section).toContainText(
+      "Tu invitación general ya no recibe más respuestas: llegó al tope de registros para tu experiencia. Si alguien más quiere confirmar, agrégala a tu lista y mándale su link personal. Si ves registros que no reconoces, escríbenos y los quitamos para liberar lugares.",
+    );
+    await expect(section.getByRole("link", { name: "Ir a Mensajes" })).toHaveAttribute("href", "#mensajes");
+    // Ya no se ofrece copiar la invitación general (quien la reciba no podría responder); verla sí
+    for (const b of shareGeneral) await expect(b).toHaveCount(0);
+    await expect(section.getByRole("link", { name: /Ver invitación/ })).toHaveAttribute("href", ev.invitePath);
+    // Los links personales de su lista se siguen compartiendo
+    await expect(section.getByRole("button", { name: /^Copiar link personal de / })).toHaveCount(11);
+
+    // En el celular el botón también vive en la barra inferior: se usa el visible
+    const add = page.getByRole("button", { name: "Agregar invitada" }).filter({ visible: true }).first();
+    await waitHydrated(add);
+    await add.click();
+    const dialog = page.getByRole("dialog", { name: "Agregar invitada" });
+    await dialog.getByRole("textbox", { name: "Nombre" }).fill(name);
+    await dialog.getByRole("button", { name: "Agregar", exact: true }).click();
+    await expect(page.getByText(`Agregamos a ${name} a tu lista`)).toBeVisible();
+    const added = await db.eventGuest.findFirstOrThrow({ where: { eventId: ev.id, name } });
+    expect(added).toMatchObject({ source: "HOST", rsvpStatus: "PENDING" });
+    expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(12);
+    await dialog.getByRole("button", { name: "Listo" }).click();
+    await page.reload();
+    await expect(page.getByRole("list", { name: "Lista de invitadas" }).getByText(name, { exact: true })).toBeVisible();
+
+    // Su link personal funciona aunque el general ya no reciba respuestas
+    const guest = await anonPage();
+    await guest.goto(`/e/${ev.micrositeSlug}/${added.token}`);
+    const rsvp = guest.getByRole("region", { name: "Confirmación de asistencia" });
+    const send = rsvp.getByRole("button", { name: "Enviar mi respuesta" });
+    await waitHydrated(send);
+    await rsvp.getByText("¡Sí, ahí estaré!").click();
+    await send.click();
+    await expect(rsvp.getByRole("heading", { name: "¡Gracias, Regina! Te esperamos" })).toBeVisible();
+    await expect.poll(async () => (await db.eventGuest.findUniqueOrThrow({ where: { id: added.id } })).rsvpStatus).toBe("ATTENDING");
+    expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(12);
+
+    // En el techo de 60 tampoco puede agregar: el aviso ya no le pide «agrégala a tu lista», le pide escribirnos
+    await fillGuestList(db, ev.id, 48);
+    expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
+    await page.reload();
+    await expect(section).toContainText(
+      "Tu invitación general ya no recibe más respuestas y tu lista llegó al máximo de 60 invitadas. Si alguien más quiere venir, escríbenos y lo vemos juntas. Si ves registros que no reconoces, escríbenos y los quitamos para liberar lugares.",
+    );
+    await expect(section).not.toContainText("agrégala a tu lista");
+    for (const b of shareGeneral) await expect(b).toHaveCount(0);
+  });
+
+  test("[PORT-027] aviso de posible duplicado en el portal: pide confirmarlo con su invitada y nunca quitar el registro que ella agregó", { tag: ["@P1", "@regression"] }, async ({ anonPage, db, evidence }) => {
+    evidence("clienta", "Portal › Invitadas: un auto-registro con el nombre de una amiga que ella agregó y dos auto-registros que sólo coinciden entre sí › Quitar a su amiga (diálogo) › Cancelar");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #7: texto del aviso de posible duplicado; revisión: si sí es suyo, escribirnos para dejar un solo registro, y el diálogo de quitar no promete volver a agregarla" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    const friendName = `Mariana Sol ${uniq("Host")}`;
+    const friend = await createGuestFixture(db, ev, { name: friendName, email: uniqEmail("mariana"), source: "HOST" }); // pendiente
+    const impostor = friendName.toLowerCase();
+    await createGuestFixture(db, ev, { name: impostor, source: "SELF_RSVP", rsvpStatus: "ATTENDING" });
+    const loneName = `Inés Robles ${uniq("Self")}`;
+    await createGuestFixture(db, ev, { name: loneName, source: "SELF_RSVP", rsvpStatus: "ATTENDING" });
+    await createGuestFixture(db, ev, { name: loneName.toUpperCase(), source: "SELF_RSVP", rsvpStatus: "MAYBE" });
+    const before = await db.eventGuest.findUniqueOrThrow({ where: { id: friend.id } });
+
+    const page = await anonPage();
+    await page.goto(ev.portalPath);
+    const list = page.getByRole("list", { name: "Lista de invitadas" });
+    // Nombre exacto (sensible a mayúsculas): el aviso de las marcadas también contiene el nombre con que coinciden
+    const item = (name: string) => list.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) });
+    await expect(list.getByText("Posible duplicado")).toHaveCount(3);
+    // Coincide con alguien que ella agregó: confirmarlo con ella, lo quitamos nosotras si no es suyo, y conservar el suyo
+    await expect(item(impostor)).toContainText(
+      `Coincide con «${friendName}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal y escríbenos para dejar un solo registro: el que agregaste tú. No quites el registro de «${friendName}».`,
+    );
+    // Sólo coincide con otro auto-registro: confirmarlo y escribirnos para dejar uno
+    await expect(item(loneName)).toContainText(
+      `Coincide con «${loneName.toUpperCase()}» de tu lista. Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro.`,
+    );
+    await expect(item(loneName.toUpperCase())).toContainText(
+      `Coincide con «${loneName}» de tu lista. Primero confírmalo con ella y, si es la misma persona, escríbenos y dejamos un solo registro.`,
+    );
+    // Su amiga no lleva marca y ningún aviso le sugiere quitarla
+    await expect(item(friendName)).toHaveCount(1);
+    await expect(item(friendName)).not.toContainText("Posible duplicado");
+    await expect(list).not.toContainText("quita el registro pendiente");
+    // Los auto-registros no tienen «Quitar» para ella (sólo su pendiente, PORT-013)
+    await expect(list.getByRole("button", { name: `Quitar a ${impostor} de la lista`, exact: true })).toHaveCount(0);
+    const remove = list.getByRole("button", { name: `Quitar a ${friendName} de la lista`, exact: true });
+    await expect(remove).toHaveCount(1);
+    // El diálogo para quitar a su amiga advierte que su registro es el confiable y le pide escribirnos; ya no promete
+    // «Puedes volver a agregarla» (addGuestAsHost la rechazaría: el auto-registro ocupa su nombre)
+    await waitHydrated(remove);
+    await remove.click();
+    const confirm = page.getByRole("alertdialog", { name: `¿Quitar a ${friendName}?` });
+    await expect(confirm).toContainText(
+      "Su link personal dejará de funcionar. Ojo: un registro de la invitación general coincide con ella, y el confiable es este, el que agregaste tú. Si es la misma persona, no la quites: escríbenos y dejamos un solo registro.",
+    );
+    await expect(confirm).not.toContainText("Puedes volver a agregarla");
+    await confirm.getByRole("button", { name: "Cancelar" }).click();
+    await expect(confirm).toHaveCount(0);
+    expect(await db.eventGuest.findUniqueOrThrow({ where: { id: friend.id } }), "mostrar el aviso y cancelar no toca a nadie").toEqual(before);
   });
 
   test("[PORT-015] el token de un evento no permite tocar invitadas ni datos de otro evento (IDOR)", { tag: ["@P0", "@permissions"] }, async ({ apiAs, db, evidence }) => {

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, Clock, ExternalLink, HeartCrack, MapPin, Music2, Shirt } from "lucide-react";
+import { CalendarDays, Clock, ExternalLink, HeartCrack, Link2, MapPin, Music2, Shirt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OCCASION_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -20,11 +20,16 @@ export function MicrositeView({ view }: { view: InviteView }) {
   const colors = uniqueColors(event.colors.length ? event.colors : view.palette).slice(0, 5);
   const accent = colors[0] ?? "#A3B18A";
   const responded = !!guest?.respondedAt;
+  // Link general con la lista en su tope: el aviso llega en el HTML del servidor, en lugar del formulario
+  // (`generalInviteClosedNotice`, mismo criterio y texto que el rechazo `GUEST_LIMIT` de `submitRsvp`).
+  const closedNotice = event.rsvpOpen ? view.generalInviteClosedNotice : null;
+  // Hay algo que responder aquí: sin eso no se ofrecen «Confirmar asistencia» ni la CTA fija.
+  const canAnswer = event.rsvpOpen && !closedNotice;
   const place = [event.neighborhood, event.city].filter(Boolean).join(", ");
   const heroBg = { backgroundColor: `color-mix(in oklab, ${accent} 16%, var(--brand-ivory))` };
 
   return (
-    <main id="contenido" className={cn("bg-ivory min-h-dvh", event.rsvpOpen && !responded && "pb-24 md:pb-0")}>
+    <main id="contenido" className={cn("bg-ivory min-h-dvh", canAnswer && !responded && "pb-24 md:pb-0")}>
       {colors.length ? (
         <div aria-hidden className="flex h-2 w-full">
           {colors.map((c) => (
@@ -59,7 +64,7 @@ export function MicrositeView({ view }: { view: InviteView }) {
               ))}
             </ul>
           ) : null}
-          {event.rsvpOpen && !event.cancelled ? (
+          {canAnswer && !event.cancelled ? (
             <Button asChild size="xl" className="mt-8">
               <a href="#rsvp">{responded ? "Ver mi respuesta" : "Confirmar asistencia"}</a>
             </Button>
@@ -211,7 +216,15 @@ export function MicrositeView({ view }: { view: InviteView }) {
               className="bg-card scroll-mt-6 rounded-3xl border border-t-4 p-5 shadow-sm sm:p-8"
               style={{ borderTopColor: accent }}
             >
-              {event.rsvpOpen ? (
+              {closedNotice ? (
+                <div className="space-y-4 text-center">
+                  <div className="bg-sage-soft text-olive mx-auto flex size-14 items-center justify-center rounded-full">
+                    <Link2 className="size-6" aria-hidden />
+                  </div>
+                  <h2 className="font-heading text-3xl font-semibold text-balance">Confirma desde tu link personal</h2>
+                  <p className="text-muted-foreground mx-auto max-w-md">{closedNotice}</p>
+                </div>
+              ) : event.rsvpOpen ? (
                 <RsvpPanel
                   key={view.token}
                   slug={view.slug}
@@ -245,7 +258,7 @@ export function MicrositeView({ view }: { view: InviteView }) {
                   </p>
                 </div>
               )}
-              {event.rsvpOpen && view.via === "invite" ? (
+              {canAnswer && view.via === "invite" ? (
                 // El link general siempre registra a una invitada nueva (nunca toma a otra por su nombre).
                 <p className="text-muted-foreground mt-6 border-t pt-4 text-center text-sm">
                   ¿{view.hostFirstName ? `${view.hostFirstName} ya te mandó` : "Ya te llegó"} tu link personal? Responde
@@ -267,7 +280,7 @@ export function MicrositeView({ view }: { view: InviteView }) {
         </footer>
       </div>
 
-      {event.rsvpOpen && !event.cancelled && !responded ? <StickyRsvpCta label="Confirmar asistencia" /> : null}
+      {canAnswer && !event.cancelled && !responded ? <StickyRsvpCta label="Confirmar asistencia" /> : null}
     </main>
   );
 }

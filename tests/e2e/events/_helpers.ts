@@ -583,6 +583,25 @@ export async function createGuestFixture(
   return { id: guest.id, token: t, name: guest.name, path: `/e/${event.micrositeSlug}/${t}` };
 }
 
+/**
+ * Llena la lista de un evento con `count` invitadas de relleno (con Prisma, sin pasar por el formulario ni por
+ * el rate limit de 10 respuestas por IP): una de cada tres la agregó la anfitriona y el resto se registró sola.
+ * Sirve para dejar la lista en el tope del link general (guestCount + margen, techo 60).
+ */
+export async function fillGuestList(db: PrismaClient, eventId: string, count: number): Promise<void> {
+  const tag = uniq("Relleno");
+  await db.eventGuest.createMany({
+    data: Array.from({ length: count }, (_, i) => ({
+      eventId,
+      name: `${tag} ${i + 1}`,
+      token: token(),
+      source: i % 3 === 0 ? ("HOST" as const) : ("SELF_RSVP" as const),
+      rsvpStatus: i % 3 === 0 ? ("PENDING" as const) : ("ATTENDING" as const),
+      respondedAt: i % 3 === 0 ? null : new Date(),
+    })),
+  });
+}
+
 export type CapsuleFixture = { id: string; shareToken: string; path: string; title: string };
 
 export async function createCapsuleFixture(

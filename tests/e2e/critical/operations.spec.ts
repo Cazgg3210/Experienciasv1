@@ -107,6 +107,8 @@ test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critica
       await expect(dialog.getByLabel("Monto")).toHaveValue(String(balance / 100));
       await expect(dialog.getByLabel("Concepto")).toHaveValue("BALANCE");
       await dialog.getByLabel("Notas").fill(note);
+      // manual-payment-dialog hace router.refresh(): recargar con ese fetch en vuelo aborta en Firefox (OPS-010)
+      const refreshed = routerRefreshed(owner, `/admin/events/${event.id}`);
       await dialog.getByRole("button", { name: "Registrar pago" }).click();
       await expect(owner.getByText("Pago registrado", { exact: true })).toBeVisible();
 
@@ -132,6 +134,7 @@ test.describe("Recorridos críticos · operación y finanzas", { tag: ["@critica
       expect(paidSum, "lo cobrado = total").toBe(total);
 
       // Panel: saldo pendiente en cero y ya no se ofrece registrar otro pago
+      await refreshed;
       await owner.reload();
       await expect(pagos.getByRole("button", { name: "Registrar pago manual" })).toHaveCount(0);
       // StatCard: etiqueta y valor son hermanos dentro de la tarjeta (sin rol propio) → subir dos niveles.

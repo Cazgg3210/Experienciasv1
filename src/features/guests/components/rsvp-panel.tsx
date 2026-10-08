@@ -207,9 +207,18 @@ function RsvpForm({
   const personal = !!guest;
   const honoree = honoreeName?.trim() || null;
   const [redirecting, setRedirecting] = React.useState(false);
+  // Link general que llegó a su tope DESPUÉS de abrir la página (carrera: si ya estaba lleno, el servidor pinta el
+  // aviso en lugar de este formulario, ver MicrositeView). El servidor rechaza con GUEST_LIMIT y aquí se muestra el
+  // mismo aviso fijo junto al botón (un toast se iría antes de leerlo), conservando lo escrito.
+  const [fullNotice, setFullNotice] = React.useState<string | null>(null);
 
   async function onSubmit(values: RsvpFormValues) {
+    setFullNotice(null);
     const res = await submitRsvpAction({ slug, token, rsvp: values });
+    if (!res.ok && res.code === "GUEST_LIMIT") {
+      setFullNotice(res.error);
+      return;
+    }
     if (!handleActionResult(res)) {
       // Los errores por campo del servidor vienen anidados como "rsvp.<campo>"
       if (!res.ok && res.fieldErrors) {
@@ -484,6 +493,11 @@ function RsvpForm({
       />
 
       <div className="flex flex-col gap-2">
+        {fullNotice ? (
+          <p role="alert" className="bg-sand-soft/70 rounded-2xl px-4 py-3 text-center text-sm">
+            {fullNotice}
+          </p>
+        ) : null}
         <NoScriptNotice className="text-center">Para enviar tu respuesta activa JavaScript en tu navegador.</NoScriptNotice>
         <SubmitButton
           waitForHydration

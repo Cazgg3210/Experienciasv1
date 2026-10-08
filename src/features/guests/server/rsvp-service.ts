@@ -7,7 +7,13 @@ import { track } from "@/server/analytics";
 import { audit } from "@/server/audit";
 import { resolveInvite } from "@/features/portal/server/portal-service";
 import { emptyToNull, isRsvpOpen } from "@/features/portal/domain/portal";
-import { MAX_GUESTS_PER_EVENT, findPossibleDuplicates, normalizeEmail, sortDietary } from "../domain/rsvp";
+import {
+  GENERAL_INVITE_FULL_MESSAGE,
+  canSelfRegister,
+  findPossibleDuplicates,
+  normalizeEmail,
+  sortDietary,
+} from "../domain/rsvp";
 import type { SubmitRsvpInput } from "../schemas";
 import { lockEventGuests } from "./guest-service";
 
@@ -39,7 +45,8 @@ const guestSelect = { id: true, token: true, name: true, rsvpStatus: true } as c
  *    Nunca re-identifica por nombre ni por email: escribirlos no prueba que sea ella, y hacerlo permitía
  *    sobrescribir la respuesta de otra invitada y recibir su link personal (BUG-003). Si coincide con
  *    alguien de la lista se crea igual (la respuesta es idéntica, sin revelar quién está invitada) y
- *    queda como «Posible duplicado» para que la anfitriona o el equipo lo revisen (+ auditoría).
+ *    queda como «Posible duplicado» para que la anfitriona o el equipo lo revisen (+ auditoría). Sólo mientras
+ *    la lista no llegue al tope del link general (`selfRsvpGuestLimit`: guestCount + margen, techo 60).
  * El mensaje para la homenajeada se guarda como EventMessage HONOREE ligado a la invitada (uno por invitada).
  */
 export async function submitRsvp(
@@ -88,13 +95,18 @@ export async function submitRsvp(
       guest = await tx.eventGuest.update({ where: { id: personalGuest.id }, data, select: guestSelect });
     } else {
       outcome = "created";
+      // Tope del link general: la lista no pasa de `guestCount` + margen (techo 60, `selfRsvpGuestLimit`). Se
+      // cuenta DENTRO del candado del evento, con el `guestCount` leído aquí mismo: dos respuestas simultáneas en
+      // el borde se serializan y la segunda ya ve a la primera, así que no lo rebasan. Va antes de buscar
+      // coincidencias: con la lista llena la respuesta es la misma haya o no coincidencia (sin enumeración).
+      const { guestCount } = await tx.event.findUniqueOrThrow({ where: { id: event.id }, select: { guestCount: true } });
       const existing = await tx.eventGuest.findMany({
         where: { eventId: event.id },
         select: { id: true, name: true, email: true },
         orderBy: { createdAt: "asc" },
       });
-      if (existing.length >= MAX_GUESTS_PER_EVENT) {
-        throw new AppError("La lista de invitadas ya está completa. Escríbele a la anfitriona.", "GUEST_LIMIT", 409);
+      if (!canSelfRegister(existing.length, guestCount)) {
+        throw new AppError(GENERAL_INVITE_FULL_MESSAGE, "GUEST_LIMIT", 409);
       }
       duplicateIds = findPossibleDuplicates(existing, { name: data.name, email }).map((g) => g.id);
       guest = await tx.eventGuest.create({
@@ -106,7 +118,7 @@ export async function submitRsvp(
         // invitada. Va dentro de la transacción: se confirma junto con la invitada (o no queda ninguno) y ya
         // no es una escritura aparte, con su propia conexión, después de la transacción. La diferencia de
         // tiempo entre «coincide» y «no coincide» queda en un INSERT sobre la conexión ya abierta (además
-        // del límite de 10 respuestas por IP cada 10 min, del cupo de 60 y de que cada sondeo deja un
+        // del límite de 10 respuestas por IP cada 10 min, del tope del link general y de que cada sondeo deja un
         // registro marcado visible para la anfitriona).
         await audit(
           {
