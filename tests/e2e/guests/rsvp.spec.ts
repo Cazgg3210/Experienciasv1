@@ -12,6 +12,7 @@ import {
   describe as d,
   expectGuardedBeforeHydration,
   fillBeforeHydration,
+  fillGuestList,
   holdPageChunk,
   token,
   trySubmitBeforeHydration,
@@ -26,6 +27,10 @@ async function openRsvp(page: Page, path: string) {
   await waitHydrated(section.getByRole("button").first());
   return section;
 }
+
+/** Respuesta del link general cuando la lista llegó a su tope (src/features/guests/domain/rsvp.ts). */
+const GENERAL_INVITE_FULL =
+  "¡Gracias por querer acompañarnos! Este enlace ya no recibe más respuestas. Pídele a la anfitriona tu link personal y confirma desde ahí.";
 
 function rsvpInput(slug: string, tk: string, patch: Record<string, unknown> = {}) {
   return {
@@ -348,18 +353,18 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     const list = host.getByRole("list", { name: "Lista de invitadas" });
     await expect(list.getByText("Posible duplicado")).toHaveCount(2);
     const hostItem = (name: string) => list.getByRole("listitem").filter({ has: host.getByText(name, { exact: true }) });
-    // La original respondió (no es un pendiente que la anfitriona pueda quitar): se le pide escribirnos.
+    // La original la agregó la anfitriona (HOST): el aviso pide confirmarlo con ella y nunca quitar su registro.
     await expect(hostItem("Alguien Más")).toContainText(
-      `Coincide con «${victim.name}» de tu lista. Si es la misma persona, escríbenos y dejamos un solo registro.`,
+      `Coincide con «${victim.name}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «${victim.name}».`,
     );
     // Nombre exacto (sensible a mayúsculas): el registro en MAYÚSCULAS es el duplicado, no la original
     await expect(hostItem(victim.name)).toHaveCount(1);
     await expect(hostItem(victim.name)).not.toContainText("Posible duplicado");
   });
 
-  test("[GST-025] amiga agregada por la anfitriona que responde con el link general: el portal le dice que quite el pendiente y el admin con quién coincide", { tag: ["@P2", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
-    evidence("clienta", "Portal: amiga pendiente → la amiga responde con el link general → «quita el registro pendiente» → Quitar de la lista");
-    test.info().annotations.push({ type: "regression", description: "BUG-003 (revisión: flujo legítimo de la anfitriona y marca con contexto)" });
+  test("[GST-025] amiga agregada por la anfitriona que responde con el link general: el portal pide confirmarlo sin quitar su registro y el equipo quita el auto-registro", { tag: ["@P2", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
+    evidence("clienta", "Portal: amiga pendiente → la amiga responde con el link general → aviso «Primero confírmalo con ella…» → owner › Invitadas › Eliminar el auto-registro → portal sin marca");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 (revisión: flujo legítimo de la anfitriona y marca con contexto; pendiente #7: el aviso ya no pide quitar el registro que ella agregó)" });
     const ev = await createEventFixture(db, { status: "CONFIRMED" });
     const friendName = `Lucía Vega ${uniq("Dup")}`;
     const friend = await createGuestFixture(db, ev, { name: friendName, email: uniqEmail("lucia"), source: "HOST" }); // pendiente
@@ -373,32 +378,40 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
     expect(await db.eventGuest.findUniqueOrThrow({ where: { id: friend.id } }), "el registro de la anfitriona no cambia").toMatchObject({ rsvpStatus: "PENDING" });
     expect(await db.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: answered.id } })).toBe(1);
 
-    // Admin: la marca dice con quién coincide
-    const owner = await rolePage("owner");
-    await owner.goto(`/admin/events/${ev.id}/guests`);
-    const table = owner.getByRole("table", { name: "Invitadas del evento" });
-    await expect(table.getByText("Posible duplicado")).toHaveCount(1);
-    await expect(table.getByText(`Coincide con «${friendName}»`)).toHaveCount(1);
-
-    // Portal: la anfitriona sabe que puede quitar ella misma el registro pendiente
+    // Portal: primero confirmarlo con su amiga; el auto-registro lo quitamos nosotras; nunca el que ella agregó
     const host = await anonPage();
     await host.goto(ev.portalPath);
     const list = host.getByRole("list", { name: "Lista de invitadas" });
     await expect(list.getByText("Posible duplicado")).toHaveCount(1);
     await expect(list).toContainText(
-      `Coincide con «${friendName}» de tu lista. Si es la misma persona, quita el registro pendiente de «${friendName}» para dejar uno solo.`,
+      `Coincide con «${friendName}» de tu lista. Primero confírmalo con ella: si este registro no es suyo, escríbenos y lo quitamos; si sí es suyo, pídele que responda desde su link personal. No quites el registro de «${friendName}».`,
     );
-    const remove = list.getByRole("button", { name: `Quitar a ${friendName} de la lista` });
-    await expect(remove).toHaveCount(1); // sólo el pendiente que ella agregó (no el auto-registro)
-    await waitHydrated(remove);
-    await remove.click();
-    await host.getByRole("alertdialog", { name: `¿Quitar a ${friendName}?` }).getByRole("button", { name: "Quitar de la lista" }).click();
-    await expect(host.getByText(`${friendName} ya no está en tu lista`)).toBeVisible();
-    expect(await db.eventGuest.count({ where: { id: friend.id } })).toBe(0);
-    await expect(list.getByText("Posible duplicado")).toHaveCount(0);
+    await expect(list, "el aviso ya no sugiere quitar el registro que agregó la anfitriona").not.toContainText("quita el registro pendiente");
+    // Ella sólo puede quitar su pendiente (PORT-013); el auto-registro no tiene botón para ella
+    await expect(list.getByRole("button", { name: `Quitar a ${friendName} de la lista` })).toHaveCount(1);
+
+    // Admin: con quién coincide y cuál conservar; el equipo quita el auto-registro marcado
+    const owner = await rolePage("owner");
+    await owner.goto(`/admin/events/${ev.id}/guests`);
+    await expect(owner.getByText("Conserva el registro que agregó la anfitriona o el equipo (tiene su link personal) y quita el marcado", { exact: false })).toBeVisible();
+    const table = owner.getByRole("table", { name: "Invitadas del evento" });
+    await expect(table.getByText("Posible duplicado")).toHaveCount(1);
+    await expect(table.getByText(`Coincide con «${friendName}»`)).toHaveCount(1);
+    // Las dos filas se llaman igual: se ubica la marcada
+    const del = table.getByRole("row").filter({ hasText: "Posible duplicado" }).getByRole("button", { name: `Eliminar a ${friendName}` });
+    await waitHydrated(del);
+    await del.click();
+    await owner.getByRole("alertdialog", { name: `¿Quitar a ${friendName}?` }).getByRole("button", { name: "Quitar invitada" }).click();
+    await expect(owner.getByText(`${friendName} se quitó de la lista`)).toBeVisible();
+    await expect.poll(() => db.eventGuest.count({ where: { id: answered.id } })).toBe(0);
+    expect(await db.eventGuest.findUniqueOrThrow({ where: { id: friend.id } }), "se queda el registro de la anfitriona, con su link").toMatchObject({ source: "HOST", rsvpStatus: "PENDING", token: friend.token });
+
+    // Portal tras recargar: queda su amiga, sin marca de posible duplicado
     await host.reload();
-    await expect(host.getByRole("list", { name: "Lista de invitadas" }).getByText(friendName, { exact: true })).toHaveCount(1);
-    await expect(host.getByRole("list", { name: "Lista de invitadas" }).getByText("Posible duplicado")).toHaveCount(0);
+    const after = host.getByRole("list", { name: "Lista de invitadas" });
+    await expect(after.getByText(friendName, { exact: true })).toHaveCount(1);
+    await expect(after.getByText("Posible duplicado")).toHaveCount(0);
+    await expect(after.getByRole("button", { name: `Quitar a ${friendName} de la lista` })).toHaveCount(1);
   });
 
   test("[GST-015] mensaje para la homenajeada: se guarda uno por invitada y se actualiza al editar", { tag: ["@P1", "@regression"] }, async ({ anonPage, rolePage, db, evidence }) => {
@@ -542,14 +555,68 @@ test.describe("RSVP · invitada", { tag: ["@module:guests"] }, () => {
   });
 
   test("[GST-021] el link general no admite más de 60 invitadas", { tag: ["@P2", "@negative"] }, async ({ apiAs, db, evidence }) => {
-    evidence("invitada", "submitRsvpAction con link general y 60 invitadas registradas");
-    const ev = await createEventFixture(db, { status: "CONFIRMED" });
+    evidence("invitada", "submitRsvpAction con link general y 60 invitadas registradas (evento de 100 personas)");
+    // Con 100 personas contratadas el tope relativo (guestCount + 50 %) sería 150: lo que frena aquí es el techo de 60.
+    const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 100 });
     await db.eventGuest.createMany({ data: Array.from({ length: 60 }, (_, i) => ({ eventId: ev.id, name: `Llena ${i + 1}`, token: token(), source: "HOST" as const })) });
     const api = await apiAs(null);
     const r = await callAction(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: "La Sesenta y Uno" }), { path: ev.invitePath });
     expect(r.code, d(r)).toBe("GUEST_LIMIT");
-    expect(r.error).toBe("La lista de invitadas ya está completa. Escríbele a la anfitriona.");
+    expect(r.error).toBe(GENERAL_INVITE_FULL);
     expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(60);
+  });
+
+  test("[GST-029] link general con la lista en su tope (guestCount + margen): la respuesta se rechaza con un aviso cálido en pantalla y la base no cambia", { tag: ["@P1", "@negative", "@regression", "@mobile"] }, async ({ anonPage, apiAs, db, evidence }) => {
+    evidence("invitada", "Evento de 6 personas con 10 en la lista › submitRsvpAction (entra la 11ª) › link general › ¡Sí, ahí estaré! › Enviar mi respuesta (rechazo) + submitRsvpAction con el nombre de una invitada");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #6: tope del link general relativo a guestCount" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 6 }); // tope = 6 + máx(5, ⌈3⌉) = 11
+    const known = await createGuestFixture(db, ev, { name: `Brenda Tope ${uniq("K")}`, source: "HOST" });
+    await fillGuestList(db, ev.id, 9); // 10 en la lista: una abajo del tope
+    const api = await apiAs(null);
+    const below = await callAction<{ personalPath: string }>(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: `La Once ${uniq("T")}` }), { path: ev.invitePath });
+    expect(below.outcome, d(below)).toBe("accepted"); // justo abajo del tope: entra
+    const before = await db.eventGuest.findMany({ where: { eventId: ev.id }, orderBy: { id: "asc" } });
+    expect(before).toHaveLength(11); // en el borde
+
+    const name = `Nueva ${uniq("Tope")}`;
+    const page = await anonPage();
+    const section = await openRsvp(page, ev.invitePath);
+    await section.getByRole("textbox", { name: "Tu nombre" }).fill(name);
+    await section.getByText("¡Sí, ahí estaré!").click();
+    await section.getByRole("button", { name: "Enviar mi respuesta" }).click();
+    await expect(section.getByRole("alert").filter({ hasText: GENERAL_INVITE_FULL })).toBeVisible();
+    await expect(section.getByRole("textbox", { name: "Tu nombre" }), "lo escrito sigue ahí").toHaveValue(name);
+    expect(new URL(page.url()).pathname, "no recibe link personal: se queda en la invitación").toBe(ev.invitePath);
+
+    // Sin enumeración: con el nombre de alguien de la lista la respuesta es la misma
+    const same = await callAction(api, "submitRsvpAction", rsvpInput(ev.micrositeSlug, ev.inviteToken, { name: known.name }), { path: ev.invitePath });
+    expect(same.code, d(same)).toBe("GUEST_LIMIT");
+    expect(same.error).toBe(GENERAL_INVITE_FULL);
+
+    // La base no cambia (ni invitadas ni rastro de posible duplicado)
+    expect(await db.eventGuest.findMany({ where: { eventId: ev.id }, orderBy: { id: "asc" } })).toEqual(before);
+    expect(await db.auditLog.count({ where: { action: "guest.possible_duplicate", entityId: { in: before.map((g) => g.id) } } })).toBe(0);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Confirmación de asistencia" }).getByRole("textbox", { name: "Tu nombre" })).toBeVisible();
+    expect(await db.eventGuest.count({ where: { eventId: ev.id, name } })).toBe(0);
+  });
+
+  test("[GST-030] con la lista en el tope del link general, el link personal sigue respondiendo", { tag: ["@P1", "@regression", "@mobile"] }, async ({ anonPage, db, evidence }) => {
+    evidence("invitada", "Evento de 6 personas con 13 en la lista (arriba del tope) › link personal › ¡Sí, ahí estaré! › Enviar mi respuesta");
+    test.info().annotations.push({ type: "regression", description: "BUG-003 · pendiente #6: el tope sólo frena al link general" });
+    const ev = await createEventFixture(db, { status: "CONFIRMED", guestCount: 6 }); // tope = 11
+    const g = await createGuestFixture(db, ev, { name: `Paola ${uniq("Tope")}`, source: "HOST" });
+    await fillGuestList(db, ev.id, 12); // 13: la anfitriona puede pasar del tope del link general (techo 60)
+    const page = await anonPage();
+    const section = await openRsvp(page, g.path);
+    await section.getByText("¡Sí, ahí estaré!").click();
+    await section.getByRole("button", { name: "Enviar mi respuesta" }).click();
+    await expect(section.getByRole("heading", { name: "¡Gracias, Paola! Te esperamos" })).toBeVisible();
+    await expect(page.getByText("Este enlace ya no recibe más respuestas")).toHaveCount(0);
+    expect(await db.eventGuest.findUniqueOrThrow({ where: { id: g.id } })).toMatchObject({ rsvpStatus: "ATTENDING", source: "HOST" });
+    expect(await db.eventGuest.count({ where: { eventId: ev.id } })).toBe(13);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Confirmación de asistencia" })).toContainText("Asiste");
   });
 
   test("[GST-022] invitación sembrada de Camila (sólo lectura) y accesibilidad del micrositio", { tag: ["@P2", "@a11y", "@regression"] }, async ({ anonPage, evidence }, testInfo) => {
